@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { Shield, Mail, ShieldAlert, Search, Siren, Globe } from 'lucide-react'
+import { Shield, Mail, ShieldAlert, Search, Siren, Globe, FlaskConical } from 'lucide-react'
 
 const links = [
   { to: '/', icon: Shield, label: '보안 대시보드' },
@@ -8,6 +8,7 @@ const links = [
   { to: '/ioc', icon: Search, label: 'IoC 분석기' },
   { to: '/incident', icon: Siren, label: '인시던트 대응' },
   { to: '/webscan', icon: Globe, label: '웹 스캐너' },
+  { to: '/threat', icon: FlaskConical, label: '위협 분석 랩' },
 ]
 
 export default function NavBar({ isMock }) {
