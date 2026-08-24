@@ -9,6 +9,7 @@ import IoCAnalyzer from './pages/IoCAnalyzer'
 import IncidentResponse from './pages/IncidentResponse'
 import WebScanner from './pages/WebScanner'
 import ThreatAnalysis from './pages/ThreatAnalysis'
+import PromptInjectionDetector from './pages/PromptInjectionDetector'
 
 export default function App() {
   const [isMock, setIsMock] = useState(null)
@@ -28,6 +29,7 @@ export default function App() {
         <Route path="/incident" element={<IncidentResponse />} />
         <Route path="/webscan" element={<WebScanner />} />
         <Route path="/threat" element={<ThreatAnalysis />} />
+        <Route path="/injection" element={<PromptInjectionDetector />} />
       </Routes>
     </BrowserRouter>
   )
