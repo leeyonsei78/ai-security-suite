@@ -13,6 +13,7 @@ Claude AI를 활용한 보안 분석 도구 모음.
 | 5 | 인시던트 리스폰스 어시스턴트 | ✅ 완료 |
 | 6 | 웹 취약점 스캐너 | ✅ 완료 |
 | 7 | 위협 분석 랩 | ✅ 완료 |
+| 8 | 프롬프트 인젝션 탐지기 | ✅ 완료 |
 
 ---
 
@@ -35,6 +36,17 @@ Claude AI를 활용한 보안 분석 도구 모음.
 - 입력: nmap 결과 / nginx·sshd 설정 파일 / 소스코드
 - CVE/CWE 매핑, 심각도별 분류
 - Markdown 리포트 다운로드
+- **시나리오 따라하기 모드**: 상단 [자유 분석]/[시나리오 따라하기] 탭 전환
+  - "처음 해보는 사람"(입문 3종) / "해킹 대회 준비"(CTF 대비 4종: 포트스캔·코드·설정·메모리 덤프) / "모의 해킹 실전"(1종) / "개인정보 유출 대응"(1종) 총 9개 시나리오
+  - 시나리오 선택 시 상황 설명·학습 목표·따라하기 단계·실전 팁 + 샘플 데이터 자동 입력
+  - 스캔 실행 후 "확인 포인트" 체크리스트가 실제 결과와 자동 대조되어 ✅ 표시
+  - **CTF 준비 가이드**: "해킹 대회 준비" 그룹 상단에 접이식 [무엇부터 배워야 할지 보기] 패널 — 기초 지식, 6개 분야(Web/Forensics/Crypto/Reverse/Pwn/Misc)별 핵심 개념, 필수 도구, 추천 학습 순서, 연습 사이트(picoCTF·OverTheWire·TryHackMe/HackTheBox·CTFtime)
+  - **메모리 덤프 분석**: 입력 유형에 "메모리 덤프" 추가 (Volatility pstree/netscan/cmdline, strings 출력 분석) — 프로세스 마스커레이딩, C2 의심 연결, 인코딩된 PowerShell 실행, 메모리 내 Base64 문자열 탐지
+  - **개인정보 유출 사고 대응** (`privacy-breach-1`): 취약점 발견 → 개인정보 유출 확인 → 사고 대응까지 이어지는 시나리오. "사고 대응 절차" 체크리스트(6단계: 탐지/즉시조치/법적 신고/정보주체 통지/원인조사/재발방지)를 처음부터 끝까지 클릭하며 따라갈 수 있음 (`response_plan` 필드, 진행률 표시, 로컬 상태만 — 새로고침 시 초기화)
+  - **모의 해킹(침투테스트) 처음부터 끝까지** (`pentest-fullchain-1`): 사전 협의(RoE 승인)부터 정찰·스캐닝/열거·취약점 분석·PoC 공격·권한 상승·흔적 정리/보고까지 7단계 실전 방법론을 `response_plan` 체크리스트로 따라갈 수 있음. 승인 없는 대상은 절대 테스트하지 않는다는 원칙을 1단계에 명시
+  - **개인정보(PII) 노출 체크 통합**: 시나리오 모드뿐 아니라 자유 분석을 포함한 모든 스캔 결과에 `personal_data_exposure` 필드(CONFIRMED/POTENTIAL/NONE, 유형, 설명, 개인정보보호법 관련 안내) 포함 — 결과 화면에 배너로 표시되고 Markdown 리포트에도 별도 섹션으로 반영됨
+  - **CVSS 점수 + 컴플라이언스 매핑**: 모든 분석 결과(Mock/Live, 시나리오/자유분석 무관)의 각 취약점에 CVSS 3.1 추정 점수·벡터와 PCI-DSS/ISMS-P/개인정보보호법 등 관련 컴플라이언스 태그가 자동으로 추가됨. `vulnerability_service.py`의 `_enrich()`가 심각도 기반으로 일괄 부여하는 방식이라 개별 mock 데이터 수정 없이도 신규 시나리오에 자동 적용됨 (참고용 추정치이며 정확한 산정은 전문가 검토 필요 — UI/리포트에 고지)
+  - `GET /api/vuln/scenarios`로 시나리오 목록 + `ctf_prep_guide` 제공, `POST /api/vuln/analyze`에 `scenario_id` 전달 시 Mock 모드에서도 시나리오별로 결정론적인(체크리스트와 항상 일치하는) 결과 반환 (`backend/services/vuln_scenarios.py`)
 
 ### App 4: IoC 분석기 `/ioc`
 IP·도메인·파일 해시·이메일 → 알려진 악성 지표 여부 판별.
@@ -66,6 +78,13 @@ URL 입력 → HTTP 요청으로 보안 헤더·SSL·노출 경로를 실시간 
 - 서버 정보 노출 여부 (Server, X-Powered-By)
 - **Live 모드**: 실제 HTTP 요청으로 실시간 점검 (허가된 사이트만!)
 
+### App 8: 프롬프트 인젝션 탐지기 `/injection`
+AI 챗봇/에이전트에 입력되는 콘텐츠를 분석해 프롬프트 인젝션·탈옥(jailbreak) 시도를 판정.
+- 입력 유형 3종: 사용자 프롬프트(직접) / 외부 문서(간접 인젝션, RAG·요약 대상) / 대화 로그(멀티턴)
+- 판정: INJECTION / JAILBREAK / SUSPICIOUS / SAFE + 위험 점수(0–100)
+- 탐지 기법 배지 (Instruction Override, DAN/Role-play Jailbreak, Indirect Prompt Injection, Delimiter Spoofing 등)
+- 위험 신호 / 안전 신호 / 권장 조치 + 최근 분석 이력
+
 ---
 
 ## 공통 기능
@@ -86,7 +105,6 @@ URL 입력 → HTTP 요청으로 보안 헤더·SSL·노출 경로를 실시간 
 ### 새 도구 추가
 - [ ] **보안 정책 생성기**: 시스템 환경 설명 → 방화벽 규칙/보안 정책 초안 자동 생성
 - [ ] **AI 모델 감사**: LLM API 설정, 시스템 프롬프트 노출 여부 점검
-- [ ] **프롬프트 인젝션 탐지기**: AI 챗봇에 대한 프롬프트 공격 탐지
 
 ---
 
@@ -111,18 +129,22 @@ test_AI_security/
 │   ├── routers/
 │   │   ├── analyze.py        ← App 1
 │   │   ├── phishing.py       ← App 2
-│   │   ├── vulnerability.py  ← App 3
+│   │   ├── vulnerability.py  ← App 3 (+ /scenarios)
 │   │   ├── ioc.py            ← App 4
 │   │   ├── incident.py       ← App 5
-│   │   └── webscan.py        ← App 6
+│   │   ├── webscan.py        ← App 6
+│   │   ├── threat_analysis.py ← App 7
+│   │   └── prompt_injection.py ← App 8
 │   └── services/
 │       ├── claude_service.py
 │       ├── mock_data.py
 │       ├── phishing_service.py / mock_phishing.py
-│       ├── vulnerability_service.py / mock_vulnerability.py
+│       ├── vulnerability_service.py / mock_vulnerability.py / vuln_scenarios.py
 │       ├── ioc_service.py / mock_ioc.py
 │       ├── incident_service.py / mock_incident.py
-│       └── webscan_service.py / mock_webscan.py
+│       ├── webscan_service.py / mock_webscan.py
+│       ├── threat_analysis_service.py / mock_threat_analysis.py
+│       └── prompt_injection_service.py / mock_prompt_injection.py
 └── frontend/
     ├── package.json
     └── src/
@@ -131,14 +153,17 @@ test_AI_security/
         │   ├── NavBar.jsx
         │   ├── GuidePanel.jsx
         │   ├── SeverityBadge.jsx
-        │   └── StatCard.jsx
+        │   ├── StatCard.jsx
+        │   └── VulnScenarioGuide.jsx
         └── pages/
             ├── Dashboard.jsx
             ├── PhishingDetector.jsx
             ├── VulnerabilityScanner.jsx
             ├── IoCAnalyzer.jsx
             ├── IncidentResponse.jsx
-            └── WebScanner.jsx
+            ├── WebScanner.jsx
+            ├── ThreatAnalysis.jsx
+            └── PromptInjectionDetector.jsx
 ```
 
 ## 실행 방법
