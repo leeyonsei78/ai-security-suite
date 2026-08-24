@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { Shield, Mail, ShieldAlert, Search, Siren, Globe, FlaskConical, Syringe, Cpu } from 'lucide-react'
+import { Shield, Mail, ShieldAlert, Search, Siren, Globe, FlaskConical, Syringe, Cpu, Swords } from 'lucide-react'
 
 const links = [
   { to: '/', icon: Shield, label: '보안 대시보드' },
@@ -11,6 +11,7 @@ const links = [
   { to: '/threat', icon: FlaskConical, label: '위협 분석 랩' },
   { to: '/injection', icon: Syringe, label: '인젝션 탐지기' },
   { to: '/pwn-lab', icon: Cpu, label: 'Pwn/Reverse 실습실' },
+  { to: '/web-arena', icon: Swords, label: 'Web CTF 아레나' },
 ]
 
 export default function NavBar({ isMock }) {

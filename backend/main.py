@@ -9,6 +9,7 @@ from routers.webscan import router as webscan_router
 from routers.threat_analysis import router as threat_router
 from routers.prompt_injection import router as injection_router
 from routers.pwn_lab import router as pwn_lab_router
+from routers.web_arena import router as web_arena_router
 from services.claude_service import IS_MOCK
 
 app = FastAPI(title="AI Security Suite", version="1.0.0")
@@ -30,6 +31,7 @@ app.include_router(webscan_router)
 app.include_router(threat_router)
 app.include_router(injection_router)
 app.include_router(pwn_lab_router)
+app.include_router(web_arena_router)
 
 
 @app.get("/")

@@ -454,6 +454,43 @@ def encrypt_flag(flag: str) -> str:
         ],
     },
     {
+        "id": "ctf-crypto-2",
+        "audience": "ctf",
+        "input_type": "code",
+        "title": "RSA 흔한 실수: 작은 공개 지수(e=3)로 flag 복구하기",
+        "level": "대회 대비",
+        "situation": "이번엔 XOR이 아니라 진짜 RSA입니다. 사내 유틸리티가 flag를 RSA로 암호화해 저장해 두었는데, 공개 지수(e)를 3으로 설정했습니다. 아래는 그 코드와 실제 공개키(E, N), 암호화된 flag(CIPHERTEXT)입니다.",
+        "objective": "RSA에서 공개 지수 e가 너무 작고 패딩이 없을 때 발생하는 'Cube Root Attack'의 원리를 이해하고, 실제 정수를 이용해 직접 flag를 복구해 봅니다.",
+        "steps": [
+            "코드를 읽고 e=3이 왜 위험한지, 패딩이 없다는 것이 왜 문제를 더 키우는지 스스로 생각해 보세요.",
+            "이 시나리오를 선택하면 샘플이 입력창에 자동으로 채워집니다. [AI로 취약점 스캔]을 눌러 어떤 암호학적 약점이 지적되는지 확인하세요.",
+            "직접 복구해보기: N, E, CIPHERTEXT 값을 Python으로 옮기고, CIPHERTEXT의 정수 세제곱근을 구해보세요. m**3 < N 이면 모듈러 연산이 적용되지 않아(즉 CIPHERTEXT == m**3, mod 없이) 세제곱근만으로 평문 m을 바로 복구할 수 있습니다.",
+            "복구한 정수 m을 바이트로 변환(m.to_bytes(...))하면 flag 문자열이 나옵니다.",
+        ],
+        "sample": """# rsa_issue_flag.py — 사내 RSA 유틸리티 (교육용 예시, 실제 서비스에 사용 금지)
+
+def encrypt(m: int, e: int, n: int) -> int:
+    return pow(m, e, n)
+
+# 공개키 (실제 배포된 값)
+E = 3
+N = 152492021574201622933813658438592096687015354496024820022069864871776033167750374407675332424948827197578209641640313484756441065722122507019500625122110087173000093
+
+# 암호화된 flag (평문을 정수로 변환한 뒤 그대로 RSA 암호화, 패딩 없음)
+CIPHERTEXT = 15985572207020068700888014025377496044827437998999765238831306147916409208249421530380579297544727487465070143601377540105949496181153762100503389525226424677""",
+        "expected_findings": [
+            {"keyword": "e=3", "label": "작은 공개 지수(e=3) 사용", "explain": "공개 지수가 3으로 매우 작아, 평문이 충분히 작으면 암호문의 세제곱근만으로 평문을 복구할 수 있습니다 (Cube Root Attack)."},
+            {"keyword": "패딩", "label": "패딩 없이 평문 직접 암호화", "explain": "OAEP 같은 표준 패딩 없이 평문을 그대로 암호화해 취약점이 훨씬 쉽게 악용됩니다."},
+            {"keyword": "커스텀", "label": "표준 라이브러리 대신 자체 구현", "explain": "cryptography/PyCryptodome 같은 검증된 라이브러리 대신 직접 구현한 RSA를 사용하고 있습니다."},
+        ],
+        "tips": [
+            "e=3이고 패딩이 없으며 메시지가 충분히 짧으면, 암호문 = 평문^3 (mod n이 아니라 진짜 그냥 세제곱) 인 경우가 흔합니다 — 정수 세제곱근만 구하면 끝입니다.",
+            "Python 표준 라이브러리만으로도 이분탐색으로 정수 세제곱근을 직접 구현할 수 있습니다 (gmpy2.iroot가 있다면 더 간단합니다).",
+            "실전에서 m**3이 n보다 크면(모듈러 wrap이 발생하면) 단순 세제곱근으로는 안 풀립니다 — 이때는 같은 메시지를 여러 개의 다른 공개키로 암호화한 값을 CRT(중국인의 나머지 정리)로 조합하는 Håstad's Broadcast Attack이 필요합니다.",
+            "RSA CTF 문제에서 자주 나오는 다른 실수 유형도 기억해두세요: 공통 모듈러스(같은 n, 다른 e로 같은 메시지 암호화), 가까운 두 소수(p,q가 너무 가까우면 페르마 인수분해로 순식간에 깨짐).",
+        ],
+    },
+    {
         "id": "privacy-breach-1",
         "audience": "privacy",
         "input_type": "config",
@@ -861,6 +898,23 @@ SCENARIO_MOCK_RESULTS: dict[str, dict] = {
             {"id": "VULN-004", "title": "인코딩을 암호화로 오인", "severity": "MEDIUM", "cve": "CWE-311",
              "description": "Base64는 데이터를 인코딩할 뿐 기밀성을 제공하지 않는데, 암호화의 일부로 사용되어 오해를 유발합니다.",
              "affected": "encrypt_flag() 함수", "recommendation": "Base64는 전송 인코딩 용도로만 사용하고, 기밀성은 검증된 암호화로 확보하세요."},
+        ],
+        "personal_data_exposure": {"risk_level": "NONE", "types": [], "explanation": "", "legal_note": ""},
+        "_mock": True,
+    },
+    "ctf-crypto-2": {
+        "risk_score": 88,
+        "summary": "RSA 공개 지수가 e=3으로 매우 작고 패딩도 없어, 암호화된 flag가 단순 세제곱근 계산만으로 복구될 수 있습니다.",
+        "vulnerabilities": [
+            {"id": "VULN-001", "title": "작은 공개 지수(e=3) 사용", "severity": "CRITICAL", "cve": "CWE-326",
+             "description": "RSA 공개 지수가 e=3으로 매우 작게 설정되어 있어, 평문이 충분히 작으면 암호문의 정수 세제곱근만으로 평문을 복구하는 Cube Root Attack에 노출됩니다.",
+             "affected": "encrypt() 함수 / E 상수", "recommendation": "표준적으로 널리 쓰이는 e=65537을 사용하고, 반드시 OAEP 패딩과 함께 적용하세요."},
+            {"id": "VULN-002", "title": "패딩 없이 평문 직접 암호화", "severity": "HIGH", "cve": "CWE-780",
+             "description": "OAEP 같은 표준 패딩 없이 평문을 그대로 암호화하고 있어, 작은 지수 공격을 포함한 여러 RSA 공격이 훨씬 쉽게 성립합니다.",
+             "affected": "encrypt() 함수", "recommendation": "RSA-OAEP 패딩을 적용해 평문을 무작위화한 뒤 암호화하세요."},
+            {"id": "VULN-003", "title": "검증되지 않은 자체 RSA 구현", "severity": "MEDIUM", "cve": "CWE-327",
+             "description": "표준 암호 라이브러리(cryptography, PyCryptodome) 대신 커스텀 RSA 구현을 사용하고 있어 안전성이 검증되지 않았습니다.",
+             "affected": "rsa_issue_flag.py 전체", "recommendation": "검증된 암호 라이브러리로 교체하고, 직접 암호 알고리즘을 구현하지 마세요."},
         ],
         "personal_data_exposure": {"risk_level": "NONE", "types": [], "explanation": "", "legal_note": ""},
         "_mock": True,

@@ -11,6 +11,7 @@ import WebScanner from './pages/WebScanner'
 import ThreatAnalysis from './pages/ThreatAnalysis'
 import PromptInjectionDetector from './pages/PromptInjectionDetector'
 import PwnLab from './pages/PwnLab'
+import WebArena from './pages/WebArena'
 
 export default function App() {
   const [isMock, setIsMock] = useState(null)
@@ -32,6 +33,7 @@ export default function App() {
         <Route path="/threat" element={<ThreatAnalysis />} />
         <Route path="/injection" element={<PromptInjectionDetector />} />
         <Route path="/pwn-lab" element={<PwnLab />} />
+        <Route path="/web-arena" element={<WebArena />} />
       </Routes>
     </BrowserRouter>
   )

