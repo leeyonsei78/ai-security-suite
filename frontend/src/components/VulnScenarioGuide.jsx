@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { GraduationCap, Trophy, Fingerprint, Crosshair, ArrowLeft, CheckCircle2, Circle, Square, SquareCheck, Lightbulb, Target, ListChecks, Compass, BookMarked, Wrench, Route, ChevronDown, ChevronUp } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { GraduationCap, Trophy, Fingerprint, Crosshair, ArrowLeft, CheckCircle2, Circle, Square, SquareCheck, Lightbulb, Target, ListChecks, Compass, BookMarked, Wrench, Route, Flag, AlertTriangle, ArrowUpRight, ChevronDown, ChevronUp, Radar, Scale, Download } from 'lucide-react'
 
 export const AUDIENCE_CONFIG = {
   beginner: { label: '처음 해보는 사람', icon: GraduationCap, color: 'text-blue-400', bg: 'bg-blue-500/10 border-blue-500/30' },
@@ -72,6 +73,21 @@ export function CtfPrepGuide({ guide }) {
         <div className="px-4 pb-4 border-t border-amber-500/20 pt-3 space-y-4">
           <p className="text-xs text-slate-300 leading-relaxed">{guide.intro}</p>
 
+          {guide.reality_check && (
+            <div className="bg-red-500/10 border border-red-500/25 rounded-lg p-3">
+              <p className="text-xs font-semibold text-red-300 mb-1 flex items-center gap-1">
+                <AlertTriangle size={12} /> 솔직한 현재 위치
+              </p>
+              <p className="text-xs text-slate-300 leading-relaxed mb-2">{guide.reality_check}</p>
+              <Link
+                to="/pwn-lab"
+                className="inline-flex items-center gap-1 text-xs font-semibold text-cyan-400 hover:text-cyan-300"
+              >
+                Pwn/Reverse 실습실에서 직접 gdb·Ghidra로 연습하기 <ArrowUpRight size={12} />
+              </Link>
+            </div>
+          )}
+
           <div>
             <p className="text-xs font-semibold text-amber-400 mb-1.5 flex items-center gap-1"><BookMarked size={12} /> 먼저 다질 기초</p>
             <ul className="space-y-1">
@@ -93,6 +109,9 @@ export function CtfPrepGuide({ guide }) {
                       <li key={j} className="text-[11px] text-slate-300 flex gap-1"><span className="text-amber-500 shrink-0">-</span>{l}</li>
                     ))}
                   </ul>
+                  {c.hands_on_note && (
+                    <p className="text-[10px] text-slate-500 italic mt-1.5 pt-1.5 border-t border-white/5">{c.hands_on_note}</p>
+                  )}
                 </div>
               ))}
             </div>
@@ -129,6 +148,134 @@ export function CtfPrepGuide({ guide }) {
               ))}
             </ul>
           </div>
+
+          {guide.competition_day && (
+            <div>
+              <p className="text-xs font-semibold text-amber-400 mb-1.5 flex items-center gap-1"><Flag size={12} /> {guide.competition_day.title}</p>
+              <ul className="space-y-1">
+                {guide.competition_day.items.map((it, i) => (
+                  <li key={i} className="flex gap-1.5 text-xs text-slate-300"><span className="text-amber-500 shrink-0">•</span>{it}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function downloadText(filename, content) {
+  const blob = new Blob([content], { type: 'text/plain' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+export function ReconGuide({ guide }) {
+  const [open, setOpen] = useState(false)
+  if (!guide) return null
+
+  const downloadScript = async () => {
+    try {
+      const res = await fetch('/api/vuln/recon-script')
+      const text = await res.text()
+      downloadText(guide.script_filename, text)
+    } catch {
+      alert('스크립트 다운로드 실패')
+    }
+  }
+
+  return (
+    <div className="bg-emerald-950/30 border border-emerald-500/20 rounded-xl overflow-hidden">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center gap-2 px-4 py-3 hover:bg-emerald-900/20 transition-colors text-left"
+      >
+        <Radar size={15} className="text-emerald-400 shrink-0" />
+        <span className="text-sm font-medium text-emerald-300">{guide.title}</span>
+        <span className="ml-auto text-xs text-emerald-500">{open ? '접기' : '무엇을 어떻게 모을지 보기'}</span>
+        {open ? <ChevronUp size={14} className="text-emerald-500" /> : <ChevronDown size={14} className="text-emerald-500" />}
+      </button>
+
+      {open && (
+        <div className="px-4 pb-4 border-t border-emerald-500/20 pt-3 space-y-4">
+          <p className="text-xs text-slate-300 leading-relaxed">{guide.intro}</p>
+
+          <div className="bg-red-500/10 border border-red-500/25 rounded-lg p-3">
+            <p className="text-xs font-semibold text-red-300 mb-1 flex items-center gap-1">
+              <Scale size={12} /> 합법적 범위 안에서
+            </p>
+            <p className="text-xs text-slate-300 leading-relaxed">{guide.legal_note}</p>
+          </div>
+
+          <div className="space-y-2.5">
+            {guide.categories.map((cat, i) => (
+              <div key={i} className="bg-black/20 rounded-lg p-3">
+                <p className="text-xs font-bold text-emerald-300 mb-1">{cat.name}</p>
+                <p className="text-[11px] text-slate-400 mb-2">
+                  <span className="text-slate-500">수집할 정보: </span>{cat.collect.join(', ')}
+                </p>
+                <div className="space-y-1">
+                  {cat.how.map((h, j) => (
+                    <div key={j} className="text-[11px] flex flex-wrap gap-x-2 gap-y-0.5">
+                      <span className="font-semibold text-slate-300 shrink-0">{h.tool}</span>
+                      <code className="text-emerald-300 font-mono">{h.command}</code>
+                      {h.note && <span className="text-slate-500">— {h.note}</span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {guide.input_type_sources && (
+            <div>
+              <p className="text-xs font-semibold text-emerald-400 mb-1">{guide.input_type_sources.title}</p>
+              <p className="text-[11px] text-slate-400 mb-2">{guide.input_type_sources.intro}</p>
+              <div className="space-y-2">
+                {guide.input_type_sources.items.map((item, i) => (
+                  <div key={i} className="bg-black/20 rounded-lg p-3">
+                    <p className="text-xs font-bold text-slate-200 mb-1.5">{item.label} <span className="text-slate-500 font-normal">({item.input_type})</span></p>
+                    <ul className="space-y-1">
+                      {item.how.map((h, j) => (
+                        <li key={j} className="text-[11px] text-slate-300 flex gap-1.5">
+                          <span className="text-emerald-500 shrink-0">•</span>{h}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+              {guide.input_type_sources.note && (
+                <p className="text-[11px] text-amber-400 mt-2 flex items-start gap-1">
+                  <AlertTriangle size={12} className="shrink-0 mt-0.5" /> {guide.input_type_sources.note}
+                </p>
+              )}
+            </div>
+          )}
+
+          <div>
+            <p className="text-xs font-semibold text-emerald-400 mb-1.5 flex items-center gap-1"><Route size={12} /> 진행 순서</p>
+            <ol className="space-y-1">
+              {guide.workflow.map((s, i) => (
+                <li key={i} className="flex gap-2 text-xs text-slate-300">
+                  <span className="shrink-0 w-4 h-4 rounded-full bg-emerald-600/40 text-emerald-200 flex items-center justify-center font-bold text-[9px]">{i + 1}</span>
+                  <span>{s}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+
+          <button
+            onClick={downloadScript}
+            className="flex items-center gap-1.5 text-xs font-semibold text-emerald-400 hover:text-emerald-300 bg-black/20 px-3 py-2 rounded-lg"
+          >
+            <Download size={13} /> {guide.script_filename} 다운로드 (Python 표준 라이브러리만 사용, 설치 불필요)
+          </button>
         </div>
       )}
     </div>

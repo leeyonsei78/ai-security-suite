@@ -9,25 +9,61 @@
 CTF_PREP_GUIDE = {
     "title": "해킹 대회(CTF), 무엇부터 배워야 할까요?",
     "intro": "CTF는 보통 Web·Pwn·Reverse·Crypto·Forensics·Misc 6개 분야로 나뉩니다. 모든 분야를 한 번에 잘할 필요는 없습니다. 기초를 다진 뒤 진입장벽이 낮은 분야부터 실전 감각을 쌓아나가세요.",
+    "reality_check": (
+        "솔직한 현재 위치 안내: 이 앱은 텍스트로 주어진 스캔 결과·설정·코드·메모리 덤프를 분석하는 도구입니다. "
+        "Web·Forensics·Crypto는 여기서 다루는 시나리오만으로도 초·중반 문제를 푸는 감각을 실질적으로 기를 수 있습니다. "
+        "하지만 Pwn(바이너리 익스플로잇)과 Reverse Engineering은 실제 바이너리를 gdb/Ghidra로 직접 조작해야 실력이 붙는 분야라, "
+        "이 앱만으로는 대회 수준에 도달할 수 없습니다. 아래 실습 사이트(picoCTF pwn/reverse, pwnable.kr, HackTheBox)에서 "
+        "반드시 손으로 직접 풀어보세요 — 이 부분은 도구가 아니라 실전 경험이 전문가를 만듭니다."
+    ),
     "foundations": [
         "리눅스 커맨드라인에 익숙해지기 (파일 권한, 프로세스, 파이프/리다이렉션)",
         "네트워크 기초 (TCP/IP, HTTP 요청/응답, DNS)",
-        "Python으로 간단한 자동화 스크립트 작성하는 법",
+        "Python으로 간단한 자동화 스크립트 작성하는 법 (pwntools, requests 라이브러리 포함)",
         "진법·인코딩 변환에 익숙해지기 (Hex, Base64, URL 인코딩)",
+        "정규표현식 기초 — flag 형식 확인, 로그·문자열에서 패턴 추출에 필수",
     ],
     "categories": [
         {"name": "Web", "desc": "웹 애플리케이션의 로직/설정 실수를 공략합니다. 진입장벽이 낮아 시작하기 좋은 분야입니다.",
-         "learn": ["SQL Injection, XSS, SSRF, 인증/세션 우회 원리", "브라우저 개발자 도구 + Burp Suite/OWASP ZAP으로 요청 가로채기·변조"]},
+         "learn": [
+             "SQL Injection, XSS, SSRF, 인증/세션 우회 원리",
+             "브라우저 개발자 도구 + Burp Suite/OWASP ZAP으로 요청 가로채기·변조",
+             "JWT 조작(alg=none, 키 혼동), 안전하지 않은 역직렬화(Insecure Deserialization)",
+             "템플릿 인젝션(SSTI) — {{7*7}} 같은 페이로드로 서버 사이드 템플릿 엔진 오탐지",
+         ],
+         "hands_on_note": "이 앱의 코드/설정 시나리오와 직접적으로 연결되는 분야입니다 — 여기서 다지고 실전 문제로 바로 확장하세요."},
         {"name": "Forensics", "desc": "패킷·이미지·메모리 덤프 등 주어진 파일에서 숨겨진 정보를 찾아냅니다.",
-         "learn": ["파일 시그니처/스테가노그래피 기초", "Wireshark로 패킷 분석", "Volatility로 메모리 덤프 분석"]},
+         "learn": [
+             "파일 시그니처/매직바이트로 위장된 파일 형식 식별, 스테가노그래피 기초(zsteg, steghide)",
+             "Wireshark로 패킷 분석 (Follow TCP Stream, 파일 추출)",
+             "Volatility로 메모리 덤프 분석 (pslist/pstree/netscan/malfind)",
+         ],
+         "hands_on_note": "이 앱의 메모리 덤프 시나리오와 동일한 사고 흐름입니다 — 실제 .pcap/.mem 파일로 연습을 확장하세요."},
         {"name": "Cryptography", "desc": "취약하게 구현되거나 잘못 사용된 암호 알고리즘을 공략합니다.",
-         "learn": ["고전 암호(Caesar, XOR)와 인코딩 구분하기", "RSA 기초 개념(공개키/개인키, 소인수분해 약점)", "CyberChef로 다양한 변환 실험해보기"]},
+         "learn": [
+             "고전 암호(Caesar, Vigenère)와 인코딩(Base64/Hex) 구분하기",
+             "반복 키 XOR의 구조적 약점과 Known-plaintext 공격",
+             "RSA 흔한 실수: 작은 e, 공통 모듈러스, 가까운 소수(p, q) — 소인수분해 취약점",
+             "CyberChef로 다양한 변환·자동 디코딩(Magic 기능) 실험해보기",
+         ],
+         "hands_on_note": "이 앱의 크립토 시나리오로 원리를 익힌 뒤, 실제로는 RsaCtfTool 같은 자동화 도구도 함께 익혀두세요."},
         {"name": "Reverse Engineering", "desc": "컴파일된 바이너리를 분석해 동작 원리와 숨겨진 조건을 파악합니다.",
-         "learn": ["어셈블리어 기초 (x86/x64)", "Ghidra/IDA Free로 디스어셈블·디컴파일 읽는 법"]},
+         "learn": [
+             "어셈블리어 기초 (x86/x64), 함수 호출 규약(calling convention)",
+             "Ghidra/IDA Free로 디스어셈블·디컴파일 읽는 법",
+             "정적 분석(문자열/함수 흐름) vs 동적 분석(디버거로 실행 추적) 구분",
+         ],
+         "hands_on_note": "⚠️ 이 앱은 텍스트만 분석하므로 실제 바이너리 리버싱을 대신할 수 없습니다. picoCTF의 reverse 문제나 crackmes.one으로 반드시 직접 실습하세요."},
         {"name": "Pwn (Binary Exploitation)", "desc": "메모리 구조를 이해하고 취약한 바이너리의 실행 흐름을 조작합니다. 난이도가 높아 기초를 먼저 다지는 것을 추천합니다.",
-         "learn": ["C언어 메모리 구조(스택/힙), 버퍼 오버플로우 원리", "gdb + pwndbg/GEF로 바이너리 디버깅"]},
+         "learn": [
+             "C언어 메모리 구조(스택/힙), 버퍼 오버플로우 원리",
+             "gdb + pwndbg/GEF로 바이너리 디버깅, 레지스터·스택 프레임 관찰",
+             "카나리/NX/ASLR/PIE 같은 보호 기법과 이를 우회하는 기본 개념(ROP 체인)",
+         ],
+         "hands_on_note": "⚠️ CTF 카테고리 중 가장 실습 의존도가 높습니다. 이 앱으로는 개념만 익힐 수 있으니 pwnable.kr, pwnable.tw에서 처음 20문제 정도를 직접 풀어보는 것을 강력히 권장합니다."},
         {"name": "Misc / OSINT", "desc": "특정 카테고리에 얽매이지 않는 문제나 공개 정보 수집 문제입니다.",
-         "learn": ["문제 설명에 숨겨진 힌트를 꼼꼼히 읽는 습관", "검색 연산자를 활용한 공개 정보 수집(OSINT) 기초"]},
+         "learn": ["문제 설명에 숨겨진 힌트를 꼼꼼히 읽는 습관", "검색 연산자를 활용한 공개 정보 수집(OSINT) 기초"],
+         "hands_on_note": "정답 패턴이 정형화되어 있지 않아 다양한 문제를 접해보는 경험치가 가장 중요합니다."},
     ],
     "tools": [
         {"name": "nmap", "use": "포트/서비스 스캔 (Recon)"},
@@ -35,23 +71,38 @@ CTF_PREP_GUIDE = {
         {"name": "Wireshark", "use": "패킷 캡처 분석"},
         {"name": "Volatility 3", "use": "메모리 포렌식"},
         {"name": "Ghidra / IDA Free", "use": "리버싱 (디스어셈블/디컴파일)"},
-        {"name": "gdb + pwndbg/GEF", "use": "바이너리 디버깅, Pwn"},
+        {"name": "gdb + pwndbg/GEF, pwntools", "use": "바이너리 디버깅 및 익스플로잇 스크립팅, Pwn"},
         {"name": "CyberChef", "use": "인코딩/디코딩/암호 실험"},
         {"name": "John the Ripper / Hashcat", "use": "해시 크래킹"},
+        {"name": "RsaCtfTool", "use": "취약한 RSA 파라미터 자동 공격 (Crypto)"},
     ],
     "learning_order": [
         "리눅스·네트워크 기초를 다집니다.",
         "Web 카테고리부터 시작합니다 — 이 취약점 스캐너의 시나리오들과 바로 연결됩니다.",
         "Forensics·Crypto로 확장합니다 — 도구 사용법 위주라 비교적 빠르게 성장할 수 있습니다.",
-        "Reverse·Pwn은 어셈블리와 메모리 구조부터 천천히 쌓아 올립니다.",
+        "Reverse·Pwn은 어셈블리와 메모리 구조부터 천천히 쌓아 올리되, 반드시 실제 바이너리로 손을 움직여 연습합니다.",
         "위 시나리오들의 체크리스트를 힌트 없이 스스로 채울 수 있는지 반복 확인합니다.",
+        "실제 상시 운영 CTF(picoCTF 등)에 참가해 시간 제한 속에서 문제를 풀어봅니다.",
     ],
     "practice_platforms": [
-        "picoCTF — 입문자를 위한 상시 운영 연습 대회",
+        "picoCTF — 입문자를 위한 상시 운영 연습 대회 (전 분야, 특히 Reverse/Pwn 입문에 적합)",
         "OverTheWire — Bandit 등 단계별 워게임 시리즈",
+        "pwnable.kr / pwnable.tw — Pwn 전문 워게임, 실전 바이너리 익스플로잇 연습",
         "TryHackMe / HackTheBox — 분야별 실습 랩",
-        "CTFtime.org — 전 세계 CTF 대회 일정 모음",
+        "CTFtime.org — 전 세계 CTF 대회 일정과 종료된 대회의 write-up 링크 모음",
     ],
+    "competition_day": {
+        "title": "대회 당일 실전 전략",
+        "items": [
+            "대회 시작 전 VPN 클라이언트, 팀 플랫폼(Discord 등) 로그인, 문제 플랫폼 계정을 미리 확인하세요.",
+            "문제 목록에서 solve 수(이미 푼 팀 수)가 많은 문제부터 시도하세요 — 배점보다 신뢰할 수 있는 실제 난이도 지표입니다.",
+            "한 문제에 30~40분 이상 진전이 없으면 팀원과 상황을 공유하고 다른 문제로 넘어가는 것도 전략입니다.",
+            "flag 형식(예: CTF{...})을 문제 설명이나 대회 공지에서 미리 확인하세요 — 제출 실패의 상당수는 형식 오류입니다.",
+            "팀으로 참가한다면 역할을 나누세요: Web 담당, Pwn/Reverse 담당, Crypto/Forensics/Misc 담당.",
+            "찾은 정보(포트, 오류 메시지, 힌트)는 바로바로 팀 채널에 기록해 중복 작업을 줄이세요.",
+            "대회 종료 후 풀지 못한 문제의 official write-up을 반드시 읽고 정리하는 습관이 다음 대회 실력에 가장 큰 영향을 줍니다.",
+        ],
+    },
 }
 
 SCENARIOS = [
@@ -360,6 +411,46 @@ b64_flag=Q1RGe21lbV9mb3JlbnNpY3NfMTAxfQ==""",
             "PowerShell -enc 값은 Base64로 인코딩된 UTF-16LE 문자열이라 일반 base64 -d만으로는 깨져 보일 수 있습니다. CyberChef의 'From Base64' + 'Decode text (UTF-16LE)' 조합을 사용하세요.",
             "자주 쓰는 Volatility 플러그인을 외워두세요: pslist/pstree(프로세스), netscan(네트워크), cmdline(실행 인자), malfind(인젝션 흔적), filescan(파일 핸들).",
             "flag가 메모리에 평문 또는 Base64로 남아있는 경우가 많으니 strings | grep -i flag는 항상 먼저 시도해보는 습관을 들이세요.",
+        ],
+    },
+    {
+        "id": "ctf-crypto-1",
+        "audience": "ctf",
+        "input_type": "code",
+        "title": "커스텀 암호화 코드 리뷰: flag 복구하기",
+        "level": "대회 대비",
+        "situation": "CTF Crypto 문제에서는 '자체 개발한 경량 암호화' 유틸리티 코드와, 이 코드로 암호화된 flag 값이 함께 주어지는 경우가 매우 흔합니다. 아래는 어떤 서비스의 암호화 유틸리티 코드와 암호화된 flag입니다.",
+        "objective": "표준이 아닌 자체 구현 암호화(Custom Crypto)의 구조적 약점을 코드만 보고 판단하고, Known-plaintext 공격으로 실제 flag를 복구하는 사고 흐름을 익힙니다.",
+        "steps": [
+            "코드를 읽고 '이 암호화가 정말 안전한가?'를 스스로 판단해 보세요. (힌트: XOR 키의 길이와 재사용 여부)",
+            "이 시나리오를 선택하면 샘플이 입력창에 자동으로 채워집니다. [AI로 취약점 스캔]을 눌러 어떤 암호학적 약점이 지적되는지 확인하세요.",
+            "직접 복구해보기: flag가 보통 'CTF{'로 시작한다는 것을 알고 있다면, 암호문을 Base64 디코딩한 뒤 앞 4바이트를 'CTF{'와 XOR하면 키의 앞부분을 알아낼 수 있습니다 (Known-plaintext attack).",
+            "CyberChef의 'XOR Brute Force'나 직접 작성한 Python 스크립트로 나머지 키를 복구해 flag 전체를 해독해보세요.",
+        ],
+        "sample": """# encrypt_util.py — 자체 개발 "경량 암호화" 유틸리티
+KEY = b"CTF25"
+
+def xor_encrypt(data: bytes, key: bytes) -> bytes:
+    return bytes(b ^ key[i % len(key)] for i, b in enumerate(data))
+
+def encrypt_flag(flag: str) -> str:
+    import base64
+    return base64.b64encode(xor_encrypt(flag.encode(), KEY)).decode()
+
+# 서버에 저장된 암호화된 flag:
+# ENCRYPTED_FLAG = 'AAAASU0sJhlZUDonGVZaLSAZV1sgJj9CQT4='
+""",
+        "expected_findings": [
+            {"keyword": "XOR", "label": "반복 키 XOR의 구조적 취약점", "explain": "동일한 짧은 키가 반복되는 XOR 암호화는 키 길이를 알아내면 사실상 복호화가 가능한 고전적 약점입니다."},
+            {"keyword": "하드코딩", "label": "암호화 키 하드코딩", "explain": "KEY 값이 소스코드에 평문으로 남아 있어 소스 유출 시 즉시 복호화가 가능합니다."},
+            {"keyword": "자체", "label": "검증되지 않은 자체 암호화 알고리즘 사용", "explain": "표준 암호 라이브러리 대신 직접 구현한 알고리즘은 안전성이 검증되지 않았습니다."},
+            {"keyword": "Base64", "label": "인코딩을 암호화로 오인", "explain": "Base64는 데이터를 인코딩할 뿐 기밀성을 제공하지 않는데 암호화의 일부로 사용되어 오해를 유발합니다."},
+        ],
+        "tips": [
+            "\"암호화\"라는 이름이 붙어 있어도 직접 구현한 알고리즘(Custom Crypto)은 대부분 검증되지 않아 취약합니다. \"Don't roll your own crypto\"는 실무와 CTF 모두에서 통하는 원칙입니다.",
+            "반복 키 XOR는 키 길이만 알아내면(Kasiski 검사, 반복 패턴 분석) 사실상 뚫린 것과 같습니다.",
+            "flag 형식을 알고 있다면(Known-plaintext) 암호문과 XOR해서 키 일부를 즉시 복구할 수 있습니다 — CTF Crypto에서 가장 자주 쓰는 트릭 중 하나입니다.",
+            "CTF Crypto 초반 문제는 대부분 '약한 커스텀 구현' 아니면 'RSA 파라미터 실수(공통 모듈러스, 작은 e, 가까운 소수)'입니다. 두 유형만 익혀도 초반 점수를 크게 얻을 수 있습니다.",
         ],
     },
     {
@@ -752,6 +843,26 @@ SCENARIO_MOCK_RESULTS: dict[str, dict] = {
             "explanation": "C2로 의심되는 외부 연결이 확인되어, 시스템에 저장된 개인정보가 함께 유출되고 있을 가능성이 있습니다. 확인하려면 네트워크 트래픽과 파일 접근 로그를 추가로 조사해야 합니다.",
             "legal_note": _LEGAL_NOTE,
         },
+        "_mock": True,
+    },
+    "ctf-crypto-1": {
+        "risk_score": 85,
+        "summary": "자체 구현한 반복 키 XOR 암호화가 사용되고 있어, flag를 포함한 암호문이 알려진 평문 공격(Known-plaintext)으로 쉽게 복구될 수 있습니다.",
+        "vulnerabilities": [
+            {"id": "VULN-001", "title": "암호화 키 하드코딩", "severity": "CRITICAL", "cve": "CWE-798",
+             "description": "KEY 값이 소스코드에 평문으로 하드코딩되어 있어 소스 유출 시 즉시 복호화가 가능합니다.",
+             "affected": "KEY 상수", "recommendation": "키를 환경변수/시크릿 매니저로 분리하고 정기적으로 교체하세요."},
+            {"id": "VULN-002", "title": "검증되지 않은 자체 암호화 알고리즘 사용", "severity": "HIGH", "cve": "CWE-327",
+             "description": "표준 암호 라이브러리 대신 직접 구현한 XOR 기반 암호화를 사용하고 있어 안전성이 검증되지 않았습니다.",
+             "affected": "xor_encrypt() 함수", "recommendation": "AES-GCM 등 검증된 표준 암호 라이브러리로 교체하세요."},
+            {"id": "VULN-003", "title": "반복 키 XOR의 구조적 취약점", "severity": "HIGH", "cve": "CWE-326",
+             "description": "동일한 짧은 키(5바이트)가 반복 사용되는 XOR 암호화는 키 길이를 알아내면 사실상 복호화가 가능합니다.",
+             "affected": "xor_encrypt() 함수", "recommendation": "키를 반복 사용하지 말고, 검증된 스트림/블록 암호 모드를 사용하세요."},
+            {"id": "VULN-004", "title": "인코딩을 암호화로 오인", "severity": "MEDIUM", "cve": "CWE-311",
+             "description": "Base64는 데이터를 인코딩할 뿐 기밀성을 제공하지 않는데, 암호화의 일부로 사용되어 오해를 유발합니다.",
+             "affected": "encrypt_flag() 함수", "recommendation": "Base64는 전송 인코딩 용도로만 사용하고, 기밀성은 검증된 암호화로 확보하세요."},
+        ],
+        "personal_data_exposure": {"risk_level": "NONE", "types": [], "explanation": "", "legal_note": ""},
         "_mock": True,
     },
     "privacy-breach-1": {
