@@ -14,7 +14,7 @@ Claude AI를 활용한 보안 분석 도구 모음.
 | 6 | 웹 취약점 스캐너 | ✅ 완료 |
 | 7 | 위협 분석 랩 | ✅ 완료 |
 | 8 | 프롬프트 인젝션 탐지기 | ✅ 완료 |
-| 9 | Pwn/Reverse 실습실 | ✅ 완료 |
+| 9 | Pwn/Reverse/Misc 실습실 | ✅ 완료 |
 | 10 | Web CTF 아레나 | ✅ 완료 |
 
 ---
@@ -95,7 +95,7 @@ AI 챗봇/에이전트에 입력되는 콘텐츠를 분석해 프롬프트 인�
 - 탐지 기법 배지 (Instruction Override, DAN/Role-play Jailbreak, Indirect Prompt Injection, Delimiter Spoofing 등)
 - 위험 신호 / 안전 신호 / 권장 조치 + 최근 분석 이력
 
-### App 9: Pwn/Reverse 실습실 `/pwn-lab`
+### App 9: Pwn/Reverse/Misc 실습실 `/pwn-lab`
 텍스트 분석으로는 대신할 수 없는 바이너리 익스플로잇·리버싱을 실제로 컴파일해서 gdb/Ghidra로 연습하는 실습 페이지.
 취약점 스캐너의 CTF 준비 가이드가 "Pwn/Reverse는 실습이 필요하다"고 안내하는 부분을 실제로 채우기 위해 추가함.
 - **0단계: 실습 환경 준비** (챌린지보다 먼저 노출, 기본 펼침 상태): 준비 체크리스트 + [방법 A: Docker]/[방법 B: WSL] 탭 전환
@@ -110,18 +110,26 @@ AI 챗봇/에이전트에 입력되는 콘텐츠를 분석해 프롬프트 인�
   1. **crackme v1** (입문): XOR 인코딩된 비밀번호 로직을 디컴파일해서 직접 디코딩 — 인코딩 값은 실제로 검증된 값(`KEY=0x4b` → `Gh1dra_Pr0!!`)
   2. **keygen_check** (중급): 가중합 체크섬 알고리즘 분석 — 정답이 하나가 아니라 조건을 만족하는 시리얼을 스스로 "생성"하는 keygen 사고방식 연습 (예시 `6488-7719` 수식 검증 완료)
   3. **antidebug_crackme** (중급~고급): ptrace 자가 검사로 디버거를 탐지하는 바이너리 — "정적 분석(Ghidra)에는 안티 디버깅이 통하지 않는다"는 핵심 교훈
+- **Misc/OSINT (3종, 컴파일 불필요)**: CTF_PREP_GUIDE의 6개 분야 중 유일하게 실습이 없던 카테고리를 채움
+  1. **encoding-chain** (입문): Base64→Hex→ROT13→reverse 4단계 인코딩 벗겨내기
+  2. **zerowidth-stego** (중급): 제로폭 유니코드 문자(U+200B/U+200C)로 숨긴 flag 추출 — 소스에 보이지 않는 문자를 직접 박아두면 편집/개행변환 중 깨질 위험이 있어 `_zw_stego_encode()`로 매번 런타임에 결정론적으로 생성함 (실제로 이 방식으로 바꾸기 전 한 번 리터럴로 잘못 삽입했다가 발견해서 고침)
+  3. **osint-clues** (입문): 가상의 회사 온보딩 문서에서 여러 문단에 흩어진 규칙(이니셜/입사연도/부서코드)을 조합해 flag 도출 — flag가 소스에 그대로 없고 반드시 유도해야 함을 검증함
+- 프론트(`PwnLab.jsx`)는 카테고리가 컴파일형(pwn/reverse)인지에 따라 "소스 코드/빌드 방법/분석 단계" ↔ "제공 파일/준비 단계/풀이 단계" 라벨을 다르게 표시(`isCompiledCategory()`)
 - 각 챌린지: 소스 다운로드, 빌드 방법, 분석 단계, 힌트(단계적 공개), 모범 답안(토글), flag 제출 후 서버 검증(`POST /api/pwn-lab/verify`, 정답 flag는 API 응답에 포함되지 않음)
 - ⚠️ 이 6개 C 소스는 이 세션에서 실제로 컴파일·실행까지 테스트하지는 못했음(환경에 gcc/gdb 없음, Docker 데몬 미실행) — 표준적인 코드이고 모든 flag 문자열이 소스에 정확히 포함됨을 프로그램적으로 검증했지만, 실제로 빌드해보고 이상이 있으면 알려주면 좋음
 
 ### App 10: Web CTF 아레나 `/web-arena`
 "실제로 살아있는 서비스를 대상으로 한 웹 익스플로잇 연습"이 이 앱 전체에 없다는 지적을 받아 신설.
 텍스트/바이너리 분석이 아니라, 진짜 취약한 로컬 FastAPI 엔드포인트(in-memory SQLite)에 실제
-HTTP 요청을 보내 공격하는 페이지. 세 취약점 모두 curl로 실제 익스플로잇까지 검증 완료:
+HTTP 요청을 보내 공격하는 페이지. 6개 취약점 모두 curl로 실제 익스플로잇까지 검증 완료:
 - **SQL Injection** (`POST /api/web-arena/sqli/login`): 파라미터화 없는 쿼리 — `username: admin'--`로 실제 인증 우회 확인
 - **IDOR** (`POST /idor/login` → `GET /idor/orders/{id}`): guest로 로그인 후 소유하지 않은 주문(1002)을 조회해 admin의 기밀 메모(flag) 탈취 확인
 - **Reflected XSS** (`GET /xss/search?q=`): `<script>` 태그가 이스케이프 없이 반영되면 flag 노출 확인. 프론트에서는 실제 DOM 렌더링 대신 안전하게 raw HTML 소스만 `<pre>`로 표시(자기 자신에 대한 XSS 방지)
+- **SSRF** (`GET /ssrf/fetch?url=`): 검증 없는 링크 미리보기가 서버 자신을 통해 "내부 전용" API(`/ssrf/internal-metadata`, 특수 헤더 없이 직접 접근하면 거부)에 접근해 flag 탈취. ⚠️ 최초 구현 시 async 라우트에서 동기 urllib 호출이 자기 자신을 재호출하며 이벤트 루프를 막아 데드락 발생 → 라우트를 일반 `def`(FastAPI가 스레드풀에서 실행)로 바꿔 해결. 실제 클라우드 메타데이터 IP(169.254.169.254)는 방어적으로 차단
+- **JWT 위조** (`POST /jwt/login` → `GET /jwt/admin`): 약한 시크릿(`changeme123`)으로 서명된 HS256 토큰 — role을 admin으로 바꿔 재서명하면 위조 성공. HMAC 직접 구현(pyjwt 미사용, 의존성 추가 없음). 위조용 Python 템플릿 다운로드 제공
+- **SSTI** (`POST /ssti/render`): 사용자 템플릿을 `str.format(**context)`로 그대로 렌더링 — `{secret_config[flag]}`로 컨텍스트 밖 값 유출. 컨텍스트에 순수 dict/문자열만 담아 `__globals__` 체인으로 이어지는 RCE 경로는 없음을 실제로 검증(`{user.__class__.__init__.__globals__}` 시도 시 AttributeError로 안전하게 차단됨)
 - **실전 타이머**: 15/30/60분 프리셋, 시작/일시정지/리셋 (프론트 로컬 상태)
-- **스코어보드**: 3개 챌린지 풀이 여부 + 시각 기록, 전부 풀면 총 소요 시간 표시 (모의 대회 경험, 프론트 로컬 상태 — 팀/서버 공유 기능은 아님)
+- **공유 스코어보드**: `POST /scoreboard/submit` { name, challenge_id, flag } / `GET /scoreboard` — 백엔드 in-memory에 이름별 풀이 기록, 5초 간격 폴링으로 실시간 반영. 같은 서버에 접속한 모두가 공유(팀 연습용). 이를 위해 CORS를 `allow_origins=["*"]`(+ `allow_credentials=False`, 쿠키 미사용이라 안전)로 전역 완화해 LAN의 다른 기기에서도 접속 가능하게 함. 실제 LAN 공유는 `npm run dev -- --host` + 방화벽 포트 개방이 별도로 필요(안내만 하고 실행은 안 함)
 - `backend/services/web_arena.py`, `backend/routers/web_arena.py` — 서버 재시작 시 데이터 초기화, 로컬 개발 전용임을 페이지에 명시
 
 ---

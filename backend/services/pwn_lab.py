@@ -86,6 +86,24 @@ LAB_SETUP = {
     ),
 }
 
+
+def _zw_stego_encode(flag: str, cover: str) -> str:
+    """제로폭 유니코드 문자(U+200B/U+200C)로 flag를 cover 텍스트 뒤에 숨긴다.
+
+    보이지 않는 문자를 소스 파일에 리터럴로 직접 박아두면 편집기/개행 변환(CRLF<->LF)·
+    인코딩 정규화 과정에서 조용히 깨질 위험이 있다. 그래서 정적 문자열이 아니라 매번
+    런타임에 결정론적으로 생성해서 항상 정확한 바이트를 보장한다.
+    """
+    zws, zwnj = chr(0x200B), chr(0x200C)  # 0, 1
+    bits = "".join(format(b, "08b") for b in flag.encode())
+    hidden = "".join(zwnj if b == "1" else zws for b in bits)
+    return cover + hidden
+
+
+_MISC_ZW_FLAG = "MISC{z3ro_w1dth_1s_1nv1s1bl3}"
+_MISC_ZW_COVER = "The quarterly report has been reviewed and approved by the operations team."
+_MISC_ZW_TEXT = _zw_stego_encode(_MISC_ZW_FLAG, _MISC_ZW_COVER)
+
 CHALLENGES = [
     {
         "id": "pwn-ret2win",
@@ -626,6 +644,145 @@ int main(void) {
 시도하기 전에 정적 분석만으로 풀리는지부터 확인하는 것이 효율적입니다.
 """,
     },
+    {
+        "id": "misc-encoding-chain",
+        "category": "misc",
+        "title": "인코딩 체인 풀기: 4단계를 벗겨내면 flag",
+        "difficulty": "입문",
+        "tool_focus": "cyberchef",
+        "situation": (
+            "CTF Misc 카테고리에서 가장 흔한 유형입니다: 문자열 하나가 주어지는데, 겉보기엔 "
+            "Base64 같지만 디코딩해도 바로 flag가 나오지 않습니다. 여러 인코딩이 겹겹이 씌워져 "
+            "있기 때문입니다."
+        ),
+        "objective": "Base64/Hex/ROT13/문자열 뒤집기를 눈으로 구분하고, 순서대로 하나씩 벗겨내는 습관을 기릅니다.",
+        "source_filename": "encoded_flag.txt",
+        "source_code": "N2Q3NDYxMzE3MTMwNzA2MTMzNWY3MzMwNWY2NjY1MzM2YzM0Nzk3YjUwNDY1NjVh",
+        "build_steps": [
+            "위 문자열을 encoded_flag.txt로 저장합니다 (아래 [파일 다운로드] 버튼 사용 가능).",
+            "별도 컴파일/실행 환경이 필요 없습니다 — CyberChef(웹) 또는 Python만 있으면 됩니다.",
+        ],
+        "analysis_steps": [
+            "문자열의 생김새를 관찰합니다: 알파벳 대소문자+숫자로만 이루어져 있고 길이가 4의 배수입니다 → Base64로 추정.",
+            "Base64로 디코딩합니다. 결과가 0-9a-f로만 이루어진 문자열이면 → Hex(16진수)로 추정.",
+            "Hex를 아스키로 디코딩합니다. 결과가 읽을 수 있는 문자이긴 한데 flag 형식이 아니라면 → 알파벳 치환 암호(ROT13 등)를 의심합니다.",
+            "ROT13을 적용해봅니다 (또는 CyberChef의 'Magic' 기능으로 자동 탐지). 결과가 'MISC{'로 끝나고 '}'로 시작한다면 → 문자열이 통째로 뒤집혀 있는 것입니다.",
+            "마지막으로 문자열을 뒤집으면(reverse) flag가 나옵니다.",
+        ],
+        "hints": [
+            "알파벳과 숫자, 종종 +/=로 끝나는 문자열은 Base64일 가능성이 높습니다.",
+            "CyberChef(온라인 도구)의 'Magic' 오퍼레이션은 여러 인코딩을 자동으로 시도해 후보를 보여줍니다 — 처음엔 이걸로 감을 잡아도 됩니다.",
+            "0-9와 a-f만 있는 문자열은 거의 항상 Hex(16진수)입니다.",
+            "flag의 앞뒤가 뒤바뀌어 보인다면('}'로 시작하는 등) 문자열 전체가 reverse된 것입니다.",
+        ],
+        "solution": """1. 주어진 문자열은 Base64입니다 → Base64 디코딩
+2. 결과는 16진수(hex) 문자열입니다 → hex 디코딩(바이트를 아스키로 변환)
+3. 결과는 ROT13이 적용된 상태입니다 → ROT13 적용 (자기 자신이 역연산이라 한 번 더 적용하면 원복)
+4. 결과는 flag가 통째로 뒤집힌 상태입니다 → 문자열 reverse
+
+Python으로 한 번에:
+import base64, codecs
+s = "N2Q3NDYxMzE3MTMwNzA2MTMzNWY3MzMwNWY2NjY1MzM2YzM0Nzk3YjUwNDY1NjVh"
+step1 = base64.b64decode(s).decode()
+step2 = bytes.fromhex(step1).decode()
+step3 = codecs.decode(step2, 'rot_13')
+flag = step3[::-1]
+print(flag)  # MISC{l4y3rs_0f_3nc0d1ng}
+""",
+    },
+    {
+        "id": "misc-zerowidth-stego",
+        "category": "misc",
+        "title": "보이지 않는 flag: 제로폭 문자 스테가노그래피",
+        "difficulty": "중급",
+        "tool_focus": "python",
+        "situation": (
+            "평범해 보이는 메모 한 줄이 주어졌습니다. 화면에는 아무 이상이 없어 보이지만, "
+            "실제로는 눈에 보이지 않는 유니코드 문자들이 뒤에 숨어 있습니다."
+        ),
+        "objective": "제로폭 문자(Zero-Width Character)를 이용한 텍스트 스테가노그래피의 원리를 이해하고, 실제로 숨겨진 데이터를 추출해봅니다. 이 기법은 실제로 워터마킹·정보 유출 탐지에도 쓰입니다.",
+        "source_filename": "hidden_message.txt",
+        "source_code": _MISC_ZW_TEXT,
+        "build_steps": [
+            "위 내용을 hidden_message.txt로 저장합니다 (아래 [파일 다운로드] 버튼을 꼭 사용하세요 — 화면에서 직접 복사하면 보이지 않는 문자가 누락될 수 있습니다).",
+            "파이썬만 있으면 됩니다. len()으로 파일의 문자 수를 세어보면 눈에 보이는 문장보다 훨씬 길다는 것을 알 수 있습니다.",
+        ],
+        "analysis_steps": [
+            "Python으로 파일을 읽고 len(text)를 확인합니다 — 눈에 보이는 문장 길이(약 77자)보다 훨씬 깁니다.",
+            "각 문자를 ord()로 확인하며 U+200B(zero-width space)나 U+200C(zero-width non-joiner)처럼 이상한 코드포인트가 있는지 찾아봅니다.",
+            "두 문자 중 하나를 비트 0, 다른 하나를 비트 1로 놓고 순서대로 이어붙입니다.",
+            "8비트씩 끊어 바이트로 만들고 아스키로 디코딩하면 flag가 나옵니다.",
+        ],
+        "hints": [
+            "겉보기엔 평범한 한 문장인데 파일 크기가 이상하게 크다면, 눈에 안 보이는 문자가 숨어있다는 신호입니다.",
+            "U+200B(ZERO WIDTH SPACE)와 U+200C(ZERO WIDTH NON-JOINER)는 화면에 아무것도 그리지 않지만 실제로 존재하는 문자입니다.",
+            "숨겨진 문자들은 눈에 보이는 문장 '뒤에' 이어붙어 있습니다.",
+            "두 종류의 문자가 등장하는 패턴을 0과 1로 바꿔서 8개씩 묶으면 bytes.decode()로 문자열이 됩니다.",
+        ],
+        "solution": """1. hidden_message.txt를 UTF-8로 읽습니다.
+2. 텍스트에서 U+200B, U+200C 두 문자만 걸러냅니다.
+3. U+200B를 0, U+200C를 1로 바꿔 비트 문자열을 만듭니다.
+4. 8비트씩 끊어 바이트로 변환하고 디코딩합니다.
+
+Python:
+ZWS, ZWNJ = '\\u200b', '\\u200c'
+text = open('hidden_message.txt', encoding='utf-8').read()
+bits = ''.join('1' if c == ZWNJ else '0' for c in text if c in (ZWS, ZWNJ))
+flag = bytes(int(bits[i:i+8], 2) for i in range(0, len(bits), 8)).decode()
+print(flag)  # MISC{z3ro_w1dth_1s_1nv1s1bl3}
+""",
+    },
+    {
+        "id": "misc-osint-clues",
+        "category": "misc",
+        "title": "흩어진 단서 조합하기: 가상 온보딩 문서 OSINT",
+        "difficulty": "입문",
+        "tool_focus": "logic",
+        "situation": (
+            "가상의 회사(ACME Corp)의 내부 온보딩 문서 일부가 주어집니다. 실제 인물이나 회사가 "
+            "아닌, 교육 목적으로 만든 가상의 문서입니다. flag는 문서에 그대로 적혀있지 않고, "
+            "여러 문단에 흩어진 규칙과 정보를 조합해야 완성됩니다."
+        ),
+        "objective": "하나의 출처만으로는 답이 나오지 않고, 여러 단서를 교차 대조해야 결론이 나오는 실제 OSINT의 사고 흐름을 연습합니다.",
+        "source_filename": "onboarding_notes.txt",
+        "source_code": """=== ACME Corp — 2026년 온보딩 가이드 (내부용, 교육 목적의 가상 문서) ===
+
+사내 계정 규칙:
+- Slack 핸들 형식: [이름 이니셜 2자, 소문자, First name + Last name 순서] + [입사연도 뒤 2자리] + [부서코드 2자리]
+- 부서코드: ENG=07, SEC=13, HR=21, OPS=42
+
+인수인계 메모 (일부):
+"신입 Security 팀 인원 Jordan Lee가 2024년에 입사했습니다.
+계정 발급 당시 임시로 남아있던 값은 'MISC{' + 그의 Slack 핸들 + '}' 형식이었습니다 (전체 소문자).\"""",
+        "build_steps": [
+            "위 내용을 onboarding_notes.txt로 저장합니다 (아래 [파일 다운로드] 버튼 사용 가능).",
+            "특별한 도구 없이 문서를 꼼꼼히 읽는 것만으로 풀 수 있습니다.",
+        ],
+        "analysis_steps": [
+            "문서에서 규칙(Slack 핸들 형식, 부서코드 표)을 먼저 정리합니다.",
+            "인물 정보(이름, 입사연도, 소속 팀)를 별도로 정리합니다.",
+            "이름에서 First name과 Last name의 이니셜을 소문자로 뽑아냅니다.",
+            "입사연도의 뒤 2자리를 뽑아냅니다.",
+            "소속 팀명을 부서코드 표에서 찾아 매칭합니다.",
+            "규칙에 정의된 순서대로 세 조각을 이어붙여 Slack 핸들을 완성하고, flag 형식에 대입합니다.",
+        ],
+        "hints": [
+            "규칙 문단과 인물 정보 문단이 분리되어 있습니다 — 표를 만들어 정리하면 헷갈리지 않습니다.",
+            "Jordan Lee의 이니셜은 First name(Jordan)의 J + Last name(Lee)의 L 순서로 'jl'입니다.",
+            "'Security 팀'은 부서코드 표의 SEC과 같은 의미입니다 (SEC=13).",
+            "입사연도 2024의 '뒤 2자리'는 24입니다. [이니셜][연도][부서코드] 순서로 이어붙이세요.",
+        ],
+        "solution": """1. 이름 이니셜: Jordan(J) + Lee(L) = 'jl'
+2. 입사연도 뒤 2자리: 2024 -> '24'
+3. 부서코드: Security = SEC = '13'
+4. Slack 핸들 = 'jl' + '24' + '13' = 'jl2413'
+5. flag = MISC{jl2413}
+
+이 챌린지의 핵심은 한 문단만 봐서는 답이 안 나온다는 것입니다. 실제 OSINT도 SNS 프로필,
+공개 문서, 도메인 등록 정보처럼 서로 다른 출처의 조각 정보를 교차 대조해야 결론이 나오는
+경우가 대부분입니다.
+""",
+    },
 ]
 
 FLAGS = {
@@ -635,6 +792,9 @@ FLAGS = {
     "reverse-crackme": "RE{gh1dra_and_x0r_ar3_fr1ends}",
     "reverse-keygen": "RE{w31ght3d_ch3cksum_cr4ck3d}",
     "reverse-antidebug": "RE{4nt1_d3bug_byp4ss3d}",
+    "misc-encoding-chain": "MISC{l4y3rs_0f_3nc0d1ng}",
+    "misc-zerowidth-stego": _MISC_ZW_FLAG,
+    "misc-osint-clues": "MISC{jl2413}",
 }
 
 

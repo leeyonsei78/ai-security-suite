@@ -16,8 +16,11 @@ app = FastAPI(title="AI Security Suite", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],
-    allow_credentials=True,
+    # 와일드카드: 이 앱은 쿠키 기반 인증을 쓰지 않아(모든 토큰은 Authorization 헤더로 전달)
+    # allow_credentials=False와 조합해도 안전하다. Web CTF 아레나의 공유 스코어보드처럼
+    # 같은 네트워크(LAN)의 팀원이 다른 호스트/포트에서 접속해 연습할 수 있도록 개방한다.
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )

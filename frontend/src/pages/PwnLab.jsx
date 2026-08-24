@@ -1,26 +1,30 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
-import { Cpu, Binary, Puzzle, Download, ChevronDown, ChevronUp, KeyRound, CheckCircle2, XCircle, EyeOff, Eye, Square, SquareCheck, Container, TerminalSquare, Wrench } from 'lucide-react'
+import { Cpu, Binary, Puzzle, ScanSearch, Download, ChevronDown, ChevronUp, KeyRound, CheckCircle2, XCircle, EyeOff, Eye, Square, SquareCheck, Container, TerminalSquare, Wrench } from 'lucide-react'
 import GuidePanel from '../components/GuidePanel'
 
 const LAB_STEPS = [
-  '0단계(실습 환경 준비)를 먼저 끝내세요 — Docker 또는 WSL 중 하나로 리눅스 gdb 환경을 만들어야 합니다.',
-  '각 챌린지 카드에서 [소스 다운로드]로 .c 파일을 받아 실습 환경 폴더에 저장합니다.',
-  '"빌드 방법"의 gcc 명령으로 컴파일합니다.',
-  '"분석 단계"를 따라 gdb 또는 Ghidra로 직접 분석·디버깅해 보세요. 막히면 힌트를 하나씩 열어보세요.',
+  'Pwn/Reverse 챌린지는 0단계(실습 환경 준비)를 먼저 끝내세요 — Docker 또는 WSL 중 하나로 리눅스 gdb 환경을 만들어야 합니다. Misc 챌린지는 별도 환경 없이 바로 풀 수 있습니다.',
+  '각 챌린지 카드에서 [다운로드]로 파일을 받습니다 (Pwn/Reverse는 컴파일 전 .c 소스, Misc는 그대로 분석할 파일).',
+  'Pwn/Reverse는 "빌드 방법"의 gcc 명령으로 컴파일 후 "분석 단계"를 따라 gdb/Ghidra로 분석합니다. Misc는 "풀이 단계"를 따라 바로 분석합니다.',
+  '막히면 힌트를 하나씩 열어보세요.',
   'flag를 찾으면 하단 입력창에 제출해 정답인지 바로 확인할 수 있습니다.',
-  '스스로 못 풀었다면 [모범 답안 보기]로 전체 풀이를 확인하세요 — 그래도 직접 gdb/Ghidra로 따라 실행해보는 것이 실력에 남습니다.',
+  '스스로 못 풀었다면 [모범 답안 보기]로 전체 풀이를 확인하세요 — 그래도 직접 따라 해보는 것이 실력에 남습니다.',
 ]
 const LAB_TIPS = [
   'ret2win은 스택 카나리와 PIE를 꺼서 빌드합니다 — 오프셋 계산에만 집중할 수 있도록 난이도를 낮춘 것입니다.',
   'crackme는 소스가 주어지지만, 실전처럼 컴파일된 바이너리만 보고 Ghidra로 분석하는 연습을 해보세요.',
+  'Misc의 제로폭 문자 챌린지는 파일을 반드시 [다운로드] 버튼으로 받으세요 — 화면에서 직접 복사하면 숨겨진 문자가 누락될 수 있습니다.',
   '이 실습은 여러분 자신의 로컬 환경(Docker 컨테이너 등)에서 직접 컴파일·실행하는 것을 전제로 합니다.',
 ]
 
 const CATEGORY_CONFIG = {
   pwn: { label: 'Pwn', icon: Binary, color: 'text-violet-400', bg: 'bg-violet-500/10 border-violet-500/30' },
   reverse: { label: 'Reverse', icon: Puzzle, color: 'text-cyan-400', bg: 'bg-cyan-500/10 border-cyan-500/30' },
+  misc: { label: 'Misc/OSINT', icon: ScanSearch, color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/30' },
 }
+
+const isCompiledCategory = (category) => category === 'pwn' || category === 'reverse'
 
 function downloadText(filename, content) {
   const blob = new Blob([content], { type: 'text/plain' })
@@ -196,7 +200,7 @@ function ChallengeCard({ challenge }) {
           onClick={() => setSourceOpen(o => !o)}
           className="flex items-center gap-1.5 text-xs font-semibold text-slate-300 hover:text-slate-100 mb-1.5"
         >
-          {sourceOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />} 소스 코드 ({challenge.source_filename})
+          {sourceOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />} {isCompiledCategory(challenge.category) ? '소스 코드' : '제공 파일'} ({challenge.source_filename})
         </button>
         {sourceOpen && (
           <div className="space-y-1.5">
@@ -205,7 +209,7 @@ function ChallengeCard({ challenge }) {
                 onClick={() => downloadText(challenge.source_filename, challenge.source_code)}
                 className="flex items-center gap-1 text-xs text-slate-300 hover:text-white bg-black/20 px-2 py-1 rounded"
               >
-                <Download size={12} /> 소스 다운로드
+                <Download size={12} /> {isCompiledCategory(challenge.category) ? '소스' : '파일'} 다운로드
               </button>
             </div>
             <pre className="bg-black/40 rounded-lg p-3 text-[11px] text-slate-300 overflow-x-auto font-mono max-h-72">{challenge.source_code}</pre>
@@ -215,7 +219,7 @@ function ChallengeCard({ challenge }) {
 
       {/* Build steps */}
       <div>
-        <p className="text-xs font-semibold text-slate-300 mb-1.5">빌드 방법</p>
+        <p className="text-xs font-semibold text-slate-300 mb-1.5">{isCompiledCategory(challenge.category) ? '빌드 방법' : '준비 단계'}</p>
         <ol className="space-y-1">
           {challenge.build_steps.map((s, i) => (
             <li key={i} className="flex gap-2 text-xs text-slate-300">
@@ -228,7 +232,7 @@ function ChallengeCard({ challenge }) {
 
       {/* Analysis steps */}
       <div>
-        <p className="text-xs font-semibold text-slate-300 mb-1.5">분석 단계 ({challenge.tool_focus})</p>
+        <p className="text-xs font-semibold text-slate-300 mb-1.5">{isCompiledCategory(challenge.category) ? `분석 단계 (${challenge.tool_focus})` : '풀이 단계'}</p>
         <ol className="space-y-1">
           {challenge.analysis_steps.map((s, i) => (
             <li key={i} className="flex gap-2 text-xs text-slate-300">
@@ -331,12 +335,12 @@ export default function PwnLab() {
       <div className="max-w-4xl mx-auto space-y-6">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Cpu className="text-cyan-400" size={26} /> Pwn / Reverse 실습실
+            <Cpu className="text-cyan-400" size={26} /> Pwn / Reverse / Misc 실습실
           </h1>
-          <p className="text-slate-400 text-sm mt-1">실제로 컴파일해서 gdb·Ghidra로 직접 분석하는 바이너리 실습 챌린지입니다. 취약점 스캐너의 텍스트 분석만으로는 다룰 수 없는 영역을 여기서 손으로 연습하세요.</p>
+          <p className="text-slate-400 text-sm mt-1">Pwn·Reverse는 실제로 컴파일해서 gdb·Ghidra로 직접 분석하고, Misc/OSINT는 인코딩·스테가노그래피·단서 조합을 직접 풀어보는 실습 챌린지입니다. 취약점 스캐너의 텍스트 분석만으로는 다룰 수 없는 영역을 여기서 손으로 연습하세요.</p>
         </div>
 
-        <GuidePanel title="Pwn/Reverse 실습실 사용 가이드" steps={LAB_STEPS} tips={LAB_TIPS} />
+        <GuidePanel title="Pwn/Reverse/Misc 실습실 사용 가이드" steps={LAB_STEPS} tips={LAB_TIPS} />
 
         <LabSetupPanel setup={labSetup} />
 
