@@ -233,6 +233,18 @@ npm install
 npm run dev
 ```
 
+서버 두 개를 띄운 뒤 `http://localhost:5173` 접속. 주요 페이지: `/vuln`(취약점 스캐너),
+`/pwn-lab`(Pwn/Reverse/Misc 실습실), `/web-arena`(Web CTF 아레나) — 나머지는 NavBar 참고.
+
+### 기능별로 서버 외에 추가로 필요한 것
+
+| 페이지/기능 | 추가로 필요한 것 |
+|---|---|
+| `/vuln`, `/web-arena` | 없음 — 서버 두 개만 켜면 바로 테스트 가능 |
+| `/pwn-lab`의 Pwn/Reverse 6개 챌린지(실제 컴파일·gdb 실행) | Docker Desktop 켜기 또는 WSL Ubuntu 설치 (페이지 0단계에 Docker/WSL 두 가지 방법 안내됨) |
+| `/pwn-lab`의 Misc 3개 챌린지 | 없음 — 컴파일 불필요 |
+| `/web-arena` 공유 스코어보드를 팀원과 같이 쓰기 | `npm run dev -- --host` + 방화벽에서 5173/8000 포트 개방 후 `http://<호스트 IP>:5173` 공유 |
+
 ## 환경 변수 (.env)
 
 ```
@@ -246,5 +258,5 @@ API 키 없으면 Mock 모드로 자동 동작.
 
 세션이 끊기면:
 1. 이 파일의 **진행 상황 표** 확인
-2. 서버 재시작: 백엔드 `uvicorn main:app --reload --port 8000`, 프론트엔드 `npm run dev`
+2. 서버 재시작: 백엔드 `uvicorn main:app --reload --port 8000`, 프론트엔드 `npm run dev` (기능별 추가 요구사항은 위 [실행 방법] 표 참고)
 3. **Roadmap**에서 다음 작업 선택
