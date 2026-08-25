@@ -12,6 +12,9 @@ import ThreatAnalysis from './pages/ThreatAnalysis'
 import PromptInjectionDetector from './pages/PromptInjectionDetector'
 import PwnLab from './pages/PwnLab'
 import WebArena from './pages/WebArena'
+import SecurityPolicyGenerator from './pages/SecurityPolicyGenerator'
+import ModelAudit from './pages/ModelAudit'
+import PentestLab from './pages/PentestLab'
 
 export default function App() {
   const [isMock, setIsMock] = useState(null)
@@ -34,6 +37,9 @@ export default function App() {
         <Route path="/injection" element={<PromptInjectionDetector />} />
         <Route path="/pwn-lab" element={<PwnLab />} />
         <Route path="/web-arena" element={<WebArena />} />
+        <Route path="/policy" element={<SecurityPolicyGenerator />} />
+        <Route path="/model-audit" element={<ModelAudit />} />
+        <Route path="/pentest-lab" element={<PentestLab />} />
       </Routes>
     </BrowserRouter>
   )

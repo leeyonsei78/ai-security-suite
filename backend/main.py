@@ -10,6 +10,10 @@ from routers.threat_analysis import router as threat_router
 from routers.prompt_injection import router as injection_router
 from routers.pwn_lab import router as pwn_lab_router
 from routers.web_arena import router as web_arena_router
+from routers.policy import router as policy_router
+from routers.model_audit import router as model_audit_router
+from routers.monitor import router as monitor_router
+from routers.pentest_lab import router as pentest_lab_router
 from services.claude_service import IS_MOCK
 
 app = FastAPI(title="AI Security Suite", version="1.0.0")
@@ -35,6 +39,10 @@ app.include_router(threat_router)
 app.include_router(injection_router)
 app.include_router(pwn_lab_router)
 app.include_router(web_arena_router)
+app.include_router(policy_router)
+app.include_router(model_audit_router)
+app.include_router(monitor_router)
+app.include_router(pentest_lab_router)
 
 
 @app.get("/")

@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import axios from 'axios'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
-import { Shield, AlertTriangle, Upload, Trash2, RefreshCw } from 'lucide-react'
+import { Shield, AlertTriangle, Upload, Trash2, RefreshCw, Radio, Send, Play, Square } from 'lucide-react'
 import StatCard from '../components/StatCard'
 import SeverityBadge from '../components/SeverityBadge'
 import GuidePanel from '../components/GuidePanel'
@@ -13,12 +13,14 @@ const DASHBOARD_STEPS = [
   '"개요" 탭에서 위협 분포 파이차트와 심각도별 통계를 확인합니다.',
   '"이벤트" 탭에서 탐지된 이벤트 목록(소스 IP, 심각도, 대응 방안)을 확인합니다.',
   '"상세" 탭에서 선택한 분석 건의 전체 결과를 조회합니다.',
+  '"실시간" 탭에서 [모니터링 시작]을 누르면 합성 로그가 주기적으로 생성되어 자동 분석되는 모습을 볼 수 있습니다.',
 ]
 const DASHBOARD_TIPS = [
   'API 키 없이도 Mock 모드로 샘플 위협 8종이 자동 생성됩니다.',
   '우측 상단 새로고침(↺) 버튼으로 최신 결과를 다시 불러옵니다.',
   '휴지통(🗑) 버튼으로 전체 분석 내역을 초기화할 수 있습니다.',
   '심각도: Critical(즉시조치) → High → Medium → Low → Info 순으로 위험합니다.',
+  "실시간 모니터링은 실제 로그 소스가 연결된 게 아니라, 데모용으로 합성한 로그를 서버가 주기적으로 생성해 분석하는 시뮬레이션입니다.",
 ]
 
 const PIE_COLORS = {
@@ -36,6 +38,43 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState('overview')
   const [isMock, setIsMock] = useState(null)
   const [selectedAnalysis, setSelectedAnalysis] = useState(null)
+
+  const [liveConnected, setLiveConnected] = useState(false)
+  const [liveEvents, setLiveEvents] = useState([])
+  const [injectText, setInjectText] = useState('')
+  const wsRef = useRef(null)
+
+  const startLiveMonitoring = () => {
+    if (wsRef.current) return
+    const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const ws = new WebSocket(`${proto}//${window.location.host}/api/monitor/ws`)
+    ws.onopen = () => setLiveConnected(true)
+    ws.onclose = () => { setLiveConnected(false); wsRef.current = null }
+    ws.onerror = () => { setLiveConnected(false) }
+    ws.onmessage = (evt) => {
+      const data = JSON.parse(evt.data)
+      if (data.type !== 'event') return
+      setLiveEvents(prev => [data, ...prev].slice(0, 30))
+      setAnalyses(prev => [...prev, data])
+    }
+    wsRef.current = ws
+  }
+
+  const stopLiveMonitoring = () => {
+    wsRef.current?.close()
+    wsRef.current = null
+    setLiveConnected(false)
+  }
+
+  const sendInjectedLine = () => {
+    if (!injectText.trim() || wsRef.current?.readyState !== WebSocket.OPEN) return
+    wsRef.current.send(JSON.stringify({ type: 'inject', line: injectText.trim() }))
+    setInjectText('')
+  }
+
+  useEffect(() => {
+    return () => { wsRef.current?.close() }
+  }, [])
 
   const fetchThreats = async () => {
     const res = await axios.get('/api/threats')
@@ -151,17 +190,18 @@ export default function Dashboard() {
 
         {/* Tabs */}
         <div className="flex gap-2 border-b border-slate-700">
-          {['overview', 'events', 'analyze', 'detail'].map((tab) => (
+          {['overview', 'events', 'analyze', 'live', 'detail'].map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`px-4 py-2 text-sm font-medium capitalize transition-colors ${
+              className={`px-4 py-2 text-sm font-medium capitalize transition-colors flex items-center gap-1.5 ${
                 activeTab === tab
                   ? 'border-b-2 border-blue-400 text-blue-400'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              {tab === 'overview' ? '개요' : tab === 'events' ? '이벤트' : tab === 'analyze' ? '분석' : '결과'}
+              {tab === 'live' && liveConnected && <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />}
+              {tab === 'overview' ? '개요' : tab === 'events' ? '이벤트' : tab === 'analyze' ? '분석' : tab === 'live' ? '실시간' : '결과'}
             </button>
           ))}
         </div>
@@ -267,6 +307,78 @@ export default function Dashboard() {
               >
                 {loading ? '분석 중...' : 'Claude AI로 분석'}
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* Live Monitoring Tab */}
+        {activeTab === 'live' && (
+          <div className="space-y-4">
+            <div className="bg-slate-800 rounded-xl p-4 border border-slate-700 flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2">
+                <Radio size={18} className={liveConnected ? 'text-red-400' : 'text-slate-500'} />
+                <span className="text-sm font-medium">
+                  {liveConnected ? '모니터링 중 — 8초마다 자동 분석' : '모니터링 중지됨'}
+                </span>
+                {liveConnected && <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />}
+              </div>
+              <button
+                onClick={liveConnected ? stopLiveMonitoring : startLiveMonitoring}
+                className={`ml-auto flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  liveConnected ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'
+                }`}
+              >
+                {liveConnected ? <><Square size={14} /> 모니터링 중지</> : <><Play size={14} /> 모니터링 시작</>}
+              </button>
+            </div>
+
+            <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
+              <p className="text-xs font-semibold text-slate-400 mb-2">이벤트 주입 (다음 분석 주기에 포함됨)</p>
+              <div className="flex gap-2">
+                <input
+                  value={injectText}
+                  onChange={e => setInjectText(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && sendInjectedLine()}
+                  placeholder='예: sshd: Failed password for root from 1.2.3.4 port 22 ssh2'
+                  disabled={!liveConnected}
+                  className="flex-1 bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:border-blue-500 disabled:opacity-50"
+                />
+                <button
+                  onClick={sendInjectedLine}
+                  disabled={!liveConnected || !injectText.trim()}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-40 rounded-lg text-sm"
+                >
+                  <Send size={14} /> 전송
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              {liveEvents.length === 0 && (
+                <p className="text-slate-500 text-center py-12">
+                  {liveConnected ? '첫 분석 주기를 기다리는 중...' : '[모니터링 시작]을 누르면 실시간 피드가 여기 표시됩니다.'}
+                </p>
+              )}
+              {liveEvents.map((ev, i) => (
+                <div key={i} className="bg-slate-800 rounded-xl p-4 border border-slate-700">
+                  <div className="flex items-center gap-2 mb-2">
+                    <SeverityBadge severity={ev.threat_level} />
+                    <span className="text-xs text-slate-500">{ev.events?.length ?? 0}개 이벤트</span>
+                    <span className="ml-auto text-xs text-slate-500">{new Date().toLocaleTimeString('ko-KR')}</span>
+                  </div>
+                  <p className="text-sm text-slate-300">{ev.summary}</p>
+                  {ev.events?.length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      {ev.events.map((e, j) => (
+                        <div key={j} className="text-xs text-slate-400 flex gap-2">
+                          <SeverityBadge severity={e.severity} />
+                          <span>{e.category}: {e.description}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
         )}
