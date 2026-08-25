@@ -103,8 +103,8 @@ function AlertBell() {
 
 export default function NavBar({ isMock }) {
   return (
-    <nav className="bg-slate-900 border-b border-slate-700 px-6 py-0 flex items-center gap-1">
-      <div className="flex items-center gap-2 pr-6 py-3 border-r border-slate-700 mr-2">
+    <nav className="bg-slate-900 border-b border-slate-700 px-6 py-0 flex items-center gap-1 overflow-x-auto">
+      <div className="flex items-center gap-2 pr-6 py-3 border-r border-slate-700 mr-2 shrink-0 whitespace-nowrap">
         <Shield className="text-blue-400" size={20} />
         <span className="font-bold text-sm">AI Security Suite</span>
         {isMock !== null && (
@@ -115,7 +115,7 @@ export default function NavBar({ isMock }) {
       </div>
       {links.map(({ to, icon: Icon, label, disabled }) =>
         disabled ? (
-          <span key={to} className="flex items-center gap-1.5 px-4 py-3 text-sm text-slate-600 cursor-not-allowed">
+          <span key={to} className="flex items-center gap-1.5 px-4 py-3 text-sm text-slate-600 cursor-not-allowed shrink-0 whitespace-nowrap">
             <Icon size={15} />{label}
             <span className="text-xs bg-slate-700 px-1 rounded">준비중</span>
           </span>
@@ -125,7 +125,7 @@ export default function NavBar({ isMock }) {
             to={to}
             end
             className={({ isActive }) =>
-              `flex items-center gap-1.5 px-4 py-3 text-sm transition-colors border-b-2 ${
+              `flex items-center gap-1.5 px-4 py-3 text-sm transition-colors border-b-2 shrink-0 whitespace-nowrap ${
                 isActive
                   ? 'border-blue-400 text-blue-400'
                   : 'border-transparent text-slate-400 hover:text-slate-200'
