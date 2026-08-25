@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from services.webscan_service import scan_url, IS_MOCK
-from services import db
+from services import db, notify
 
 router = APIRouter(prefix="/api/webscan", tags=["webscan"])
 
@@ -28,6 +28,8 @@ async def scan(request: ScanRequest):
 
     entry = dict(result)
     entry["id"] = db.add_entry(APP_NAME, entry)
+    has_critical = any(f.get("severity") == "CRITICAL" for f in entry.get("findings", []))
+    await notify.alert_if_critical(APP_NAME, has_critical, "CRITICAL", entry.get("summary", ""), entry["id"])
     return entry
 
 

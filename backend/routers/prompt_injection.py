@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from services.prompt_injection_service import analyze_injection
-from services import db
+from services import db, notify
 
 router = APIRouter(prefix="/api/injection", tags=["prompt-injection"])
 
@@ -27,6 +27,9 @@ async def analyze(request: AnalyzeRequest):
         **result,
     }
     entry["id"] = db.add_entry(APP_NAME, entry)
+    await notify.alert_if_critical(
+        APP_NAME, entry.get("verdict") == "INJECTION", "INJECTION", entry.get("summary", ""), entry["id"]
+    )
     return entry
 
 

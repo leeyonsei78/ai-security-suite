@@ -194,6 +194,7 @@ LLM 기반 애플리케이션 자체의 설계/설정이 안전한지를 OWASP T
 - **사용 가이드**: 모든 페이지에 접이식 GuidePanel 포함
 - **네비게이션 바**: MOCK/LIVE 배지 + 전체 메뉴
 - **히스토리 SQLite 영속화**: App 1(대시보드·실시간 모니터링 포함)/2/3/4/5/6/7/8/11/12의 분석 이력·상담 세션이 `backend/data/history.db`(SQLite, gitignore 대상)에 저장되어 서버 재시작에도 유지됨. 앱마다 저장 형태(단순 이력 리스트 vs 채팅 세션)가 달라도 `backend/services/db.py`의 범용 `app` 구분 단일 테이블(JSON 블롭)로 통일 처리 — `add_entry`/`get_history`/`get_entry`/`update_entry`/`clear_history` 5개 함수로 기존 `history: list[dict]`/`sessions: dict[int, dict]` 패턴을 그대로 대체함. **CTF/모의해킹 연습용 앱(App 9 Pwn/Reverse, App 10 Web CTF 아레나, App 13 모의 해킹 랩)은 서버 재시작 시 초기화되는 것이 의도된 동작이라 이 영속화 대상에서 제외**됨
+- **알림 시스템**: 탐지형 앱 7개(대시보드·실시간모니터링/피싱/취약점/IoC/웹스캐너/인젝션탐지/모델감사)가 각 앱 기준 최고 심각도(CRITICAL/MALICIOUS/INJECTION)로 판정하면 자동으로 Slack/이메일 알림을 시도함. `SLACK_WEBHOOK_URL` 또는 `SMTP_*`(`.env.example` 참고) 미설정 시 자동 Mock 모드로 동작 — 실제 전송 없이 알림 로그만 기록(다른 앱들의 Mock/Live 패턴과 동일). 알림 로그는 NavBar 우측 종(🔔) 아이콘 드롭다운에서 확인·삭제 가능(`GET/DELETE /api/alerts`, 20초 폴링). 상담형 앱(인시던트/위협분석)과 생성형 앱(정책생성기)은 "위협 판정"이 아니라 대상에서 제외. `backend/services/notify.py`, `backend/routers/alerts.py`. ⚠️ 알림 발송(urllib/smtplib)은 블로킹 호출이라 async 라우트에서 직접 기다리면 안 됨 — 실시간 모니터링 WebSocket에서 이미 겪은 함정과 같은 유형이라 `alert_if_critical()`이 내부적으로 `run_in_executor`로 스레드 위임함. 7개 앱 전부에서 Mock 데이터 조합으로 실제 CRITICAL을 트리거해 alerts 카운트 증가·비-CRITICAL 시 미증가·서버 재시작 후 유지까지 curl로 검증 완료
 
 ---
 
@@ -201,7 +202,7 @@ LLM 기반 애플리케이션 자체의 설계/설정이 안전한지를 OWASP T
 
 ### 기존 기능 강화
 - [x] **실시간 모니터링**: 로그를 주기적으로 자동 분석 (WebSocket) — App 1 `/`의 "실시간" 탭으로 구현됨
-- [ ] **알림 시스템**: Critical 탐지 시 이메일/슬랙 알림
+- [x] **알림 시스템**: Critical 탐지 시 이메일/슬랙 알림 — `backend/services/notify.py`, 위 "공통 기능" 참고. 모든 Roadmap "기존 기능 강화" 항목 완료
 - [x] **히스토리 DB**: 메모리 저장 → SQLite 영속화 — `backend/services/db.py`, 위 "공통 기능" 참고
 
 ### 새 도구 추가
@@ -238,6 +239,7 @@ test_AI_security/
 │   │   ├── prompt_injection.py ← App 8
 │   │   ├── pwn_lab.py         ← App 9
 │   │   ├── web_arena.py       ← App 10
+│   │   ├── alerts.py          ← 알림 로그 조회/삭제 (GET/DELETE /api/alerts)
 │   │   ├── policy.py          ← App 11 (+ /guide)
 │   │   ├── model_audit.py     ← App 12 (+ /reference)
 │   │   ├── monitor.py         ← App 1 실시간 모니터링 (WebSocket /ws)
@@ -246,6 +248,7 @@ test_AI_security/
 │       ├── claude_service.py
 │       ├── mock_data.py
 │       ├── db.py              ← 히스토리 SQLite 영속화 (범용, App 1/2/3/4/5/6/7/8/11/12 공용)
+│       ├── notify.py          ← Critical 탐지 시 Slack/이메일 알림
 │       ├── live_monitor.py    ← App 1 실시간 모니터링용 합성 로그 생성기
 │       ├── phishing_service.py / mock_phishing.py
 │       ├── vulnerability_service.py / mock_vulnerability.py / vuln_scenarios.py / recon_guide.py
@@ -315,8 +318,17 @@ npm run dev
 
 ```
 ANTHROPIC_API_KEY=your_key_here
+
+# 알림 시스템 (선택, .env.example 참고)
+SLACK_WEBHOOK_URL=
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_USER=
+SMTP_PASSWORD=
+ALERT_EMAIL_TO=
+ALERT_EMAIL_FROM=
 ```
-API 키 없으면 Mock 모드로 자동 동작.
+API 키 없으면 Mock 모드로 자동 동작. 알림 관련 변수도 하나도 없으면 알림이 Mock 모드로 동작(로그만 기록, 실제 전송 없음).
 
 ---
 

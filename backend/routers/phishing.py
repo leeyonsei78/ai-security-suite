@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from services.phishing_service import analyze_phishing
-from services import db
+from services import db, notify
 
 router = APIRouter(prefix="/api/phishing", tags=["phishing"])
 
@@ -27,6 +27,9 @@ async def analyze(request: AnalyzeRequest):
         **result,
     }
     entry["id"] = db.add_entry(APP_NAME, entry)
+    await notify.alert_if_critical(
+        APP_NAME, entry.get("verdict") == "MALICIOUS", "MALICIOUS", entry.get("summary", ""), entry["id"]
+    )
     return entry
 
 

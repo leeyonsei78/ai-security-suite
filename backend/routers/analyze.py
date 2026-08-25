@@ -1,7 +1,7 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from pydantic import BaseModel
 from services.claude_service import analyze_logs
-from services import db
+from services import db, notify
 
 router = APIRouter(prefix="/api", tags=["analyze"])
 
@@ -26,6 +26,9 @@ async def analyze_log_file(file: UploadFile = File(...)):
     result = analyze_logs(log_text)
     result["filename"] = file.filename
     result["id"] = db.add_entry(APP_NAME, result)
+    await notify.alert_if_critical(
+        APP_NAME, result.get("threat_level") == "CRITICAL", "CRITICAL", result.get("summary", ""), result["id"]
+    )
     return result
 
 
@@ -37,6 +40,9 @@ async def analyze_log_text(request: TextAnalysisRequest):
     result = analyze_logs(request.content)
     result["filename"] = "manual_input"
     result["id"] = db.add_entry(APP_NAME, result)
+    await notify.alert_if_critical(
+        APP_NAME, result.get("threat_level") == "CRITICAL", "CRITICAL", result.get("summary", ""), result["id"]
+    )
     return result
 
 

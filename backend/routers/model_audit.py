@@ -3,7 +3,7 @@ from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 from services.model_audit_service import analyze_model_audit, generate_markdown_report
 from services.owasp_llm_reference import OWASP_LLM_TOP10, OWASP_LLM_DISCLAIMER
-from services import db
+from services import db, notify
 
 router = APIRouter(prefix="/api/model-audit", tags=["model-audit"])
 
@@ -34,6 +34,10 @@ async def analyze(request: AnalyzeRequest):
         **result,
     }
     entry["id"] = db.add_entry(APP_NAME, entry)
+    critical_count = entry.get("counts", {}).get("CRITICAL", 0)
+    await notify.alert_if_critical(
+        APP_NAME, critical_count > 0, "CRITICAL", entry.get("summary", ""), entry["id"]
+    )
     return entry
 
 

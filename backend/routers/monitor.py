@@ -2,7 +2,7 @@ import asyncio
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from services.claude_service import analyze_logs
 from services.live_monitor import generate_batch
-from services import db
+from services import db, notify
 
 router = APIRouter(prefix="/api/monitor", tags=["monitor"])
 
@@ -43,6 +43,10 @@ async def monitor_ws(websocket: WebSocket):
             result["raw_log"] = batch_text
             # 대시보드(App 1)의 수동 분석과 같은 history에 합류시켜 "개요"/"이벤트" 탭에도 반영되게 한다.
             result["id"] = db.add_entry("dashboard", result)
+            await notify.alert_if_critical(
+                "dashboard", result.get("threat_level") == "CRITICAL", "CRITICAL",
+                result.get("summary", ""), result["id"],
+            )
 
             await websocket.send_json({"type": "event", **result})
     except WebSocketDisconnect:
