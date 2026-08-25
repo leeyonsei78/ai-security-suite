@@ -19,6 +19,8 @@ Claude AI를 활용한 보안 분석 도구 모음.
 | 11 | 보안 정책 생성기 | ✅ 완료 |
 | 12 | AI 모델 감사 | ✅ 완료 |
 | 13 | 모의 해킹 랩 | ✅ 완료 |
+| 14 | 피싱 모의훈련 이메일 생성기 | ✅ 완료 |
+| 15 | CVE 실시간 조회 | ✅ 완료 |
 
 ---
 
@@ -189,6 +191,28 @@ LLM 기반 애플리케이션 자체의 설계/설정이 안전한지를 OWASP T
 - `backend/services/pentest_lab.py`, `backend/routers/pentest_lab.py`
 - 체인 1 전체(정찰 2회 → 경로 조작으로 토큰 획득 → 내부망 접근 → 백업 계정 탈취 → 로그인 → 세션 위조 → flag → verify)와 체인 2 전체(정찰 2회 → 커맨드 인젝션으로 whoami 확인 → find로 SUID 발견 → cat 권한거부 확인 → backup_tool 오용으로 flag → verify)를 curl로 순서대로 실행해 둘 다 실제로 끝까지 성공하는 것을 검증 완료. 프론트는 `vite build` 성공으로 검증(이 세션 내내 Chrome 자동화가 localhost에서 에러 반환 — 사용자에게 직접 확인 요청함)
 
+### App 14: 피싱 모의훈련 이메일 생성기 `/phishing-sim`
+App 2(피싱 탐지기)와 짝을 이루는 "생성기" — 사내 보안 인식 훈련(모의훈련)용 피싱 시뮬레이션 이메일을 AI로 생성. App 9/10/13이 공격 실습을, App 2/8이 탐지를 다루는 것과 같은 공격↔방어 짝 패턴을 새 영역(훈련 콘텐츠 제작)으로 확장.
+- 입력: 시나리오 유형 6종(IT 비밀번호 만료/택배 배송·통관/급여명세서·인사공지/경영진 사칭 CEO Fraud/클라우드 문서 공유/보안팀 사칭 계정 경고), 난이도 3단계(초급/중급/고급 — 위험 신호의 명확성 조절), 조직 컨텍스트 자유 텍스트(선택)
+- 출력: 이메일 제목·발신 표시 이름·발신 도메인·본문·CTA 문구 + **포함된 위험 신호 정답지**(신호별 설명) + 난이도 설계 근거
+- **안전 설계(듀얼유즈 대응)**: 발신 도메인은 항상 `.example`(RFC 2606 예약 도메인)만 사용하고 실제 브랜드명을 사칭하지 않도록 시스템 프롬프트에 명시. 가상의 회사 "ACME Corp"(App 9 OSINT 챌린지와 동일한 가상 회사 재사용)를 기본 배경으로 사용. 실제 작동하는 악성 링크·자격증명 수집 폼·실행 파일은 생성하지 않는 텍스트 초안 전용 도구(Policy Generator의 "AI가 생성한 초안, 실사용 전 검토 필요" 패턴과 동일). 페이지 상단에 상시 노출되는 경고 배너(RoE 배너와 같은 패턴)로 "사내 승인 없이 발송 금지, 발신 도메인은 실사용 전 조직의 정식 모의훈련 플랫폼 도메인으로 교체" 등을 고지
+- **정답지 숨기기 토글**: 훈련 진행자가 피훈련자에게 이메일만 먼저 보여주고(정답지 숨김), 교육 시점에 위험 신호 정답지를 공개할 수 있도록 프론트에 표시/숨기기 버튼 제공
+- Markdown 리포트 다운로드에 이메일 원문 + 정답지 + 진행 유의사항 포함 (`GET /api/phishing-sim/report/{id}`)
+- 히스토리 SQLite 영속화 대상에 포함(탐지형이 아닌 생성형이라 알림 시스템 대상에서는 제외 — 인시던트/위협분석/정책생성기와 동일한 스코프 결정)
+- `backend/routers/phishing_sim.py`, `backend/services/phishing_sim_service.py` / `mock_phishing_sim.py`(시나리오 6종 큐레이션)
+- 백엔드는 curl로 `/scenarios`·`/generate`(Mock)·`/history`·`/report/{id}` 전부 검증 완료, 프론트는 `vite build` 성공 + 사용자 브라우저 확인 필요
+
+### App 15: CVE 실시간 조회 `/cve-lookup`
+이 프로젝트에서 **Claude AI를 쓰지 않는 유일한 앱** — Anthropic API 키 유무와 무관하게 항상 NVD(미국 국가 취약점 데이터베이스, `services.nvd.nist.gov`) 공식 REST API를 실시간으로 조회한다. 지금까지 모든 앱이 Claude API 또는 로컬 데모 데이터만 썼는데, 실제 외부 라이브 데이터를 쓰는 첫 사례.
+- CVE 번호로 직접 조회(`GET /api/cve/{cve_id}`, 형식 검증 `CVE-YYYY-NNNNN`) + 키워드 검색(`GET /api/cve/search?keyword=`, 예: log4j·openssl)
+- 응답: 실제 CVSS 점수/버전/심각도/벡터, 공식 설명(영문), 공개일·최종수정일, CWE 목록, 참고 링크(최대 8개) — 전부 NVD 원본 데이터 그대로(AI 가공 없음)
+- `NVD_API_KEY` 환경변수는 선택 사항(`.env.example`에 추가) — 없으면 30초당 5건, 있으면 30초당 50건으로 요청 한도가 늘어남. `GET /api/cve/status`로 키 설정 여부 확인 가능
+- 에러 처리: 잘못된 CVE 형식(400) / 존재하지 않는 CVE(404) / 레이트리밋(429) / 타임아웃(504) / 네트워크 오류(502)를 각각 구분해 친절한 한국어 메시지로 반환 — httpx `AsyncClient`를 그대로 `await`하는 방식이라(다른 앱들의 블로킹-호출 스레드 오프로드 패턴과 달리 애초에 비동기라 이벤트 루프를 막지 않음) 별도 `run_in_executor` 불필요
+- **App 3(취약점 스캐너) 연동**: 스캔 결과의 각 취약점 카드에서 `cve` 필드가 `CVE-YYYY-NNNNN` 형식과 일치하면 "실시간 CVE 조회" 링크가 나타나 `/cve-lookup?cve=...`로 이동, AI가 추정한 CVSS 점수와 NVD 공식 데이터를 직접 대조해볼 수 있음 (`VulnerabilityScanner.jsx`)
+- Log4Shell(CVE-2021-44228, CVSS 10.0 CRITICAL)과 openssl 키워드 검색을 실제로 조회해 정확한 실제 데이터가 반환되는 것, 잘못된 형식·존재하지 않는 CVE의 에러 처리까지 curl로 검증 완료
+- `backend/routers/cve_lookup.py`, `backend/services/cve_lookup_service.py`
+- 백엔드는 curl로 실제 NVD API 대상 검증 완료, 프론트는 `vite build` 성공 + 사용자 브라우저 확인 필요
+
 ---
 
 ## 공통 기능
@@ -196,8 +220,8 @@ LLM 기반 애플리케이션 자체의 설계/설정이 안전한지를 OWASP T
 - **Mock / Live 모드**: `.env`에 `ANTHROPIC_API_KEY` 없으면 자동 Mock 모드
 - **사용 가이드**: 모든 페이지에 접이식 GuidePanel 포함
 - **네비게이션 바**: MOCK/LIVE 배지 + 전체 메뉴
-- **히스토리 SQLite 영속화**: App 1(대시보드·실시간 모니터링 포함)/2/3/4/5/6/7/8/11/12의 분석 이력·상담 세션이 `backend/data/history.db`(SQLite, gitignore 대상)에 저장되어 서버 재시작에도 유지됨. 앱마다 저장 형태(단순 이력 리스트 vs 채팅 세션)가 달라도 `backend/services/db.py`의 범용 `app` 구분 단일 테이블(JSON 블롭)로 통일 처리 — `add_entry`/`get_history`/`get_entry`/`update_entry`/`clear_history` 5개 함수로 기존 `history: list[dict]`/`sessions: dict[int, dict]` 패턴을 그대로 대체함. **CTF/모의해킹 연습용 앱(App 9 Pwn/Reverse, App 10 Web CTF 아레나, App 13 모의 해킹 랩)은 서버 재시작 시 초기화되는 것이 의도된 동작이라 이 영속화 대상에서 제외**됨
-- **알림 시스템**: 탐지형 앱 7개(대시보드·실시간모니터링/피싱/취약점/IoC/웹스캐너/인젝션탐지/모델감사)가 각 앱 기준 최고 심각도(CRITICAL/MALICIOUS/INJECTION)로 판정하면 자동으로 Slack/이메일 알림을 시도함. `SLACK_WEBHOOK_URL` 또는 `SMTP_*`(`.env.example` 참고) 미설정 시 자동 Mock 모드로 동작 — 실제 전송 없이 알림 로그만 기록(다른 앱들의 Mock/Live 패턴과 동일). 알림 로그는 NavBar 우측 종(🔔) 아이콘 드롭다운에서 확인·삭제 가능(`GET/DELETE /api/alerts`, 20초 폴링). 상담형 앱(인시던트/위협분석)과 생성형 앱(정책생성기)은 "위협 판정"이 아니라 대상에서 제외. `backend/services/notify.py`, `backend/routers/alerts.py`. ⚠️ 알림 발송(urllib/smtplib)은 블로킹 호출이라 async 라우트에서 직접 기다리면 안 됨 — 실시간 모니터링 WebSocket에서 이미 겪은 함정과 같은 유형이라 `alert_if_critical()`이 내부적으로 `run_in_executor`로 스레드 위임함. 7개 앱 전부에서 Mock 데이터 조합으로 실제 CRITICAL을 트리거해 alerts 카운트 증가·비-CRITICAL 시 미증가·서버 재시작 후 유지까지 curl로 검증 완료
+- **히스토리 SQLite 영속화**: App 1(대시보드·실시간 모니터링 포함)/2/3/4/5/6/7/8/11/12/14/15의 분석 이력·상담 세션이 `backend/data/history.db`(SQLite, gitignore 대상)에 저장되어 서버 재시작에도 유지됨. 앱마다 저장 형태(단순 이력 리스트 vs 채팅 세션)가 달라도 `backend/services/db.py`의 범용 `app` 구분 단일 테이블(JSON 블롭)로 통일 처리 — `add_entry`/`get_history`/`get_entry`/`update_entry`/`clear_history` 5개 함수로 기존 `history: list[dict]`/`sessions: dict[int, dict]` 패턴을 그대로 대체함. **CTF/모의해킹 연습용 앱(App 9 Pwn/Reverse, App 10 Web CTF 아레나, App 13 모의 해킹 랩)은 서버 재시작 시 초기화되는 것이 의도된 동작이라 이 영속화 대상에서 제외**됨
+- **알림 시스템**: 탐지형 앱 7개(대시보드·실시간모니터링/피싱/취약점/IoC/웹스캐너/인젝션탐지/모델감사)가 각 앱 기준 최고 심각도(CRITICAL/MALICIOUS/INJECTION)로 판정하면 자동으로 Slack/이메일 알림을 시도함. `SLACK_WEBHOOK_URL` 또는 `SMTP_*`(`.env.example` 참고) 미설정 시 자동 Mock 모드로 동작 — 실제 전송 없이 알림 로그만 기록(다른 앱들의 Mock/Live 패턴과 동일). 알림 로그는 NavBar 우측 종(🔔) 아이콘 드롭다운에서 확인·삭제 가능(`GET/DELETE /api/alerts`, 20초 폴링). 상담형 앱(인시던트/위협분석)과 생성형 앱(정책생성기, 피싱 모의훈련 생성기)은 "위협 판정"이 아니라 대상에서 제외. CVE 조회(App 15)는 Claude AI 자체를 쓰지 않는 순수 조회 도구라 마찬가지로 제외. `backend/services/notify.py`, `backend/routers/alerts.py`. ⚠️ 알림 발송(urllib/smtplib)은 블로킹 호출이라 async 라우트에서 직접 기다리면 안 됨 — 실시간 모니터링 WebSocket에서 이미 겪은 함정과 같은 유형이라 `alert_if_critical()`이 내부적으로 `run_in_executor`로 스레드 위임함. 7개 앱 전부에서 Mock 데이터 조합으로 실제 CRITICAL을 트리거해 alerts 카운트 증가·비-CRITICAL 시 미증가·서버 재시작 후 유지까지 curl로 검증 완료
 
 ---
 
@@ -209,7 +233,9 @@ LLM 기반 애플리케이션 자체의 설계/설정이 안전한지를 OWASP T
 - [x] **히스토리 DB**: 메모리 저장 → SQLite 영속화 — `backend/services/db.py`, 위 "공통 기능" 참고
 
 ### 새 도구 추가
-현재 없음 — 새 아이디어가 생기면 여기에 추가.
+- [x] **피싱 모의훈련 이메일 생성기**: App 14 (`/phishing-sim`)로 구현됨
+- [x] **CVE 실시간 조회 연동**: App 15 (`/cve-lookup`)로 구현됨, App 3 취약점 스캐너와 연동
+- 그 외 후보였던 시크릿 스캐너·통합 리스크 대시보드는 미착수 — 새 아이디어가 생기면 여기에 추가.
 
 ---
 
@@ -246,11 +272,13 @@ test_AI_security/
 │   │   ├── policy.py          ← App 11 (+ /guide)
 │   │   ├── model_audit.py     ← App 12 (+ /reference)
 │   │   ├── monitor.py         ← App 1 실시간 모니터링 (WebSocket /ws)
-│   │   └── pentest_lab.py     ← App 13 (+ /stages, /exploit-template)
+│   │   ├── pentest_lab.py     ← App 13 (+ /stages, /exploit-template)
+│   │   ├── phishing_sim.py    ← App 14 (+ /scenarios, /report/{id})
+│   │   └── cve_lookup.py      ← App 15 (+ /search, /status) — Claude API 미사용, NVD 공식 API 직접 호출
 │   └── services/
 │       ├── claude_service.py
 │       ├── mock_data.py
-│       ├── db.py              ← 히스토리 SQLite 영속화 (범용, App 1/2/3/4/5/6/7/8/11/12 공용)
+│       ├── db.py              ← 히스토리 SQLite 영속화 (범용, App 1/2/3/4/5/6/7/8/11/12/14/15 공용)
 │       ├── notify.py          ← Critical 탐지 시 Slack/이메일 알림
 │       ├── live_monitor.py    ← App 1 실시간 모니터링용 합성 로그 생성기
 │       ├── phishing_service.py / mock_phishing.py
@@ -264,7 +292,9 @@ test_AI_security/
 │       ├── web_arena.py
 │       ├── policy_service.py / mock_policy.py / policy_guide.py
 │       ├── model_audit_service.py / mock_model_audit.py / owasp_llm_reference.py
-│       └── pentest_lab.py
+│       ├── pentest_lab.py
+│       ├── phishing_sim_service.py / mock_phishing_sim.py
+│       └── cve_lookup_service.py
 └── frontend/
     ├── package.json
     └── src/
@@ -288,7 +318,9 @@ test_AI_security/
             ├── WebArena.jsx
             ├── SecurityPolicyGenerator.jsx
             ├── ModelAudit.jsx
-            └── PentestLab.jsx
+            ├── PentestLab.jsx
+            ├── PhishingSimGenerator.jsx
+            └── CveLookup.jsx
 ```
 
 ## 실행 방법
@@ -312,10 +344,11 @@ npm run dev
 
 | 페이지/기능 | 추가로 필요한 것 |
 |---|---|
-| `/vuln`, `/web-arena`, `/policy`, `/model-audit`, `/pentest-lab` | 없음 — 서버 두 개만 켜면 바로 테스트 가능 |
+| `/vuln`, `/web-arena`, `/policy`, `/model-audit`, `/pentest-lab`, `/phishing-sim` | 없음 — 서버 두 개만 켜면 바로 테스트 가능 |
 | `/pwn-lab`의 Pwn/Reverse 6개 챌린지(실제 컴파일·gdb 실행) | Docker Desktop 켜기 또는 WSL Ubuntu 설치 (페이지 0단계에 Docker/WSL 두 가지 방법 안내됨) |
 | `/pwn-lab`의 Misc 3개 챌린지 | 없음 — 컴파일 불필요 |
 | `/web-arena` 공유 스코어보드를 팀원과 같이 쓰기 | `npm run dev -- --host` + 방화벽에서 5173/8000 포트 개방 후 `http://<호스트 IP>:5173` 공유 |
+| `/cve-lookup` | 없음 — 다만 외부 인터넷(services.nvd.nist.gov)에 접속 가능해야 함. `NVD_API_KEY` 없이도 동작(요청 한도만 낮음) |
 
 ## 환경 변수 (.env)
 
@@ -330,6 +363,9 @@ SMTP_USER=
 SMTP_PASSWORD=
 ALERT_EMAIL_TO=
 ALERT_EMAIL_FROM=
+
+# CVE 실시간 조회 (선택, .env.example 참고) — 없어도 동작하나 요청 한도가 낮음
+NVD_API_KEY=
 ```
 API 키 없으면 Mock 모드로 자동 동작. 알림 관련 변수도 하나도 없으면 알림이 Mock 모드로 동작(로그만 기록, 실제 전송 없음).
 

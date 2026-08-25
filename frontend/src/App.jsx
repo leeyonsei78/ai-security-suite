@@ -15,6 +15,8 @@ import WebArena from './pages/WebArena'
 import SecurityPolicyGenerator from './pages/SecurityPolicyGenerator'
 import ModelAudit from './pages/ModelAudit'
 import PentestLab from './pages/PentestLab'
+import PhishingSimGenerator from './pages/PhishingSimGenerator'
+import CveLookup from './pages/CveLookup'
 
 export default function App() {
   const [isMock, setIsMock] = useState(null)
@@ -40,6 +42,8 @@ export default function App() {
         <Route path="/policy" element={<SecurityPolicyGenerator />} />
         <Route path="/model-audit" element={<ModelAudit />} />
         <Route path="/pentest-lab" element={<PentestLab />} />
+        <Route path="/phishing-sim" element={<PhishingSimGenerator />} />
+        <Route path="/cve-lookup" element={<CveLookup />} />
       </Routes>
     </BrowserRouter>
   )
