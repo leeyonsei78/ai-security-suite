@@ -3,10 +3,11 @@ from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 from services.policy_service import generate_policy, generate_markdown_report
 from services.policy_guide import POLICY_PREP_GUIDE, ENVIRONMENT_RECON
+from services import db
 
 router = APIRouter(prefix="/api/policy", tags=["security-policy"])
 
-history: list[dict] = []
+APP_NAME = "policy"
 
 VALID_ENV_TYPES = {"web_server", "cloud", "internal_network", "container", "database"}
 
@@ -33,30 +34,30 @@ async def generate(request: GenerateRequest):
 
     result = generate_policy(request.environment_type, request.compliance, request.description)
     entry = {
-        "id": len(history) + 1,
         "environment_type": request.environment_type,
         "compliance": request.compliance,
         "preview": request.description[:100].replace("\n", " "),
         **result,
     }
-    history.append(entry)
+    entry["id"] = db.add_entry(APP_NAME, entry)
     return entry
 
 
 @router.get("/history")
 async def get_history():
+    history = db.get_history(APP_NAME)
     return {"history": history, "total": len(history)}
 
 
 @router.delete("/history")
 async def clear_history():
-    history.clear()
+    db.clear_history(APP_NAME)
     return {"message": "Cleared"}
 
 
 @router.get("/report/{entry_id}", response_class=PlainTextResponse)
 async def get_report(entry_id: int):
-    entry = next((h for h in history if h["id"] == entry_id), None)
+    entry = db.get_entry(APP_NAME, entry_id)
     if not entry:
         raise HTTPException(status_code=404, detail="Report not found")
     return generate_markdown_report(entry)

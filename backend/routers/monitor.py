@@ -2,7 +2,7 @@ import asyncio
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from services.claude_service import analyze_logs
 from services.live_monitor import generate_batch
-from routers.analyze import analysis_store
+from services import db
 
 router = APIRouter(prefix="/api/monitor", tags=["monitor"])
 
@@ -40,9 +40,9 @@ async def monitor_ws(websocket: WebSocket):
             # Offload to a thread so the loop stays free to keep receiving injected lines meanwhile.
             result = await loop.run_in_executor(None, analyze_logs, batch_text)
             result["filename"] = "live_monitor"
-            result["id"] = len(analysis_store) + 1
             result["raw_log"] = batch_text
-            analysis_store.append(result)
+            # 대시보드(App 1)의 수동 분석과 같은 history에 합류시켜 "개요"/"이벤트" 탭에도 반영되게 한다.
+            result["id"] = db.add_entry("dashboard", result)
 
             await websocket.send_json({"type": "event", **result})
     except WebSocketDisconnect:

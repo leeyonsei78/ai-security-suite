@@ -1,11 +1,11 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from pydantic import BaseModel
 from services.claude_service import analyze_logs
+from services import db
 
 router = APIRouter(prefix="/api", tags=["analyze"])
 
-# In-memory store for demo purposes
-analysis_store: list[dict] = []
+APP_NAME = "dashboard"
 
 
 class TextAnalysisRequest(BaseModel):
@@ -25,8 +25,7 @@ async def analyze_log_file(file: UploadFile = File(...)):
 
     result = analyze_logs(log_text)
     result["filename"] = file.filename
-    result["id"] = len(analysis_store) + 1
-    analysis_store.append(result)
+    result["id"] = db.add_entry(APP_NAME, result)
     return result
 
 
@@ -37,17 +36,17 @@ async def analyze_log_text(request: TextAnalysisRequest):
 
     result = analyze_logs(request.content)
     result["filename"] = "manual_input"
-    result["id"] = len(analysis_store) + 1
-    analysis_store.append(result)
+    result["id"] = db.add_entry(APP_NAME, result)
     return result
 
 
 @router.get("/threats")
 async def get_threats():
-    return {"analyses": analysis_store, "total": len(analysis_store)}
+    analyses = db.get_history(APP_NAME)
+    return {"analyses": analyses, "total": len(analyses)}
 
 
 @router.delete("/threats")
 async def clear_threats():
-    analysis_store.clear()
+    db.clear_history(APP_NAME)
     return {"message": "Cleared"}

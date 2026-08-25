@@ -193,6 +193,7 @@ LLM 기반 애플리케이션 자체의 설계/설정이 안전한지를 OWASP T
 - **Mock / Live 모드**: `.env`에 `ANTHROPIC_API_KEY` 없으면 자동 Mock 모드
 - **사용 가이드**: 모든 페이지에 접이식 GuidePanel 포함
 - **네비게이션 바**: MOCK/LIVE 배지 + 전체 메뉴
+- **히스토리 SQLite 영속화**: App 1(대시보드·실시간 모니터링 포함)/2/3/4/5/6/7/8/11/12의 분석 이력·상담 세션이 `backend/data/history.db`(SQLite, gitignore 대상)에 저장되어 서버 재시작에도 유지됨. 앱마다 저장 형태(단순 이력 리스트 vs 채팅 세션)가 달라도 `backend/services/db.py`의 범용 `app` 구분 단일 테이블(JSON 블롭)로 통일 처리 — `add_entry`/`get_history`/`get_entry`/`update_entry`/`clear_history` 5개 함수로 기존 `history: list[dict]`/`sessions: dict[int, dict]` 패턴을 그대로 대체함. **CTF/모의해킹 연습용 앱(App 9 Pwn/Reverse, App 10 Web CTF 아레나, App 13 모의 해킹 랩)은 서버 재시작 시 초기화되는 것이 의도된 동작이라 이 영속화 대상에서 제외**됨
 
 ---
 
@@ -201,7 +202,7 @@ LLM 기반 애플리케이션 자체의 설계/설정이 안전한지를 OWASP T
 ### 기존 기능 강화
 - [x] **실시간 모니터링**: 로그를 주기적으로 자동 분석 (WebSocket) — App 1 `/`의 "실시간" 탭으로 구현됨
 - [ ] **알림 시스템**: Critical 탐지 시 이메일/슬랙 알림
-- [ ] **히스토리 DB**: 메모리 저장 → SQLite 영속화
+- [x] **히스토리 DB**: 메모리 저장 → SQLite 영속화 — `backend/services/db.py`, 위 "공통 기능" 참고
 
 ### 새 도구 추가
 현재 없음 — 새 아이디어가 생기면 여기에 추가.
@@ -244,6 +245,7 @@ test_AI_security/
 │   └── services/
 │       ├── claude_service.py
 │       ├── mock_data.py
+│       ├── db.py              ← 히스토리 SQLite 영속화 (범용, App 1/2/3/4/5/6/7/8/11/12 공용)
 │       ├── live_monitor.py    ← App 1 실시간 모니터링용 합성 로그 생성기
 │       ├── phishing_service.py / mock_phishing.py
 │       ├── vulnerability_service.py / mock_vulnerability.py / vuln_scenarios.py / recon_guide.py

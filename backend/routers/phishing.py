@@ -1,10 +1,11 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from services.phishing_service import analyze_phishing
+from services import db
 
 router = APIRouter(prefix="/api/phishing", tags=["phishing"])
 
-history: list[dict] = []
+APP_NAME = "phishing"
 
 
 class AnalyzeRequest(BaseModel):
@@ -21,21 +22,21 @@ async def analyze(request: AnalyzeRequest):
 
     result = analyze_phishing(request.content)
     entry = {
-        "id": len(history) + 1,
         "input_type": request.input_type,
         "preview": request.content[:120].replace("\n", " "),
         **result,
     }
-    history.append(entry)
+    entry["id"] = db.add_entry(APP_NAME, entry)
     return entry
 
 
 @router.get("/history")
 async def get_history():
+    history = db.get_history(APP_NAME)
     return {"history": history, "total": len(history)}
 
 
 @router.delete("/history")
 async def clear_history():
-    history.clear()
+    db.clear_history(APP_NAME)
     return {"message": "Cleared"}

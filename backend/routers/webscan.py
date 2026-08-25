@@ -1,10 +1,11 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from services.webscan_service import scan_url, IS_MOCK
+from services import db
 
 router = APIRouter(prefix="/api/webscan", tags=["webscan"])
 
-history: list[dict] = []
+APP_NAME = "webscan"
 
 
 class ScanRequest(BaseModel):
@@ -25,19 +26,20 @@ async def scan(request: ScanRequest):
     if "error" in result and not result.get("findings"):
         raise HTTPException(status_code=400, detail=result["error"])
 
-    entry = {"id": len(history) + 1, **result}
-    history.append(entry)
+    entry = dict(result)
+    entry["id"] = db.add_entry(APP_NAME, entry)
     return entry
 
 
 @router.get("/history")
 async def get_history():
+    history = db.get_history(APP_NAME)
     return {"history": history, "total": len(history)}
 
 
 @router.delete("/history")
 async def clear_history():
-    history.clear()
+    db.clear_history(APP_NAME)
     return {"message": "Cleared"}
 
 

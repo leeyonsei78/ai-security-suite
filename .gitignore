@@ -21,6 +21,11 @@ node_modules/
 frontend/dist/
 frontend/.vite/
 
+# Database (persisted history — runtime data, not source)
+backend/data/
+*.db
+*.db-journal
+
 # OS
 .DS_Store
 Thumbs.db

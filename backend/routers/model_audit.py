@@ -3,10 +3,11 @@ from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 from services.model_audit_service import analyze_model_audit, generate_markdown_report
 from services.owasp_llm_reference import OWASP_LLM_TOP10, OWASP_LLM_DISCLAIMER
+from services import db
 
 router = APIRouter(prefix="/api/model-audit", tags=["model-audit"])
 
-history: list[dict] = []
+APP_NAME = "model_audit"
 
 
 class AnalyzeRequest(BaseModel):
@@ -28,29 +29,29 @@ async def analyze(request: AnalyzeRequest):
 
     result = analyze_model_audit(request.content, request.input_type)
     entry = {
-        "id": len(history) + 1,
         "input_type": request.input_type,
         "preview": request.content[:100].replace("\n", " "),
         **result,
     }
-    history.append(entry)
+    entry["id"] = db.add_entry(APP_NAME, entry)
     return entry
 
 
 @router.get("/history")
 async def get_history():
+    history = db.get_history(APP_NAME)
     return {"history": history, "total": len(history)}
 
 
 @router.delete("/history")
 async def clear_history():
-    history.clear()
+    db.clear_history(APP_NAME)
     return {"message": "Cleared"}
 
 
 @router.get("/report/{entry_id}", response_class=PlainTextResponse)
 async def get_report(entry_id: int):
-    entry = next((h for h in history if h["id"] == entry_id), None)
+    entry = db.get_entry(APP_NAME, entry_id)
     if not entry:
         raise HTTPException(status_code=404, detail="Report not found")
     return generate_markdown_report(entry)

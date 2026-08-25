@@ -1,10 +1,11 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from services.prompt_injection_service import analyze_injection
+from services import db
 
 router = APIRouter(prefix="/api/injection", tags=["prompt-injection"])
 
-history: list[dict] = []
+APP_NAME = "injection"
 
 
 class AnalyzeRequest(BaseModel):
@@ -21,21 +22,21 @@ async def analyze(request: AnalyzeRequest):
 
     result = analyze_injection(request.content, request.input_type)
     entry = {
-        "id": len(history) + 1,
         "input_type": request.input_type,
         "preview": request.content[:120].replace("\n", " "),
         **result,
     }
-    history.append(entry)
+    entry["id"] = db.add_entry(APP_NAME, entry)
     return entry
 
 
 @router.get("/history")
 async def get_history():
+    history = db.get_history(APP_NAME)
     return {"history": history, "total": len(history)}
 
 
 @router.delete("/history")
 async def clear_history():
-    history.clear()
+    db.clear_history(APP_NAME)
     return {"message": "Cleared"}

@@ -1,10 +1,11 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from services.ioc_service import analyze_ioc
+from services import db
 
 router = APIRouter(prefix="/api/ioc", tags=["ioc"])
 
-history: list[dict] = []
+APP_NAME = "ioc"
 
 
 class AnalyzeRequest(BaseModel):
@@ -22,17 +23,18 @@ async def analyze(request: AnalyzeRequest):
     if not results:
         raise HTTPException(status_code=400, detail="No valid IoCs found")
 
-    entry = {"id": len(history) + 1, "results": results, "total": len(results)}
-    history.append(entry)
+    entry = {"results": results, "total": len(results)}
+    entry["id"] = db.add_entry(APP_NAME, entry)
     return entry
 
 
 @router.get("/history")
 async def get_history():
+    history = db.get_history(APP_NAME)
     return {"history": history, "total": len(history)}
 
 
 @router.delete("/history")
 async def clear_history():
-    history.clear()
+    db.clear_history(APP_NAME)
     return {"message": "Cleared"}
