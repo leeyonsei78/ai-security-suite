@@ -1,0 +1,182 @@
+{
+  "name": "AI Security Suite - IoC Batch Analysis (Webhook)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ioc-batch-analysis",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "trigger-webhook",
+      "name": "Webhook: receive IoC list",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -640,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.AI_SECURITY_SUITE_BASE_URL || 'http://localhost:8000' }}/api/ioc/analyze",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"content\": $json.body.content } }}",
+        "options": {
+          "headers": {
+            "parameters": [
+              {
+                "name": "X-API-Key",
+                "value": "={{ $env.AI_SECURITY_SUITE_API_KEY || '' }}"
+              }
+            ]
+          }
+        }
+      },
+      "id": "http-ioc-analyze",
+      "name": "POST /api/ioc/analyze",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -420,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// entry.results is the list from /api/ioc/analyze; each item has a `verdict`\n// (MALICIOUS / SUSPICIOUS / SAFE / UNKNOWN). Surface a simple boolean + summary\n// for the IF node, while passing the full entry through for the webhook response.\nconst entry = $input.first().json;\nconst malicious = (entry.results || []).filter((r) => r.verdict === 'MALICIOUS');\nreturn [\n  {\n    json: {\n      entry,\n      hasMalicious: malicious.length > 0,\n      summary: malicious.map((r) => `${r.ioc} (${r.category || 'unknown'})`).join(', '),\n    },\n  },\n];"
+      },
+      "id": "code-summarize",
+      "name": "Summarize verdicts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.entry }}"
+      },
+      "id": "respond-webhook",
+      "name": "Respond: analysis result",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        20,
+        -140
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.hasMalicious }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "if-malicious",
+      "name": "Any MALICIOUS?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        20,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "text": "=악성 IoC {{$json.entry.total}}건 중 확정 악성 발견: {{$json.summary}}\n분석 ID: {{$json.entry.id}}",
+        "otherOptions": {}
+      },
+      "id": "slack-notify",
+      "name": "Slack: malicious IoC found",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        240,
+        140
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook: receive IoC list": {
+      "main": [
+        [
+          {
+            "node": "POST /api/ioc/analyze",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST /api/ioc/analyze": {
+      "main": [
+        [
+          {
+            "node": "Summarize verdicts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summarize verdicts": {
+      "main": [
+        [
+          {
+            "node": "Respond: analysis result",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Any MALICIOUS?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Any MALICIOUS?": {
+      "main": [
+        [
+          {
+            "node": "Slack: malicious IoC found",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "instanceId": "ai-security-suite"
+  }
+}

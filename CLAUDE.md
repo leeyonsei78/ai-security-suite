@@ -222,6 +222,7 @@ App 2(피싱 탐지기)와 짝을 이루는 "생성기" — 사내 보안 인식
 - **네비게이션 바**: MOCK/LIVE 배지 + 전체 메뉴
 - **히스토리 SQLite 영속화**: App 1(대시보드·실시간 모니터링 포함)/2/3/4/5/6/7/8/11/12/14/15의 분석 이력·상담 세션이 `backend/data/history.db`(SQLite, gitignore 대상)에 저장되어 서버 재시작에도 유지됨. 앱마다 저장 형태(단순 이력 리스트 vs 채팅 세션)가 달라도 `backend/services/db.py`의 범용 `app` 구분 단일 테이블(JSON 블롭)로 통일 처리 — `add_entry`/`get_history`/`get_entry`/`update_entry`/`clear_history` 5개 함수로 기존 `history: list[dict]`/`sessions: dict[int, dict]` 패턴을 그대로 대체함. **CTF/모의해킹 연습용 앱(App 9 Pwn/Reverse, App 10 Web CTF 아레나, App 13 모의 해킹 랩)은 서버 재시작 시 초기화되는 것이 의도된 동작이라 이 영속화 대상에서 제외**됨
 - **알림 시스템**: 탐지형 앱 7개(대시보드·실시간모니터링/피싱/취약점/IoC/웹스캐너/인젝션탐지/모델감사)가 각 앱 기준 최고 심각도(CRITICAL/MALICIOUS/INJECTION)로 판정하면 자동으로 Slack/이메일 알림을 시도함. `SLACK_WEBHOOK_URL` 또는 `SMTP_*`(`.env.example` 참고) 미설정 시 자동 Mock 모드로 동작 — 실제 전송 없이 알림 로그만 기록(다른 앱들의 Mock/Live 패턴과 동일). 알림 로그는 NavBar 우측 종(🔔) 아이콘 드롭다운에서 확인·삭제 가능(`GET/DELETE /api/alerts`, 20초 폴링). 상담형 앱(인시던트/위협분석)과 생성형 앱(정책생성기, 피싱 모의훈련 생성기)은 "위협 판정"이 아니라 대상에서 제외. CVE 조회(App 15)는 Claude AI 자체를 쓰지 않는 순수 조회 도구라 마찬가지로 제외. `backend/services/notify.py`, `backend/routers/alerts.py`. ⚠️ 알림 발송(urllib/smtplib)은 블로킹 호출이라 async 라우트에서 직접 기다리면 안 됨 — 실시간 모니터링 WebSocket에서 이미 겪은 함정과 같은 유형이라 `alert_if_critical()`이 내부적으로 `run_in_executor`로 스레드 위임함. 7개 앱 전부에서 Mock 데이터 조합으로 실제 CRITICAL을 트리거해 alerts 카운트 증가·비-CRITICAL 시 미증가·서버 재시작 후 유지까지 curl로 검증 완료
+- **n8n 자동화 연동**: 모든 앱이 이미 REST API(`/api/*`)로 노출돼 있어 n8n의 HTTP Request 노드가 코드 수정 없이 그대로 호출 가능. `docs/n8n-integration.md`에 연동 방법 + 자동화용 엔드포인트 요약, `n8n-workflows/`에 바로 Import 가능한 예제 워크플로우 3개(알림 폴링→Slack, CVE 일일 감시→Slack, IoC 일괄분석 Webhook) 제공. 이와 함께 백엔드를 로컬 밖으로 노출하는 경우를 대비해 선택적 API 키 인증(`API_KEY` 환경변수, 미설정 시 기존과 동일하게 인증 없음)을 `backend/services/auth.py` + `main.py`(`/api/*` 라우터 전체에 `Depends`)로 추가 — `/api/mode`는 헬스체크 목적으로 예외. `API_KEY` 미설정/오설정/정설정 3가지 케이스와 IoC 분석·alerts 응답 필드가 예제 워크플로우 가정과 일치하는지 curl로 검증 완료. CVE 검색 예제는 이 세션 네트워크 제한으로 NVD 실호출까지는 못 했으나 `cve_lookup_service.search_cves()` 응답 스키마 확인으로 대체함. ⚠️ `API_KEY`를 켜면 프론트엔드 요청도 헤더가 없어 401을 받게 되므로(가이드에 고지), n8n 전용으로 켜거나 프론트 프록시에 헤더 주입을 추가해야 함(미착수)
 
 ---
 
@@ -236,6 +237,10 @@ App 2(피싱 탐지기)와 짝을 이루는 "생성기" — 사내 보안 인식
 - [x] **피싱 모의훈련 이메일 생성기**: App 14 (`/phishing-sim`)로 구현됨
 - [x] **CVE 실시간 조회 연동**: App 15 (`/cve-lookup`)로 구현됨, App 3 취약점 스캐너와 연동
 - 그 외 후보였던 시크릿 스캐너·통합 리스크 대시보드는 미착수 — 새 아이디어가 생기면 여기에 추가.
+
+### 외부 자동화 연동
+- [x] **n8n 연동 (Pull: n8n → 이 앱)**: 위 "공통 기능"의 n8n 자동화 연동 항목, `docs/n8n-integration.md` 참고
+- [ ] **n8n 연동 (Push: 이 앱 → n8n)**: 지금은 CRITICAL 탐지 시 Slack/이메일로만 알림(`notify.py`)을 보내는데, 여기에 n8n Webhook URL을 추가로 호출하는 옵션을 붙여 n8n 쪽에서 Jira 티켓 생성 등 복잡한 후속 처리를 할 수 있게 하는 안 — 사용자가 검토 후 진행 여부 결정 예정
 
 ---
 
@@ -254,6 +259,9 @@ test_AI_security/
 ├── CLAUDE.md
 ├── .env.example
 ├── .gitignore
+├── docs/
+│   └── n8n-integration.md    ← n8n 연동 가이드
+├── n8n-workflows/             ← n8n Import용 예제 워크플로우 3개
 ├── backend/
 │   ├── main.py
 │   ├── requirements.txt
@@ -279,6 +287,7 @@ test_AI_security/
 │       ├── claude_service.py
 │       ├── mock_data.py
 │       ├── db.py              ← 히스토리 SQLite 영속화 (범용, App 1/2/3/4/5/6/7/8/11/12/14/15 공용)
+│       ├── auth.py            ← 선택적 API 키 인증 (n8n 등 외부 연동용, API_KEY 미설정 시 비활성)
 │       ├── notify.py          ← Critical 탐지 시 Slack/이메일 알림
 │       ├── live_monitor.py    ← App 1 실시간 모니터링용 합성 로그 생성기
 │       ├── phishing_service.py / mock_phishing.py
@@ -349,6 +358,7 @@ npm run dev
 | `/pwn-lab`의 Misc 3개 챌린지 | 없음 — 컴파일 불필요 |
 | `/web-arena` 공유 스코어보드를 팀원과 같이 쓰기 | `npm run dev -- --host` + 방화벽에서 5173/8000 포트 개방 후 `http://<호스트 IP>:5173` 공유 |
 | `/cve-lookup` | 없음 — 다만 외부 인터넷(services.nvd.nist.gov)에 접속 가능해야 함. `NVD_API_KEY` 없이도 동작(요청 한도만 낮음) |
+| n8n 연동 (`n8n-workflows/`) | 없음 — 서버 두 개만 켜면 바로 Import해서 테스트 가능. 자세한 내용은 `docs/n8n-integration.md` |
 
 ## 환경 변수 (.env)
 
@@ -366,6 +376,10 @@ ALERT_EMAIL_FROM=
 
 # CVE 실시간 조회 (선택, .env.example 참고) — 없어도 동작하나 요청 한도가 낮음
 NVD_API_KEY=
+
+# 백엔드 API 인증 (선택, .env.example 참고) — 비워두면 인증 없음(기본값).
+# n8n 등을 로컬 밖으로 노출할 때 설정 권장. docs/n8n-integration.md 참고
+API_KEY=
 ```
 API 키 없으면 Mock 모드로 자동 동작. 알림 관련 변수도 하나도 없으면 알림이 Mock 모드로 동작(로그만 기록, 실제 전송 없음).
 

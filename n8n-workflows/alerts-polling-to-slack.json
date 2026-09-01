@@ -1,0 +1,121 @@
+{
+  "name": "AI Security Suite - Critical Alerts -> Slack",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      },
+      "id": "trigger-schedule",
+      "name": "Every 5 minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -420,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.AI_SECURITY_SUITE_BASE_URL || 'http://localhost:8000' }}/api/alerts",
+        "options": {
+          "headers": {
+            "parameters": [
+              {
+                "name": "X-API-Key",
+                "value": "={{ $env.AI_SECURITY_SUITE_API_KEY || '' }}"
+              }
+            ]
+          }
+        }
+      },
+      "id": "http-get-alerts",
+      "name": "GET /api/alerts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -200,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// /api/alerts returns { alerts: [...], is_mock, configured }.\n// Keep only alerts created within this schedule's interval (5 minutes) so the\n// same alert isn't re-posted to Slack on every poll. For a stricter dedupe\n// (survives n8n restarts), swap this for the Static Data API keyed by alert id.\nconst body = $input.first().json;\nconst alerts = body.alerts || [];\nconst cutoff = Date.now() - 5 * 60 * 1000;\nreturn alerts\n  .filter((a) => new Date(a.created_at).getTime() > cutoff)\n  .map((a) => ({ json: a }));"
+      },
+      "id": "code-filter-recent",
+      "name": "Filter: new since last poll",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        20,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "text": "=[{{$json.severity}}] {{$json.app_label}}\n{{$json.summary}}\n분석 ID: {{$json.entry_id}}",
+        "otherOptions": {}
+      },
+      "id": "slack-notify",
+      "name": "Slack: post alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        240,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Every 5 minutes": {
+      "main": [
+        [
+          {
+            "node": "GET /api/alerts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET /api/alerts": {
+      "main": [
+        [
+          {
+            "node": "Filter: new since last poll",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter: new since last poll": {
+      "main": [
+        [
+          {
+            "node": "Slack: post alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "instanceId": "ai-security-suite"
+  }
+}

@@ -1,5 +1,6 @@
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from services.auth import require_api_key
 from routers.analyze import router as analyze_router
 from routers.phishing import router as phishing_router
 from routers.vulnerability import router as vuln_router
@@ -32,23 +33,28 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(analyze_router)
-app.include_router(phishing_router)
-app.include_router(vuln_router)
-app.include_router(ioc_router)
-app.include_router(incident_router)
-app.include_router(webscan_router)
-app.include_router(threat_router)
-app.include_router(injection_router)
-app.include_router(pwn_lab_router)
-app.include_router(web_arena_router)
-app.include_router(policy_router)
-app.include_router(model_audit_router)
-app.include_router(monitor_router)
-app.include_router(pentest_lab_router)
-app.include_router(alerts_router)
-app.include_router(phishing_sim_router)
-app.include_router(cve_lookup_router)
+# API_KEY 환경변수가 설정된 경우에만 X-API-Key 헤더를 요구한다(기본값은 미설정 =
+# 인증 없음, 지금까지의 동작과 동일). n8n 등 외부 자동화 도구에서 이 백엔드를
+# 로컬/신뢰된 네트워크 밖으로 노출할 때 켜는 것을 권장 (docs/n8n-integration.md 참고).
+# /api/mode는 헬스체크 성격이라 인증 없이 열어둔다.
+_authed = [Depends(require_api_key)]
+app.include_router(analyze_router, dependencies=_authed)
+app.include_router(phishing_router, dependencies=_authed)
+app.include_router(vuln_router, dependencies=_authed)
+app.include_router(ioc_router, dependencies=_authed)
+app.include_router(incident_router, dependencies=_authed)
+app.include_router(webscan_router, dependencies=_authed)
+app.include_router(threat_router, dependencies=_authed)
+app.include_router(injection_router, dependencies=_authed)
+app.include_router(pwn_lab_router, dependencies=_authed)
+app.include_router(web_arena_router, dependencies=_authed)
+app.include_router(policy_router, dependencies=_authed)
+app.include_router(model_audit_router, dependencies=_authed)
+app.include_router(monitor_router, dependencies=_authed)
+app.include_router(pentest_lab_router, dependencies=_authed)
+app.include_router(alerts_router, dependencies=_authed)
+app.include_router(phishing_sim_router, dependencies=_authed)
+app.include_router(cve_lookup_router, dependencies=_authed)
 
 
 @app.get("/")
