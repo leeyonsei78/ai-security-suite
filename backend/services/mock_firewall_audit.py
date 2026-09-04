@@ -181,6 +181,50 @@ _TEMPLATES = {
             {"framework": "PCI-DSS", "note": "요구사항 1.2.1(인바운드/아웃바운드 트래픽을 필요한 것으로 제한)에 대한 아웃바운드 통제가 없고, 관리 포트가 전역 공개되어 위반 소지가 있습니다."},
         ],
     },
+    "router_switch": {
+        "summary": "관리 프로토콜이 암호화되지 않은 채(Telnet, SNMP 기본 커뮤니티스트링) 열려 있고, 특권 모드 비밀번호도 가역적으로 암호화되어 있어 공격자가 설정을 탈취하면 장비를 완전히 장악할 수 있는 상태입니다.",
+        "overall_risk": "CRITICAL",
+        "findings": [
+            {
+                "rule_reference": "line vty 0 4 — transport input telnet",
+                "issue_type": "insecure_management",
+                "severity": "CRITICAL",
+                "description": "VTY(원격 관리) 회선이 평문 프로토콜인 Telnet을 허용합니다. 관리 세션의 비밀번호와 명령이 네트워크상에서 그대로 노출됩니다.",
+                "recommendation": "line vty 0 4 / transport input ssh 로 SSH만 허용하도록 바꾸고, ip ssh version 2 로 SSHv2를 강제하세요.",
+            },
+            {
+                "rule_reference": "snmp-server community public RW",
+                "issue_type": "insecure_management",
+                "severity": "CRITICAL",
+                "description": "SNMP 커뮤니티스트링이 기본값 'public'으로 설정되어 있고 쓰기(RW) 권한까지 있습니다. 이 값을 아는 누구나 장비 설정을 원격으로 읽고 변경할 수 있습니다.",
+                "recommendation": "SNMPv1/v2c community를 즉시 삭제하고 SNMPv3(인증+암호화)로 전환하거나, 최소한 커뮤니티스트링을 예측 불가능한 값으로 바꾸고 access-list로 조회 가능 IP를 제한하세요.",
+            },
+            {
+                "rule_reference": "enable password 7 0822455D0A16",
+                "issue_type": "weak_authentication",
+                "severity": "HIGH",
+                "description": "특권 모드 비밀번호가 가역적인 Cisco Type 7 암호화('enable password')로 저장되어 있습니다. Type 7은 공개된 알고리즘이라 설정 파일만 확보하면 즉시 평문 복호화가 가능합니다.",
+                "recommendation": "enable password 대신 enable secret(Type 8/9, bcrypt/scrypt 기반)을 사용하고, 실행 중인 설정에서 Type 7 항목을 모두 제거하세요.",
+            },
+            {
+                "rule_reference": "interface GigabitEthernet0/1 — switchport trunk native vlan 1",
+                "issue_type": "missing_control",
+                "severity": "MEDIUM",
+                "description": "트렁크 포트의 네이티브 VLAN이 기본값인 VLAN 1로 방치되어 있습니다. VLAN 1은 CDP/STP 등 관리 트래픽이 기본으로 흐르고 VLAN 호핑 공격의 대표적 경로입니다.",
+                "recommendation": "네이티브 VLAN을 사용하지 않는 별도 VLAN(예: VLAN 999)으로 바꾸고, 액세스 포트에는 switchport port-security로 연결 가능한 MAC 수를 제한하세요.",
+            },
+            {
+                "rule_reference": "AAA/TACACS+ 설정 없음 — 로컬 계정만 존재, 관리자별 계정 분리 안 됨",
+                "issue_type": "weak_authentication",
+                "severity": "MEDIUM",
+                "description": "aaa new-model이 설정되어 있지 않아 중앙 인증(TACACS+/RADIUS) 없이 로컬 공용 계정으로만 관리자가 접근합니다. 누가 언제 무엇을 변경했는지 추적할 수 없습니다.",
+                "recommendation": "aaa new-model을 활성화하고 TACACS+/RADIUS 서버와 연동해 관리자별 개별 계정+로깅을 구성하세요. 최소한 로컬 계정이라도 관리자별로 분리하고 공용 계정은 폐기하세요.",
+            },
+        ],
+        "compliance_notes": [
+            {"framework": "ISMS-P", "note": "2.5.1(사용자 계정 관리)·2.6.1(네트워크 접근)에서 요구하는 개별 계정 관리와 안전한 인증 수단이 지켜지지 않고 있습니다."},
+        ],
+    },
     "windows_fw": {
         "summary": "인바운드 규칙 상당수가 프로필 제한(Public/Private/Domain) 없이 'Any'로 설정되어 있어, 노트북이 공용 Wi-Fi에 연결될 때도 사내망과 동일한 서비스가 노출됩니다.",
         "overall_risk": "HIGH",

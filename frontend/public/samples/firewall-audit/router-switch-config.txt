@@ -1,0 +1,29 @@
+! 예시 파일 — App 16(방화벽 정책 감사기) 테스트용 (Cisco IOS 스타일 running-config 발췌)
+! 실제로는: terminal length 0  후  show running-config  결과를 세션 로그나 파일로 저장
+!
+hostname edge-sw01
+!
+enable password 7 0822455D0A16
+!
+snmp-server community public RW
+!
+interface GigabitEthernet0/1
+ description Uplink to core
+ switchport mode trunk
+ switchport trunk native vlan 1
+!
+interface GigabitEthernet0/2
+ description Access port - no port-security configured
+ switchport mode access
+ switchport access vlan 10
+!
+line con 0
+ login
+line vty 0 4
+ transport input telnet
+ login
+line vty 5 15
+ transport input telnet
+ login
+!
+end

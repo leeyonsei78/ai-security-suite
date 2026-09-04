@@ -1,14 +1,14 @@
 import { useState, useEffect, useRef } from 'react'
 import axios from 'axios'
 import {
-  ShieldQuestion, Terminal, Cloud, CloudCog, Network, MonitorCog, Server, Trash2, Download,
+  ShieldQuestion, Terminal, Cloud, CloudCog, Network, Router, MonitorCog, Server, Trash2, Download,
   AlertTriangle, ListOrdered, BadgeCheck, Upload, FileText, X,
 } from 'lucide-react'
 import GuidePanel from '../components/GuidePanel'
 import SeverityBadge from '../components/SeverityBadge'
 
 const AUDIT_STEPS = [
-  "감사할 방화벽 플랫폼을 선택합니다 (Linux iptables / AWS 보안그룹 / Azure NSG / GCP 방화벽 규칙 / Windows 방화벽 / 기타).",
+  "감사할 플랫폼을 선택합니다 (Linux iptables / AWS 보안그룹 / Azure NSG / GCP 방화벽 규칙 / 라우터·스위치 / Windows 방화벽 / 기타).",
   "선택한 플랫폼에 맞는 명령어로 실제 규칙을 조회합니다 (아래 '규칙 가져오는 방법' 참고).",
   '조회 결과를 그대로 복사해 붙여넣거나, 파일로 저장해 업로드합니다. 환경 컨텍스트(선택)에 용도를 적으면 더 정확한 분석이 됩니다.',
   '[AI로 감사 실행] 버튼을 클릭합니다.',
@@ -26,6 +26,7 @@ const SOURCE_ICONS = {
   aws_sg: Cloud,
   azure_nsg: CloudCog,
   gcp_fw: Network,
+  router_switch: Router,
   windows_fw: MonitorCog,
   other: Server,
 }
@@ -35,6 +36,7 @@ const PLACEHOLDERS = {
   aws_sg: `Inbound:\nTCP 22, Source 0.0.0.0/0\nTCP 3389, Source 0.0.0.0/0\nTCP 5432, Source 0.0.0.0/0\n\nOutbound:\nALL TRAFFIC, Destination 0.0.0.0/0`,
   azure_nsg: `Priority 100  Allow-SSH      Inbound  Allow  Source: *  Port: 22\nPriority 120  Allow-Any-Any  Inbound  Allow  Source: *  Port: *\nPriority 65001  AllowInternetOutBound  Outbound  Allow  Dest: Internet  Port: *`,
   gcp_fw: `default-allow-ssh   INGRESS  priority 65534  0.0.0.0/0  tcp:22\ndefault-allow-rdp   INGRESS  priority 65534  0.0.0.0/0  tcp:3389\nallow-internal-legacy  INGRESS  priority 1000  10.0.0.0/8  all  (targetTags 없음)`,
+  router_switch: `enable password 7 0822455D0A16\nsnmp-server community public RW\n\nline vty 0 4\n transport input telnet\n\ninterface GigabitEthernet0/1\n switchport trunk native vlan 1`,
   windows_fw: `DisplayName: File and Printer Sharing (SMB-In)\nDirection: Inbound  Action: Allow  Profile: Any\n\nDisplayName: RemoteDesktop-UserMode-In-TCP\nDirection: Inbound  Action: Allow  Profile: Any`,
   other: `policy #3: any any any any allow\npolicy #7: internal->dmz tcp/22 deny\npolicy #20: tcp/8080 permit (no description, last modified 2 years ago)`,
 }
@@ -44,6 +46,7 @@ const SAMPLE_FILES = {
   aws_sg: '/samples/firewall-audit/aws-security-group.json',
   azure_nsg: '/samples/firewall-audit/azure-nsg-rules.json',
   gcp_fw: '/samples/firewall-audit/gcp-firewall-rules.json',
+  router_switch: '/samples/firewall-audit/router-switch-config.txt',
   windows_fw: '/samples/firewall-audit/windows-firewall-rules.txt',
   other: '/samples/firewall-audit/other-vendor-policy.txt',
 }
@@ -126,7 +129,7 @@ export default function FirewallAudit() {
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <ShieldQuestion className="text-cyan-400" size={26} /> 방화벽 정책 감사기
           </h1>
-          <p className="text-slate-400 text-sm mt-1">기존 방화벽 규칙을 붙여넣으면 AI가 과도 허용·중복·충돌·미사용 규칙과 컴플라이언스 위반을 찾아 수정안을 제시합니다.</p>
+          <p className="text-slate-400 text-sm mt-1">기존 방화벽 규칙이나 라우터·스위치 설정을 붙여넣으면 AI가 과도 허용·중복·충돌·미사용 규칙, 안전하지 않은 관리 방식, 컴플라이언스 위반을 찾아 수정안을 제시합니다.</p>
         </div>
 
         <GuidePanel title="방화벽 정책 감사기 사용 가이드" steps={AUDIT_STEPS} tips={AUDIT_TIPS} />
@@ -135,9 +138,9 @@ export default function FirewallAudit() {
           {/* Input Panel */}
           <div className="md:col-span-2 space-y-4">
             <div>
-              <p className="text-xs font-semibold text-slate-400 mb-2">방화벽 플랫폼</p>
+              <p className="text-xs font-semibold text-slate-400 mb-2">감사 대상 플랫폼</p>
               <div className="grid grid-cols-2 gap-2">
-                {['iptables', 'aws_sg', 'azure_nsg', 'gcp_fw', 'windows_fw', 'other'].map(id => {
+                {['iptables', 'aws_sg', 'azure_nsg', 'gcp_fw', 'router_switch', 'windows_fw', 'other'].map(id => {
                   const Icon = SOURCE_ICONS[id]
                   const label = guide?.source_types?.find(s => s.id === id)?.label ?? id
                   return (

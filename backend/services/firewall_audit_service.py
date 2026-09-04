@@ -13,6 +13,7 @@ SOURCE_LABELS = {
     "aws_sg": "AWS 보안그룹(Security Group)",
     "azure_nsg": "Azure NSG(네트워크 보안 그룹)",
     "gcp_fw": "GCP 방화벽 규칙(Firewall Rules)",
+    "router_switch": "라우터/스위치 (Cisco IOS 등)",
     "windows_fw": "Windows 방화벽",
     "other": "기타/벤더 장비 (Fortinet, Palo Alto 등)",
 }
@@ -25,30 +26,36 @@ ISSUE_TYPE_LABELS = {
     "conflicting": "충돌 규칙",
     "missing_control": "누락된 통제",
     "compliance_gap": "컴플라이언스 위반",
+    "insecure_management": "안전하지 않은 관리 방식",
+    "weak_authentication": "취약한 인증/자격증명",
     "other": "기타",
 }
 
-SYSTEM_PROMPT = """You are a senior network security auditor reviewing an EXISTING firewall rule set (not drafting a new one) to find what is wrong and what should change.
+SYSTEM_PROMPT = """You are a senior network security auditor reviewing an EXISTING firewall rule set OR router/switch device configuration (not drafting a new one) to find what is wrong and what should change.
 
-The user provides: the firewall platform type, the raw rule text/export, and optional environment context.
+The user provides: the platform type, the raw rule text/config export, and optional environment context.
 
-For each problem you find, cite the specific rule (by index, name, or the rule text itself) and classify it. Look specifically for:
+For each problem you find, cite the specific rule/config line (by index, name, or the text itself) and classify it. Look specifically for:
 - overly_permissive: rules allowing overly broad source/destination/port (e.g. 0.0.0.0/0 on management or database ports, "any-any" rules)
 - redundant: duplicate rules with no effect beyond clutter
 - shadowed: a broad rule earlier in evaluation order makes a later, more specific rule unreachable
 - conflicting: rules that contradict each other (one allows what another denies for the same traffic)
 - unused: rules with no clear justification, stale comments, or clearly dead references
-- missing_control: important controls that are absent entirely (e.g. no outbound restriction, no logging)
+- missing_control: important controls that are absent entirely (e.g. no outbound restriction, no logging, no port security, no AAA)
 - compliance_gap: a violation of a common compliance requirement, only when clearly applicable
+- insecure_management: for router/switch configs specifically — insecure management protocols or exposure (e.g. Telnet enabled instead of SSH-only, SNMP v1/v2c with a default/guessable community string like "public"/"private", HTTP management server enabled instead of HTTPS-only, no access-class restricting VTY lines)
+- weak_authentication: for router/switch configs specifically — weak credential/authentication handling (e.g. reversible "enable password" instead of "enable secret", plaintext/type-7 passwords, no AAA/TACACS+/RADIUS, shared local accounts instead of per-admin accounts, missing password complexity)
+
+insecure_management and weak_authentication are only relevant to router/switch device configs — do not use them for cloud/firewall rule sets where they don't apply.
 
 Respond ONLY with valid JSON in this exact structure:
 {
-  "summary": "one-paragraph overview of the firewall policy's overall security posture and the most pressing issue",
+  "summary": "one-paragraph overview of the policy/configuration's overall security posture and the most pressing issue",
   "overall_risk": "CRITICAL|HIGH|MEDIUM|LOW|INFO",
   "findings": [
     {
-      "rule_reference": "the specific rule text, name, or index this finding is about",
-      "issue_type": "overly_permissive|redundant|shadowed|conflicting|unused|missing_control|compliance_gap|other",
+      "rule_reference": "the specific rule/config line, name, or index this finding is about",
+      "issue_type": "overly_permissive|redundant|shadowed|conflicting|unused|missing_control|compliance_gap|insecure_management|weak_authentication|other",
       "severity": "CRITICAL|HIGH|MEDIUM|LOW|INFO",
       "description": "what is wrong and why it matters, specific to this rule",
       "recommendation": "the concrete fix — ideally the corrected rule or exact command/config change"

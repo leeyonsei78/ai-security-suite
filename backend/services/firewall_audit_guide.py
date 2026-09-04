@@ -27,6 +27,12 @@ SOURCE_TYPES = [
         "commands": ["gcloud compute firewall-rules list --format=json", "gcloud compute firewall-rules list --format='table(name,direction,sourceRanges.list(),allowed[].map().firewall_rule().list(),targetTags.list())'"],
     },
     {
+        "id": "router_switch",
+        "label": "라우터/스위치 (Cisco IOS 등)",
+        "how_to_export": "SSH/콘솔로 접속해 `terminal length 0`으로 페이징을 끈 뒤 `show running-config` 결과를 터미널 로그(PuTTY/SecureCRT 등의 세션 로깅)로 저장하거나, `show running-config | redirect flash:running-config.txt` 등으로 장비에서 직접 파일로 뽑아 업로드하세요. 장비가 여러 대라면 장비별로 파일을 나눠 저장해두고 한 번에 하나씩 업로드해 감사하는 것을 권장합니다.",
+        "commands": ["terminal length 0", "show running-config", "show version", "show vlan brief", "show cdp neighbors detail  # 인접 장비 정보 노출 확인용"],
+    },
+    {
         "id": "windows_fw",
         "label": "Windows 방화벽",
         "how_to_export": "PowerShell(관리자 권한) 또는 netsh 명령 결과를 붙여넣거나, 텍스트 파일로 저장해(`> rules.txt`) 업로드하세요. GUI의 '정책 내보내기'(.wfw)는 바이너리 형식이라 지원하지 않습니다.",

@@ -219,16 +219,18 @@ App 2(피싱 탐지기)와 짝을 이루는 "생성기" — 사내 보안 인식
 
 ### App 16: 방화벽 정책 감사기 `/firewall-audit`
 "방화벽 정책이 바른지 수정이 필요한지 검토하는 프로그램"을 만들어달라는 사용자 요청으로 신설. App 11(보안 정책 생성기)이 "새 정책을 생성"하는 것과 정반대 방향 — **이미 존재하는** 방화벽 규칙을 붙여넣으면 AI가 무엇이 잘못됐는지 감사(audit)한다.
-- 입력: 방화벽 플랫폼 6종(Linux iptables/nftables, AWS 보안그룹, Azure NSG, GCP 방화벽 규칙, Windows 방화벽, 기타 벤더 장비) 선택 + 실제 규칙 텍스트 붙여넣기 또는 파일 업로드 + 환경 컨텍스트(선택)
+- 입력: 플랫폼 7종(Linux iptables/nftables, AWS 보안그룹, Azure NSG, GCP 방화벽 규칙, 라우터/스위치, Windows 방화벽, 기타 벤더 장비) 선택 + 실제 규칙/설정 텍스트 붙여넣기 또는 파일 업로드 + 환경 컨텍스트(선택)
 - 각 플랫폼에서 실제로 규칙을 어떻게 뽑아오는지 명령어까지 안내(`GET /api/firewall-audit/guide`, `backend/services/firewall_audit_guide.py`) — App 3 recon_guide.py/App 11 policy_guide.py와 동일한 패턴
-- **파일 업로드**: "다운로드한 정책 파일을 그대로 업로드해서 점검하면 되지 않냐"는 사용자 제안으로 추가. 백엔드 변경 없이 프론트에서 `FileReader`로 파일을 텍스트로 읽어 기존 붙여넣기 textarea에 채우는 방식(바이너리 export는 텍스트로 못 읽으므로 미지원 — Windows GUI의 `.wfw` 등은 안내에서 제외 처리). 업로드 즉시 테스트해볼 수 있도록 플랫폼별 예시 파일 6종을 `frontend/public/samples/firewall-audit/`에 제공(`mock_firewall_audit.py`의 큐레이션 시나리오와 내용이 정확히 대응하도록 작성)
+- **파일 업로드**: "다운로드한 정책 파일을 그대로 업로드해서 점검하면 되지 않냐"는 사용자 제안으로 추가. 백엔드 변경 없이 프론트에서 `FileReader`로 파일을 텍스트로 읽어 기존 붙여넣기 textarea에 채우는 방식(바이너리 export는 텍스트로 못 읽으므로 미지원 — Windows GUI의 `.wfw` 등은 안내에서 제외 처리). 업로드 즉시 테스트해볼 수 있도록 플랫폼별 예시 파일 7종을 `frontend/public/samples/firewall-audit/`에 제공(`mock_firewall_audit.py`의 큐레이션 시나리오와 내용이 정확히 대응하도록 작성)
 - **Azure NSG / GCP 방화벽 규칙**: 기존 AWS 보안그룹 하나뿐이던 클라우드 카테고리를 독립 플랫폼으로 분리 추가("클라우드는 다른 제공자도 되냐"는 질문에 착수). Azure는 우선순위(priority) 낮은 Any-Any 규칙이 뒤 규칙을 가리는(shadowed) 패턴, GCP는 기본 생성되는 SSH/RDP 허용 규칙 + targetTags 없는 규칙이 전체 인스턴스에 적용되는 패턴을 mock 시나리오로 큐레이션
-- 출력: 종합 위험도(CRITICAL~INFO) + 규칙별 발견 사항(과도 허용/중복/가려진 규칙 Shadowed/충돌/미사용/누락된 통제/컴플라이언스 위반 7종 issue_type, 해당 규칙 원문 인용, 구체적 수정안) + 컴플라이언스 참고
-- Mock/Live 모드는 기존 패턴(App 11/vulnerability_service와 동일) 그대로 사용 — `backend/services/firewall_audit_service.py`(Claude 시스템 프롬프트 + `_enrich()`로 심각도별 통계 집계), `mock_firewall_audit.py`(플랫폼별 큐레이션된 mock 감사 결과 6종)
+- **라우터/스위치 (Cisco IOS 등)**: "라우터/스위치 장비도 동일하게 점검하고 싶다"는 요청으로 추가. 기존 issue_type 7종(과도허용/중복/가려진규칙/충돌/미사용/누락된통제/컴플라이언스위반)은 "방화벽 규칙" 관점이라 장비 하드닝 이슈(Telnet 활성화, SNMP 기본 커뮤니티스트링, Type 7 평문 복호화 가능 비밀번호, AAA 미구성 등)를 잘 못 잡는다고 판단해 `insecure_management`(안전하지 않은 관리 방식)·`weak_authentication`(취약한 인증/자격증명) 2종을 신규 issue_type으로 추가(SYSTEM_PROMPT에 "이 둘은 라우터/스위치에만 해당, 클라우드/방화벽 규칙셋엔 쓰지 말 것" 명시). `show running-config`(페이징 끄고 세션 로그로 저장 또는 장비에서 직접 파일로 export)를 안내
+- 출력: 종합 위험도(CRITICAL~INFO) + 규칙별 발견 사항(과도 허용/중복/가려진 규칙 Shadowed/충돌/미사용/누락된 통제/컴플라이언스 위반/안전하지 않은 관리 방식/취약한 인증 9종 issue_type, 해당 규칙 원문 인용, 구체적 수정안) + 컴플라이언스 참고
+- Mock/Live 모드는 기존 패턴(App 11/vulnerability_service와 동일) 그대로 사용 — `backend/services/firewall_audit_service.py`(Claude 시스템 프롬프트 + `_enrich()`로 심각도별 통계 집계), `mock_firewall_audit.py`(플랫폼별 큐레이션된 mock 감사 결과 7종)
 - Markdown 리포트 다운로드에 "다음 단계"로 App 11(보안 정책 생성기) 링크 포함 — 감사에서 발견한 문제를 반영한 새 정책 초안을 이어서 만들 수 있게 상호 연결
 - 탐지형 앱으로 분류해 알림 시스템 대상에 포함(종합 위험도 CRITICAL 시 알림) — 8번째 탐지형 앱
 - 백엔드 curl로 analyze(AWS 보안그룹 샘플, CRITICAL 3건 검출)/guide/report/alerts 카운트 증가까지 검증, 프론트 `vite build` 성공 + Claude in Chrome으로 실제 브라우저에서 규칙 입력→감사 실행→결과 렌더링까지 end-to-end 확인 완료
-- Azure NSG/GCP 추가분은 6개 플랫폼 ID가 guide/service/mock 세 모듈에서 누락 없이 일치하는지 스크립트로 검증 + 실행 중이던 백엔드(auto-reload)에 실제 analyze 호출로 CRITICAL 판정 확인, 예시 파일 6종 전부 200 응답·JSON 유효성 확인까지 완료 — 다만 이 세션은 Chrome 확장 연결이 끊겨 있어 새 플랫폼 버튼의 실제 브라우저 렌더링(6개 2열 그리드 레이아웃)은 사용자 확인 필요
+- Azure NSG/GCP/라우터·스위치 추가분은 플랫폼 ID가 guide/service/mock 세 모듈에서 누락 없이 일치하는지 스크립트로 검증 + 실제 analyze 호출로 CRITICAL 판정과 신규 issue_type 라벨 확인, 예시 파일 전부 200 응답·JSON 유효성 확인까지 완료. **⚠️ 라우터/스위치 mock 데이터 작성 중 실제 버그 발견·수정**: `rule_reference`에 두 줄짜리 설정을 담으려고 Python 문자열에 `\n`을 쓰려다 이스케이프를 잘못 넣어(`\\n`) 화면에 리터럴 백슬래시-n 문자로 노출되는 버그가 있었음 — 다른 항목들처럼 em-dash(` — `)로 한 줄에 묶는 기존 스타일로 통일해 해결. **⚠️ 이 세션에서 겪은 uvicorn --reload 미반영 재확인**: 새 source_type 추가 후 curl로 확인해보니 실행 중이던 백엔드가 변경을 반영하지 않고 있었음(포트 8000을 잡고 있던 프로세스가 `netstat`엔 나오지만 `Get-Process`로는 안 잡히는 좀비 소켓 상태였음 — `Get-Process | Where ProcessName -match python`으로 실제 PID를 찾아 `Stop-Process`한 뒤 재기동해서 해결). 이 프로젝트에서 반복되는 패턴이므로 새 라우터/서비스 변경 후에는 항상 curl로 실제 반영 여부부터 확인할 것 — netstat 기준 PID로 taskkill이 안 먹히면 PowerShell `Get-Process`로 실제 프로세스를 찾아 죽일 것
+- 이 세션은 Chrome 확장이 연결되지 않아 새 플랫폼 버튼의 실제 브라우저 렌더링(7개 2열 그리드 레이아웃)은 사용자 확인 필요
 
 ### App 17: 인프라 취약점 스캐너 `/infra-scan`
 "취약점 점검(=취약점 분석) 프로그램"을 만들어달라는 요청 — 기존 App 3(설정파일/코드 텍스트 분석)·App 6(웹 URL 전용 실시간 점검)과 달리, 사용자가 "의존성 스캐너"와 "네트워크 스캐너" 둘 다 원한다고 선택해 두 모드를 한 앱의 탭으로 구현. **이 프로젝트에서 App 15(CVE 조회)에 이어 두 번째로 Claude API를 쓰지 않는 앱** — 대신 App 15의 NVD 연동을 재사용해 항상 실시간 외부 데이터로 동작한다(Mock 모드 없음).
