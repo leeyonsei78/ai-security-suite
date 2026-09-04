@@ -46,6 +46,10 @@ APP_LABELS = {
     "firewall_audit": "방화벽 정책 감사기",
     "infra_scan_dependency": "인프라 취약점 스캐너 (의존성)",
     "infra_scan_network": "인프라 취약점 스캐너 (네트워크)",
+    "iam_audit": "클라우드 IAM 정책 감사기",
+    "secret_scan": "시크릿 스캐너",
+    "container_audit": "컨테이너/Dockerfile 감사기",
+    "dns_security": "DNS/이메일 보안 점검",
 }
 
 ALERTS_APP = "alerts"

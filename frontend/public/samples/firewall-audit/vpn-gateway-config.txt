@@ -1,0 +1,36 @@
+! 예시 파일 — App 16(방화벽 정책 감사기) 테스트용 (FortiGate SSL-VPN 스타일 설정 발췌)
+! 실제로는: show vpn ssl settings / show vpn ssl web portal / show user local / show vpn ipsec phase1-interface
+! 실제 장비에서 뽑을 때는 psksecret 등 비밀값이 그대로 노출되니, 실사용 값인지 확인 후 필요하면 마스킹해서 업로드하세요.
+
+config vpn ssl settings
+    set servercert "Fortinet_Factory"
+    set ssl-min-proto-ver tls1-0
+    set idle-timeout 0
+    set port 443
+end
+
+config vpn ssl web portal
+    edit "full-access"
+        set tunnel-mode enable
+        set split-tunneling enable
+        set ip-pools "SSLVPN_TUNNEL_ADDR1"
+    next
+end
+
+config user local
+    edit "vpnuser1"
+        set type password
+        set two-factor disable
+    next
+    edit "vpnuser2"
+        set type password
+        set two-factor disable
+    next
+end
+
+config vpn ipsec phase1-interface
+    edit "branch-tunnel"
+        set interface "wan1"
+        set psksecret "Summer2023!"
+    next
+end

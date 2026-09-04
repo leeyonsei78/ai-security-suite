@@ -1,0 +1,23 @@
+{
+  "_comment": "예시 파일 — App 18(클라우드 IAM 정책 감사기) 테스트용. 실제로는: gcloud projects get-iam-policy <프로젝트ID> --format=json",
+  "bindings": [
+    { "role": "roles/storage.objectViewer", "members": ["allUsers"] },
+    { "role": "roles/owner", "members": ["user:alice@company.com", "user:bob@company.com"] },
+    {
+      "role": "roles/iam.serviceAccountUser",
+      "members": ["user:contractor@company.com"]
+    },
+    {
+      "role": "roles/iam.serviceAccountTokenCreator",
+      "members": ["user:contractor@company.com"]
+    }
+  ],
+  "serviceAccountKeys": [
+    {
+      "serviceAccount": "ci-deployer@project.iam.gserviceaccount.com",
+      "keyId": "abc123",
+      "validAfterTime": "2023-01-15T00:00:00Z"
+    }
+  ],
+  "sharedAccountNote": "deploy-bot@company.com 계정 비밀번호를 여러 CI 파이프라인과 팀원이 공유 사용 중 (사내 위키 기록)"
+}

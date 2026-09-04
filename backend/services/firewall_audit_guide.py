@@ -33,6 +33,18 @@ SOURCE_TYPES = [
         "commands": ["terminal length 0", "show running-config", "show version", "show vlan brief", "show cdp neighbors detail  # 인접 장비 정보 노출 확인용"],
     },
     {
+        "id": "vpn_gateway",
+        "label": "VPN/원격접속 게이트웨이 (FortiGate/Cisco AnyConnect 등)",
+        "how_to_export": "SSH/콘솔로 접속해 SSL-VPN·IPsec 관련 설정 결과를 붙여넣거나 파일로 저장해 업로드하세요. FortiGate는 `show vpn ssl settings` 등, Cisco ASA/AnyConnect는 `show running-config webvpn` 등을 사용합니다. 사전공유키·비밀번호가 평문으로 포함될 수 있으니 업로드 전 실제로 사용 중인 값인지 확인하고, 필요하면 마스킹 후 업로드하세요.",
+        "commands": [
+            "show vpn ssl settings  # FortiGate",
+            "show vpn ssl web portal",
+            "show user local",
+            "show running-config webvpn  # Cisco ASA/AnyConnect",
+            "show running-config tunnel-group",
+        ],
+    },
+    {
         "id": "windows_fw",
         "label": "Windows 방화벽",
         "how_to_export": "PowerShell(관리자 권한) 또는 netsh 명령 결과를 붙여넣거나, 텍스트 파일로 저장해(`> rules.txt`) 업로드하세요. GUI의 '정책 내보내기'(.wfw)는 바이너리 형식이라 지원하지 않습니다.",

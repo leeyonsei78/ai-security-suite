@@ -19,6 +19,11 @@ import PhishingSimGenerator from './pages/PhishingSimGenerator'
 import CveLookup from './pages/CveLookup'
 import FirewallAudit from './pages/FirewallAudit'
 import InfraScanner from './pages/InfraScanner'
+import IamAudit from './pages/IamAudit'
+import SecretScanner from './pages/SecretScanner'
+import ContainerAudit from './pages/ContainerAudit'
+import DnsSecurityCheck from './pages/DnsSecurityCheck'
+import RiskDashboard from './pages/RiskDashboard'
 
 export default function App() {
   const [isMock, setIsMock] = useState(null)
@@ -48,6 +53,11 @@ export default function App() {
         <Route path="/cve-lookup" element={<CveLookup />} />
         <Route path="/firewall-audit" element={<FirewallAudit />} />
         <Route path="/infra-scan" element={<InfraScanner />} />
+        <Route path="/iam-audit" element={<IamAudit />} />
+        <Route path="/secret-scan" element={<SecretScanner />} />
+        <Route path="/container-audit" element={<ContainerAudit />} />
+        <Route path="/dns-security" element={<DnsSecurityCheck />} />
+        <Route path="/risk-dashboard" element={<RiskDashboard />} />
       </Routes>
     </BrowserRouter>
   )

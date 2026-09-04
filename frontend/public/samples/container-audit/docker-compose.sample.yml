@@ -1,0 +1,15 @@
+# 예시 파일 — App 20(컨테이너/Dockerfile 감사기) 테스트용
+# 실제로는: cat docker-compose.yml  (또는 docker compose config)
+version: "3.8"
+services:
+  app:
+    image: myapp:latest
+    privileged: true
+    network_mode: host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./data:/app/data
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production

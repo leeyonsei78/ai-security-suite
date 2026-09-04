@@ -225,6 +225,51 @@ _TEMPLATES = {
             {"framework": "ISMS-P", "note": "2.5.1(사용자 계정 관리)·2.6.1(네트워크 접근)에서 요구하는 개별 계정 관리와 안전한 인증 수단이 지켜지지 않고 있습니다."},
         ],
     },
+    "vpn_gateway": {
+        "summary": "SSL-VPN 포털이 오래된 TLS 버전을 허용하고 MFA 없이 비밀번호만으로 로그인되며, split-tunneling까지 켜져 있어 감염된 원격 단말이 검사 없이 내부망과 인터넷을 동시에 오갈 수 있는 상태입니다. 원격 접근 경로 전반의 위험도가 높습니다.",
+        "overall_risk": "CRITICAL",
+        "findings": [
+            {
+                "rule_reference": "config vpn ssl settings — set ssl-min-proto-ver tls1-0",
+                "issue_type": "insecure_management",
+                "severity": "CRITICAL",
+                "description": "SSL-VPN 포털이 TLS 1.0까지 허용합니다. TLS 1.0/1.1은 이미 주요 브라우저·표준에서 폐기됐고, SSL-VPN 장비 자체를 겨냥한 다수의 실제 취약점이 오래된 프로토콜 스택과 함께 발견되어 왔습니다.",
+                "recommendation": "set ssl-min-proto-ver tls1-2 (가능하면 tls1-3)로 상향하고, 장비 펌웨어를 최신 버전으로 유지해 알려진 SSL-VPN CVE에 노출되지 않도록 하세요.",
+            },
+            {
+                "rule_reference": "config user local edit \"vpnuser1\" — set two-factor disable",
+                "issue_type": "weak_authentication",
+                "severity": "CRITICAL",
+                "description": "VPN 로그인 계정에 2단계 인증(MFA)이 꺼져 있어 비밀번호 유출만으로 원격 접속이 가능합니다. 원격 접근은 공격자가 내부망에 진입하는 가장 흔한 경로 중 하나입니다.",
+                "recommendation": "set two-factor enable 로 FortiToken/이메일 OTP 등을 강제하거나, RADIUS 연동으로 별도 MFA 서버를 붙이세요. 최소한 관리자·특권 계정부터 우선 적용하세요.",
+            },
+            {
+                "rule_reference": "config vpn ssl web portal edit \"full-access\" — set split-tunneling enable",
+                "issue_type": "overly_permissive",
+                "severity": "HIGH",
+                "description": "split-tunneling이 활성화되어 있어, VPN 연결 중에도 클라이언트가 인터넷에 직접 접속합니다. 감염된 단말이 검사 없이 인터넷과 내부망을 동시에 오가는 다리 역할을 할 수 있습니다.",
+                "recommendation": "보안이 중요한 그룹은 set split-tunneling disable로 전체 트래픽을 터널로 강제하거나, 최소한 허용 목적지를 명시적으로 제한하는 split-tunneling-acl을 구성하세요.",
+            },
+            {
+                "rule_reference": "config vpn ssl settings — set idle-timeout 0",
+                "issue_type": "missing_control",
+                "severity": "MEDIUM",
+                "description": "유휴 세션 타임아웃이 0(무제한)으로 설정되어 있습니다. 자리를 비운 사이 세션이 탈취되거나, 퇴근 후에도 세션이 계속 유효한 상태로 남습니다.",
+                "recommendation": "업무 특성에 맞는 유휴 타임아웃(예: 15~30분)을 설정하고, 동시 세션 수 제한(concurrent session limit)도 함께 구성하세요.",
+            },
+            {
+                "rule_reference": "config vpn ipsec phase1-interface edit \"branch-tunnel\" — set psksecret \"Summer2023!\"",
+                "issue_type": "weak_authentication",
+                "severity": "HIGH",
+                "description": "지사 간 IPsec 터널의 사전공유키(PSK)가 계절+연도 패턴의 예측 가능한 값이고, 평문 그대로 설정 파일에 노출되어 있습니다. 이 파일이 유출되면 터널이 즉시 위조 가능합니다.",
+                "recommendation": "무작위로 생성된 고엔트로피 PSK로 교체하거나 인증서 기반 IKE 인증으로 전환하고, 설정 백업 파일 자체도 접근 통제·암호화된 저장소에 보관하세요.",
+            },
+        ],
+        "compliance_notes": [
+            {"framework": "ISMS-P", "note": "2.6.6(원격 접근 통제)에서 요구하는 안전한 인증 수단(MFA)과 접근 경로 통제가 미흡합니다."},
+            {"framework": "PCI-DSS", "note": "요구사항 8.4.2(원격 네트워크 접근에 대한 다중 인증)를 충족하지 못하고 있습니다."},
+        ],
+    },
     "windows_fw": {
         "summary": "인바운드 규칙 상당수가 프로필 제한(Public/Private/Domain) 없이 'Any'로 설정되어 있어, 노트북이 공용 Wi-Fi에 연결될 때도 사내망과 동일한 서비스가 노출됩니다.",
         "overall_risk": "HIGH",

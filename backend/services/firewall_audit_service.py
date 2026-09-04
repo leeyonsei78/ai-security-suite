@@ -14,6 +14,7 @@ SOURCE_LABELS = {
     "azure_nsg": "Azure NSG(네트워크 보안 그룹)",
     "gcp_fw": "GCP 방화벽 규칙(Firewall Rules)",
     "router_switch": "라우터/스위치 (Cisco IOS 등)",
+    "vpn_gateway": "VPN/원격접속 게이트웨이",
     "windows_fw": "Windows 방화벽",
     "other": "기타/벤더 장비 (Fortinet, Palo Alto 등)",
 }
@@ -43,10 +44,10 @@ For each problem you find, cite the specific rule/config line (by index, name, o
 - unused: rules with no clear justification, stale comments, or clearly dead references
 - missing_control: important controls that are absent entirely (e.g. no outbound restriction, no logging, no port security, no AAA)
 - compliance_gap: a violation of a common compliance requirement, only when clearly applicable
-- insecure_management: for router/switch configs specifically — insecure management protocols or exposure (e.g. Telnet enabled instead of SSH-only, SNMP v1/v2c with a default/guessable community string like "public"/"private", HTTP management server enabled instead of HTTPS-only, no access-class restricting VTY lines)
-- weak_authentication: for router/switch configs specifically — weak credential/authentication handling (e.g. reversible "enable password" instead of "enable secret", plaintext/type-7 passwords, no AAA/TACACS+/RADIUS, shared local accounts instead of per-admin accounts, missing password complexity)
+- insecure_management: for router/switch/VPN gateway configs specifically — insecure management protocols or exposure (e.g. Telnet enabled instead of SSH-only, SNMP v1/v2c with a default/guessable community string like "public"/"private", HTTP management server enabled instead of HTTPS-only, no access-class restricting VTY lines, outdated SSL/TLS protocol versions allowed on a VPN portal, e.g. ssl-min-proto-ver set to tls1-0)
+- weak_authentication: for router/switch/VPN gateway configs specifically — weak credential/authentication handling (e.g. reversible "enable password" instead of "enable secret", plaintext/type-7 passwords, no AAA/TACACS+/RADIUS, shared local accounts instead of per-admin accounts, missing password complexity, no MFA/two-factor required for remote VPN login, weak or hardcoded pre-shared keys for site-to-site tunnels)
 
-insecure_management and weak_authentication are only relevant to router/switch device configs — do not use them for cloud/firewall rule sets where they don't apply.
+insecure_management and weak_authentication are only relevant to router/switch/VPN gateway device configs — do not use them for cloud IAM/firewall rule sets where they don't apply. Also for VPN gateway configs, flag split-tunneling being enabled as overly_permissive (it lets a compromised client bridge the internet and the internal network simultaneously, bypassing perimeter inspection) and a missing/zero idle-timeout as missing_control.
 
 Respond ONLY with valid JSON in this exact structure:
 {

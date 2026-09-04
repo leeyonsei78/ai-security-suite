@@ -4,7 +4,7 @@ import axios from 'axios'
 import {
   Shield, Mail, ShieldAlert, Search, Siren, Globe, FlaskConical, Syringe, Cpu, Swords,
   ScrollText, BrainCircuit, ShieldCheck, Bell, Trash2, Send, Database, ShieldQuestion, Radar,
-  ChevronDown,
+  KeyRound, ScanSearch, Container, MailCheck, Gauge, ChevronDown,
 } from 'lucide-react'
 
 const groups = [
@@ -23,6 +23,10 @@ const groups = [
       { to: '/model-audit', icon: BrainCircuit, label: 'AI 모델 감사' },
       { to: '/firewall-audit', icon: ShieldQuestion, label: '방화벽 정책 감사기' },
       { to: '/infra-scan', icon: Radar, label: '인프라 취약점 스캐너' },
+      { to: '/iam-audit', icon: KeyRound, label: 'IAM 정책 감사기' },
+      { to: '/secret-scan', icon: ScanSearch, label: '시크릿 스캐너' },
+      { to: '/container-audit', icon: Container, label: '컨테이너/Dockerfile 감사기' },
+      { to: '/dns-security', icon: MailCheck, label: 'DNS/이메일 보안 점검' },
     ],
   },
   {
@@ -51,6 +55,7 @@ const groups = [
     icon: Database,
     links: [
       { to: '/cve-lookup', icon: Database, label: 'CVE 조회' },
+      { to: '/risk-dashboard', icon: Gauge, label: '통합 리스크 대시보드' },
     ],
   },
 ]

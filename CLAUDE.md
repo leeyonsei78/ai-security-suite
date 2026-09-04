@@ -23,6 +23,11 @@ Claude AI를 활용한 보안 분석 도구 모음.
 | 15 | CVE 실시간 조회 | ✅ 완료 |
 | 16 | 방화벽 정책 감사기 | ✅ 완료 |
 | 17 | 인프라 취약점 스캐너 (의존성+네트워크) | ✅ 완료 |
+| 18 | 클라우드 IAM 정책 감사기 | ✅ 완료 |
+| 19 | 시크릿 스캐너 | ✅ 완료 |
+| 20 | 컨테이너/Dockerfile 감사기 | ✅ 완료 |
+| 21 | DNS/이메일 보안 점검 | ✅ 완료 |
+| 22 | 통합 리스크 대시보드 | ✅ 완료 |
 
 ---
 
@@ -219,18 +224,19 @@ App 2(피싱 탐지기)와 짝을 이루는 "생성기" — 사내 보안 인식
 
 ### App 16: 방화벽 정책 감사기 `/firewall-audit`
 "방화벽 정책이 바른지 수정이 필요한지 검토하는 프로그램"을 만들어달라는 사용자 요청으로 신설. App 11(보안 정책 생성기)이 "새 정책을 생성"하는 것과 정반대 방향 — **이미 존재하는** 방화벽 규칙을 붙여넣으면 AI가 무엇이 잘못됐는지 감사(audit)한다.
-- 입력: 플랫폼 7종(Linux iptables/nftables, AWS 보안그룹, Azure NSG, GCP 방화벽 규칙, 라우터/스위치, Windows 방화벽, 기타 벤더 장비) 선택 + 실제 규칙/설정 텍스트 붙여넣기 또는 파일 업로드 + 환경 컨텍스트(선택)
+- 입력: 플랫폼 8종(Linux iptables/nftables, AWS 보안그룹, Azure NSG, GCP 방화벽 규칙, 라우터/스위치, VPN/원격접속 게이트웨이, Windows 방화벽, 기타 벤더 장비) 선택 + 실제 규칙/설정 텍스트 붙여넣기 또는 파일 업로드 + 환경 컨텍스트(선택)
 - 각 플랫폼에서 실제로 규칙을 어떻게 뽑아오는지 명령어까지 안내(`GET /api/firewall-audit/guide`, `backend/services/firewall_audit_guide.py`) — App 3 recon_guide.py/App 11 policy_guide.py와 동일한 패턴
 - **파일 업로드**: "다운로드한 정책 파일을 그대로 업로드해서 점검하면 되지 않냐"는 사용자 제안으로 추가. 백엔드 변경 없이 프론트에서 `FileReader`로 파일을 텍스트로 읽어 기존 붙여넣기 textarea에 채우는 방식(바이너리 export는 텍스트로 못 읽으므로 미지원 — Windows GUI의 `.wfw` 등은 안내에서 제외 처리). 업로드 즉시 테스트해볼 수 있도록 플랫폼별 예시 파일 7종을 `frontend/public/samples/firewall-audit/`에 제공(`mock_firewall_audit.py`의 큐레이션 시나리오와 내용이 정확히 대응하도록 작성)
 - **Azure NSG / GCP 방화벽 규칙**: 기존 AWS 보안그룹 하나뿐이던 클라우드 카테고리를 독립 플랫폼으로 분리 추가("클라우드는 다른 제공자도 되냐"는 질문에 착수). Azure는 우선순위(priority) 낮은 Any-Any 규칙이 뒤 규칙을 가리는(shadowed) 패턴, GCP는 기본 생성되는 SSH/RDP 허용 규칙 + targetTags 없는 규칙이 전체 인스턴스에 적용되는 패턴을 mock 시나리오로 큐레이션
-- **라우터/스위치 (Cisco IOS 등)**: "라우터/스위치 장비도 동일하게 점검하고 싶다"는 요청으로 추가. 기존 issue_type 7종(과도허용/중복/가려진규칙/충돌/미사용/누락된통제/컴플라이언스위반)은 "방화벽 규칙" 관점이라 장비 하드닝 이슈(Telnet 활성화, SNMP 기본 커뮤니티스트링, Type 7 평문 복호화 가능 비밀번호, AAA 미구성 등)를 잘 못 잡는다고 판단해 `insecure_management`(안전하지 않은 관리 방식)·`weak_authentication`(취약한 인증/자격증명) 2종을 신규 issue_type으로 추가(SYSTEM_PROMPT에 "이 둘은 라우터/스위치에만 해당, 클라우드/방화벽 규칙셋엔 쓰지 말 것" 명시). `show running-config`(페이징 끄고 세션 로그로 저장 또는 장비에서 직접 파일로 export)를 안내
+- **라우터/스위치 (Cisco IOS 등)**: "라우터/스위치 장비도 동일하게 점검하고 싶다"는 요청으로 추가. 기존 issue_type 7종(과도허용/중복/가려진규칙/충돌/미사용/누락된통제/컴플라이언스위반)은 "방화벽 규칙" 관점이라 장비 하드닝 이슈(Telnet 활성화, SNMP 기본 커뮤니티스트링, Type 7 평문 복호화 가능 비밀번호, AAA 미구성 등)를 잘 못 잡는다고 판단해 `insecure_management`(안전하지 않은 관리 방식)·`weak_authentication`(취약한 인증/자격증명) 2종을 신규 issue_type으로 추가. `show running-config`(페이징 끄고 세션 로그로 저장 또는 장비에서 직접 파일로 export)를 안내
+- **VPN/원격접속 게이트웨이 (FortiGate/Cisco AnyConnect 등)**: "정보보안 관점에서 더 점검할 게 있는지" 물어본 것에 대한 답으로 제안하고 착수 — 원격 접근 경로가 실제 대형 침해사고의 흔한 원인이라 우선순위 높게 판단. 라우터/스위치용으로 추가했던 `insecure_management`(오래된 TLS 버전 허용 등)·`weak_authentication`(MFA 미적용, 약한 IPsec PSK 등)를 그대로 재사용하고, split-tunneling 활성화는 `overly_permissive`(감염 단말이 검사 없이 인터넷·내부망을 동시에 오갈 수 있음), 유휴 타임아웃 미설정은 `missing_control`로 분류하도록 SYSTEM_PROMPT에 추가 — 새 issue_type 없이 기존 9종만으로 커버됨
 - 출력: 종합 위험도(CRITICAL~INFO) + 규칙별 발견 사항(과도 허용/중복/가려진 규칙 Shadowed/충돌/미사용/누락된 통제/컴플라이언스 위반/안전하지 않은 관리 방식/취약한 인증 9종 issue_type, 해당 규칙 원문 인용, 구체적 수정안) + 컴플라이언스 참고
-- Mock/Live 모드는 기존 패턴(App 11/vulnerability_service와 동일) 그대로 사용 — `backend/services/firewall_audit_service.py`(Claude 시스템 프롬프트 + `_enrich()`로 심각도별 통계 집계), `mock_firewall_audit.py`(플랫폼별 큐레이션된 mock 감사 결과 7종)
+- Mock/Live 모드는 기존 패턴(App 11/vulnerability_service와 동일) 그대로 사용 — `backend/services/firewall_audit_service.py`(Claude 시스템 프롬프트 + `_enrich()`로 심각도별 통계 집계), `mock_firewall_audit.py`(플랫폼별 큐레이션된 mock 감사 결과 8종)
 - Markdown 리포트 다운로드에 "다음 단계"로 App 11(보안 정책 생성기) 링크 포함 — 감사에서 발견한 문제를 반영한 새 정책 초안을 이어서 만들 수 있게 상호 연결
 - 탐지형 앱으로 분류해 알림 시스템 대상에 포함(종합 위험도 CRITICAL 시 알림) — 8번째 탐지형 앱
 - 백엔드 curl로 analyze(AWS 보안그룹 샘플, CRITICAL 3건 검출)/guide/report/alerts 카운트 증가까지 검증, 프론트 `vite build` 성공 + Claude in Chrome으로 실제 브라우저에서 규칙 입력→감사 실행→결과 렌더링까지 end-to-end 확인 완료
-- Azure NSG/GCP/라우터·스위치 추가분은 플랫폼 ID가 guide/service/mock 세 모듈에서 누락 없이 일치하는지 스크립트로 검증 + 실제 analyze 호출로 CRITICAL 판정과 신규 issue_type 라벨 확인, 예시 파일 전부 200 응답·JSON 유효성 확인까지 완료. **⚠️ 라우터/스위치 mock 데이터 작성 중 실제 버그 발견·수정**: `rule_reference`에 두 줄짜리 설정을 담으려고 Python 문자열에 `\n`을 쓰려다 이스케이프를 잘못 넣어(`\\n`) 화면에 리터럴 백슬래시-n 문자로 노출되는 버그가 있었음 — 다른 항목들처럼 em-dash(` — `)로 한 줄에 묶는 기존 스타일로 통일해 해결. **⚠️ 이 세션에서 겪은 uvicorn --reload 미반영 재확인**: 새 source_type 추가 후 curl로 확인해보니 실행 중이던 백엔드가 변경을 반영하지 않고 있었음(포트 8000을 잡고 있던 프로세스가 `netstat`엔 나오지만 `Get-Process`로는 안 잡히는 좀비 소켓 상태였음 — `Get-Process | Where ProcessName -match python`으로 실제 PID를 찾아 `Stop-Process`한 뒤 재기동해서 해결). 이 프로젝트에서 반복되는 패턴이므로 새 라우터/서비스 변경 후에는 항상 curl로 실제 반영 여부부터 확인할 것 — netstat 기준 PID로 taskkill이 안 먹히면 PowerShell `Get-Process`로 실제 프로세스를 찾아 죽일 것
-- 이 세션은 Chrome 확장이 연결되지 않아 새 플랫폼 버튼의 실제 브라우저 렌더링(7개 2열 그리드 레이아웃)은 사용자 확인 필요
+- Azure NSG/GCP/라우터·스위치/VPN 게이트웨이 추가분은 플랫폼 ID가 guide/service/mock 세 모듈에서 누락 없이 일치하는지 스크립트로 검증 + 실제 analyze 호출로 CRITICAL 판정과 issue_type 라벨 확인, 예시 파일 전부 200 응답·JSON 유효성 확인까지 완료. **⚠️ 라우터/스위치 mock 데이터 작성 중 실제 버그 2건 발견·수정**: ① `rule_reference`에 두 줄짜리 설정을 담으려고 Python 문자열에 `\n`을 쓰려다 이스케이프를 잘못 넣어(`\\n`) 화면에 리터럴 백슬래시-n 문자로 노출되는 버그 — 다른 항목들처럼 em-dash(` — `)로 한 줄에 묶는 기존 스타일로 통일해 해결. ② VPN 게이트웨이 mock 설명 문구 작성 중 "인터넷"이 "인터?트"로 깨져 저장된 인코딩 손상을 발견해 재작성으로 수정. **⚠️ 이 세션에서 겪은 uvicorn --reload 미반영**: 새 source_type 추가 후 curl로 확인해보니 실행 중이던 백엔드가 변경을 반영하지 않고 있었음(포트 8000을 잡고 있던 프로세스가 `netstat`엔 나오지만 `Get-Process`로는 안 잡히는 좀비 소켓 상태였음 — `Get-Process | Where ProcessName -match python`으로 실제 PID를 찾아 `Stop-Process`한 뒤 재기동해서 해결). 이 프로젝트에서 반복되는 패턴이므로 새 라우터/서비스 변경 후에는 항상 curl로 실제 반영 여부부터 확인할 것 — netstat 기준 PID로 taskkill이 안 먹히면 PowerShell `Get-Process`로 실제 프로세스를 찾아 죽일 것
+- 이 세션은 Chrome 확장이 연결되지 않아 새 플랫폼 버튼의 실제 브라우저 렌더링(8개 2열 그리드 레이아웃)은 사용자 확인 필요
 
 ### App 17: 인프라 취약점 스캐너 `/infra-scan`
 "취약점 점검(=취약점 분석) 프로그램"을 만들어달라는 요청 — 기존 App 3(설정파일/코드 텍스트 분석)·App 6(웹 URL 전용 실시간 점검)과 달리, 사용자가 "의존성 스캐너"와 "네트워크 스캐너" 둘 다 원한다고 선택해 두 모드를 한 앱의 탭으로 구현. **이 프로젝트에서 App 15(CVE 조회)에 이어 두 번째로 Claude API를 쓰지 않는 앱** — 대신 App 15의 NVD 연동을 재사용해 항상 실시간 외부 데이터로 동작한다(Mock 모드 없음).
@@ -247,6 +253,52 @@ App 2(피싱 탐지기)와 짝을 이루는 "생성기" — 사내 보안 인식
   1. HTTP(포트 80/8080/8443/443) 배너를 응답의 첫 줄(상태줄, 예: `HTTP/1.1 200`)만 잡던 것을 실제 버전 정보가 담긴 `Server:` 헤더를 찾도록 수정. 이 프로젝트의 테스트용 Tomcat 8.5.19는 애초에 `Server:` 헤더 자체를 보내지 않는 것도 확인해, 이 경우 응답 본문의 `<title>` 태그(예: `Apache Tomcat/8.5.19`)에서 추출하는 fallback을 추가 — 실제로 GET 요청을 보내야만 body를 받을 수 있어 기존 HEAD 요청도 GET으로 변경
   2. Redis(6379)는 연결만 해서는 아무 데이터도 먼저 보내지 않는 프로토콜(요청-응답형)이라 배너가 항상 비어있었음 — 연결 직후 구버전 인라인 커맨드 `INFO\r\n`을 보내 응답에서 `redis_version:` 줄을 파싱하도록 추가
   3. 배너 원문을 그대로 NVD 키워드 검색에 넣으면(예: `redis_version:4.0.14`) 실제 CVE 설명 문구(`Redis 4.0.14`)와 형식이 달라 전혀 매칭되지 않음을 curl로 직접 비교 검증(빈 검색어 0건 vs 정규화된 검색어 2건) — Redis는 `Redis {버전}` 형태로 재구성, 그 외는 `/`, `:`, `_` 구분자를 공백으로 정규화하도록 `_search_query()` 추가. 수정 후 실제로 Redis 4.0.14 대상 스캔에서 **CVE-2019-10192/10193(HIGH, hyperloglog 버퍼 오버플로우)**을 정확히 찾아내는 것까지 확인 완료
+
+### App 18: 클라우드 IAM 정책 감사기 `/iam-audit`
+"정보보안 관점에서 더 점검할 게 있는지" 질문에 후보로 제시한 두 방향(App 16 확장 + 신규 앱) 중 신규 앱 쪽으로 착수. App 16(방화벽 정책 감사기)이 "네트워크 규칙"(누가 어느 포트/IP에 접근 가능한가)을 감사한다면, 이 앱은 "권한"(누가 무엇을 할 수 있는가)을 감사하는 상호보완 짝 — App 11↔16과 같은 "생성↔감사" 구도는 아니고, App 16과 나란히 놓이는 자매 앱.
+- 입력: 클라우드 IAM 플랫폼 3종(AWS IAM/Azure RBAC/GCP IAM) 선택 + 실제 정책·역할·사용자 정보 텍스트 붙여넣기 또는 파일 업로드 + 환경 컨텍스트(선택) — App 16과 동일한 UX 패턴(플랫폼 버튼, 가이드 명령어 박스, 예시 파일 다운로드 링크, 파일 업로드 버튼)을 그대로 재사용해 처음부터 파일 업로드 지원
+- **issue_type을 App 16과 별도로 새로 설계**: 방화벽 규칙 감사의 7종(과도허용/중복/가려진규칙/충돌/미사용/누락된통제/컴플라이언스위반)은 "권한" 개념에 안 맞아 재사용하지 않고, `excessive_privilege`(과도한 권한)·`missing_mfa`(MFA 미적용)·`stale_credential`(오래된/미사용 자격증명)·`privilege_escalation_path`(권한 상승 경로 — 예: AWS `iam:PutUserPolicy`를 자기 자신에게 허용, GCP `serviceAccountUser`+`serviceAccountTokenCreator` 조합)·`misconfigured_trust`(잘못된 신뢰 관계/공개 노출 — 예: AssumeRole Principal `*`, GCP `allUsers` 바인딩)·`shared_credential`(공유 계정) 6종을 새로 정의
+- 출력: 종합 위험도(CRITICAL~INFO) + 발견 사항별 해당 정책/계정 원문 인용, 구체적 수정안 + 컴플라이언스 참고 — App 16과 동일한 응답 스키마(`_enrich()`로 심각도별 통계 집계·정렬)
+- 플랫폼별 mock 시나리오 5건씩 큐레이션(`mock_iam_audit.py`): AWS는 인라인 Admin 정책 직접 부여+자기 자신에게 정책 추가 가능한 권한 상승 경로, Azure는 구독 범위 Owner 상시 부여+커스텀 역할의 `roleAssignments/write`가 테넌트 루트(`/`) 범위라 사실상 Owner와 동급인 권한 상승 경로, GCP는 `allUsers` 공개 바인딩(가장 흔한 실제 클라우드 사고 패턴)+서비스 계정 가장(impersonation) 조합
+- Markdown 리포트 다운로드에 "다음 단계"로 App 16(방화벽 정책 감사기) 링크 포함 — 네트워크·권한 두 축을 이어서 점검하도록 상호 연결
+- 탐지형 앱으로 분류해 알림 시스템 대상에 포함(종합 위험도 CRITICAL 시 알림) — 11번째 탐지형 앱
+- `backend/routers/iam_audit.py`, `backend/services/iam_audit_service.py`(Claude 시스템 프롬프트+`_enrich()`)/`mock_iam_audit.py`/`iam_audit_guide.py` — App 16 firewall_audit 4파일 구성을 그대로 복제
+- 백엔드는 3개 플랫폼 전부 curl로 analyze 실제 호출해 CRITICAL 판정과 신규 issue_type 라벨 정상 출력 확인, 예시 파일 3종(`frontend/public/samples/iam-audit/`) 200 응답·JSON 유효성 확인, CRITICAL 결과가 알림(`iam_audit` app_label "클라우드 IAM 정책 감사기")에 실제로 반영되는 것까지 확인 완료. 프론트 `vite build` 성공까지 검증 — 이 세션은 Chrome 확장이 연결되지 않아 실제 브라우저 렌더링은 사용자 확인 필요
+
+### App 19: 시크릿 스캐너 `/secret-scan`
+"정보보안 관점에서 더 점검할 게 있는지" 질문에 후보로 제시한 4개(시크릿 스캐너/통합 리스크 대시보드/컨테이너 감사/DNS·이메일 보안) 중 사용자가 전부 진행을 선택해 이어서 구현. Roadmap에 오래전부터 미착수로 남아있던 후보이기도 함.
+- **이 프로젝트에서 App 15/17에 이어 세 번째로 Claude API를 쓰지 않는 앱** — 하드코딩된 시크릿 탐지는 정규식/엔트로피 기반 결정론적 매칭이 LLM보다 정확·빠르고, 원본 시크릿 값을 외부(Claude API)로 전송하지 않아도 된다는 보안상 이점도 있어 의도적으로 Claude를 배제
+- 입력: 코드/설정 텍스트 붙여넣기 또는 파일 업로드(플랫폼 선택 없음 — 범용 텍스트 스캐너)
+- **탐지 패턴 15종**: AWS 액세스키/시크릿키, GitHub/GitLab 토큰, Slack 토큰/Webhook, Google API 키, Stripe 라이브 시크릿/공개 키, 개인키 블록, Twilio 키, DB 연결 문자열(자격증명 포함), JWT 형태 토큰 + 일반 `key=value` 휴리스틱 + Shannon 엔트로피 기반 고엔트로피 문자열(최후 fallback, LOW 확신도로 명시)
+- **⚠️ 보안 설계상 핵심 결정**: 이 앱이 다루는 입력 자체가 실제 비밀값일 수 있어, 매치된 값은 찾아내는 즉시 앞뒤 일부만 남기고 마스킹하고 그 이후로는(응답·히스토리 DB·마크다운 리포트 전부) 원본 값이나 원본 텍스트를 절대 다시 노출하지 않음 — `context` 필드도 매치 구간만 마스킹해 재구성. 히스토리 DB에도 원본 content나 truncate된 미리보기를 저장하지 않고 파일명·글자수·줄수 같은 비민감 메타데이터만 기록(App 16/18 등 다른 감사 앱들이 `preview`를 저장하는 것과 의도적으로 다른 부분)
+- **placeholder 필터링**: `changeme`/`example`/`test`/`xxx` 등 명백한 예시값은 오탐 방지를 위해 제외 — 실제로 AWS 공식 문서의 예시 키(`AKIAIOSFODNN7EXAMPLE`, "EXAMPLE" 포함)가 정확히 필터링되는 것을 테스트로 확인
+- `backend/services/secret_scanner_service.py`(패턴 정의+마스킹+엔트로피 계산), `backend/routers/secret_scan.py`
+- 로컬에서 실제 패턴들(AWS/GitHub/GitLab/Slack/Google/Stripe/개인키/DB연결문자열)로 유닛 테스트해 매칭·마스킹·placeholder 필터링 전부 정상 동작 확인, 히스토리 DB에 저장된 엔트리에 `content`/`raw` 필드가 없는 것(원본 미저장)까지 직접 검증. 탐지형 앱으로 알림 시스템 대상에 포함, curl로 CRITICAL 알림 발생까지 확인. 프론트 `vite build` 성공
+
+### App 20: 컨테이너/Dockerfile 감사기 `/container-audit`
+App 16(방화벽 정책 감사기)·App 18(IAM 정책 감사기)와 완전히 동일한 패턴(붙여넣기/파일 업로드 → Claude가 감사) — Dockerfile·docker-compose.yml을 대상으로 한 컨테이너 정의 자체(이미지·실행 옵션)의 보안을 감사한다.
+- 입력: 파일 유형 2종(Dockerfile / docker-compose.yml) 선택 + 파일 내용 붙여넣기 또는 업로드 + 환경 컨텍스트(선택)
+- **issue_type 6종 신규 설계**: `running_as_root`(USER 지시어 없어 root로 실행)·`excessive_capabilities`(privileged/cap-add/host network 등)·`baked_in_secret`(이미지 레이어에 시크릿 굽기)·`unpinned_base_image`(latest 태그 미고정)·`insecure_mount_or_network`(docker.sock 마운트 등)·`missing_control`(HEALTHCHECK/리소스 제한 없음) — App 16/18의 issue_type과 겹치지 않는 독자 taxonomy
+- mock 시나리오(`mock_container_audit.py`): Dockerfile은 ENV로 DB 비밀번호를 굽고 FROM node:latest+USER 없음(root 실행)인 전형적 안티패턴, compose는 privileged:true + docker.sock 마운트 + network_mode:host가 동시에 걸려 컨테이너가 뚫리면 사실상 호스트가 뚫리는 조합
+- `backend/routers/container_audit.py`, `backend/services/container_audit_service.py`/`mock_container_audit.py`/`container_audit_guide.py` — App 16 firewall_audit 4파일 구성을 그대로 복제
+- 탐지형 앱으로 알림 시스템 대상에 포함. 백엔드 curl로 두 파일 유형 모두 analyze 호출해 CRITICAL 판정 확인, 예시 파일 2종(`frontend/public/samples/container-audit/`) 200 응답 확인, CRITICAL 알림(`container_audit` app_label "컨테이너/Dockerfile 감사기") 실제 반영 확인. 프론트 `vite build` 성공
+
+### App 21: DNS/이메일 보안 점검 `/dns-security`
+**이 프로젝트에서 App 15/17에 이어 네 번째로 Claude API를 쓰지 않는 앱** — SPF/DMARC/DKIM/DNSSEC 판정은 실제 DNS 레코드를 기계적 규칙으로 해석하는 문제라 결정론적 조회가 LLM보다 정확하다고 판단.
+- **DoH(DNS-over-HTTPS) 기반**: 새 Python 의존성(dnspython 등) 추가 없이, 이 프로젝트에서 이미 쓰는 httpx로 Google Public DNS의 JSON API(`https://dns.google/resolve`)를 직접 호출 — App 15(NVD REST API)와 같은 "기존 httpx 재사용" 패턴
+- 입력: 도메인 이름 하나만 입력(플랫폼 선택 없음)
+- 점검 항목 4종: **SPF**(레코드 존재+`all` 메커니즘 강도 `-all`/`~all`/`?all`/`+all` 판정), **DMARC**(`_dmarc.<도메인>` 레코드+정책 `p=none`/`quarantine`/`reject` 판정), **DKIM**(흔한 셀렉터 8종 — google/default/selector1/selector2/k1/dkim/mail/smtp — 를 대상으로 best-effort 조회, 실제 셀렉터가 다르면 "못 찾음"으로 나올 수 있음을 UI에 명시), **DNSSEC**(DNSKEY 레코드 존재 여부로 적용 여부 추정)
+- **⚠️ 실제 조회 중 발견해 수정한 버그**: DKIM 판정에 `"p=" in record`라는 느슨한 체크를 썼다가, `example.com`이 모든 DKIM 셀렉터에 와일드카드로 `"v=DKIM1; p="`(RFC 6376상 명시적으로 폐기된 빈 키)를 반환하는 것 때문에 8개 셀렉터 전부가 "발견됨"으로 잘못 집계되는 실제 오탐을 발견 → `p=` 뒤에 실제 값이 있는지까지 확인하는 `_has_active_dkim_key()`로 수정. `google.com`(SPF `~all`/DMARC `p=reject`/DNSSEC 미적용)·`example.com`(전부 적절히 설정)·존재하지 않는 도메인(NXDOMAIN 에러 처리) 세 가지 실제 케이스로 검증
+- `backend/routers/dns_security.py`, `backend/services/dns_security_service.py`
+- 탐지형 앱으로 알림 시스템 대상에 포함(SPF `+all` 등 CRITICAL 발견 시). 실제 도메인 3종 대상 end-to-end 검증 완료, 프론트 `vite build` 성공
+
+### App 22: 통합 리스크 대시보드 `/risk-dashboard`
+탐지형 앱이 App 16~21 추가로 14개까지 늘어나면서 "한 화면에서 전체 현황을 보고 싶다"는 필요에 답해 신설. Roadmap에 오래전부터 미착수로 남아있던 후보.
+- **새로운 분석을 하지 않는 순수 집계 페이지** — Claude API도, 외부 API도 호출하지 않고 이 서버 안에 이미 쌓여있는 데이터만 재사용. 앱마다 결과 스키마가 완전히 제각각이라(App 1의 이벤트 목록, App 16의 findings, App 17의 매칭 CVE 등) 개별 스키마를 파싱하는 대신, 모든 탐지형 앱이 이미 공통으로 거치는 두 지점만 씀: `db.get_history(app)`의 길이(=실행 건수, 스키마 무관)와 `notify.py`가 이미 정규화해 쌓아둔 alerts 테이블(app/app_label/severity/created_at)
+- `notify.APP_LABELS` 딕셔너리(14개 탐지형 앱 이름+라벨)를 그대로 순회하는 방식이라, 앞으로 탐지형 앱이 추가돼도 대시보드 코드 수정 없이 자동으로 포함됨
+- 출력: 앱별 실행 건수·CRITICAL 알림 건수(내림차순 정렬, 클릭 시 해당 앱으로 이동) + CRITICAL 알림 건수 상위 8개 가로 막대 차트(recharts, App 1의 파이차트와 같은 라이브러리 재사용) + 최근 알림 15건 타임라인
+- `backend/routers/dashboard_overview.py`(`/api/dashboard/overview` 단일 엔드포인트), `backend/services/dashboard_service.py`. 탐지 판정을 내리는 앱이 아니라 알림 시스템 대상에는 포함하지 않음(정책 생성기 등 생성형 앱과 같은 스코프 결정)
+- 실제 이 프로젝트에서 여러 세션에 걸쳐 쌓인 진짜 히스토리 데이터(전체 178건 실행, CRITICAL 126건)로 조회해 14개 앱 전부 정상 집계되는 것을 curl로 확인. 프론트는 `StatCard` 컴포넌트의 실제 prop 시그니처(`color`가 키워드가 아니라 `"border-red-600"` 같은 전체 클래스명이어야 함)를 처음에 잘못 가정했다가 기존 사용처(App 1 Dashboard.jsx)를 확인하고 수정. `vite build` 성공까지 검증
 
 ### 테스트 레인지 (`test-range/`)
 App 6/16/17을 실제 대상으로 테스트해볼 수 있는 로컬 전용 Docker Compose 스택 — "취약한 사이트/네트워크/서버/방화벽을 구성할 방법이 있는지 검토해달라"는 요청으로 신설. App 9(Pwn Lab)이 이미 Docker를 요구하므로 새 의존성은 아님. 전부 검증된 공식 이미지(또는 그 위의 커스텀 Dockerfile)만 사용.
@@ -265,8 +317,8 @@ App 6/16/17을 실제 대상으로 테스트해볼 수 있는 로컬 전용 Dock
 - **Mock / Live 모드**: `.env`에 `ANTHROPIC_API_KEY` 없으면 자동 Mock 모드
 - **사용 가이드**: 모든 페이지에 접이식 GuidePanel 포함
 - **네비게이션 바**: MOCK/LIVE 배지 + 전체 메뉴
-- **히스토리 SQLite 영속화**: App 1(대시보드·실시간 모니터링 포함)/2/3/4/5/6/7/8/11/12/14/15/16/17(의존성+네트워크 두 앱 이름)의 분석 이력·상담 세션이 `backend/data/history.db`(SQLite, gitignore 대상)에 저장되어 서버 재시작에도 유지됨. 앱마다 저장 형태(단순 이력 리스트 vs 채팅 세션)가 달라도 `backend/services/db.py`의 범용 `app` 구분 단일 테이블(JSON 블롭)로 통일 처리 — `add_entry`/`get_history`/`get_entry`/`update_entry`/`clear_history` 5개 함수로 기존 `history: list[dict]`/`sessions: dict[int, dict]` 패턴을 그대로 대체함. **CTF/모의해킹 연습용 앱(App 9 Pwn/Reverse, App 10 Web CTF 아레나, App 13 모의 해킹 랩)은 서버 재시작 시 초기화되는 것이 의도된 동작이라 이 영속화 대상에서 제외**됨
-- **알림 시스템**: 탐지형 앱 10개(대시보드·실시간모니터링/피싱/취약점/IoC/웹스캐너/인젝션탐지/모델감사/방화벽 정책 감사기/인프라 취약점 스캐너 의존성·네트워크)가 각 앱 기준 최고 심각도(CRITICAL/MALICIOUS/INJECTION)로 판정하면 자동으로 Slack/이메일 알림을 시도함. `SLACK_WEBHOOK_URL` 또는 `SMTP_*`(`.env.example` 참고) 미설정 시 자동 Mock 모드로 동작 — 실제 전송 없이 알림 로그만 기록(다른 앱들의 Mock/Live 패턴과 동일). 알림 로그는 NavBar 우측 종(🔔) 아이콘 드롭다운에서 확인·삭제 가능(`GET/DELETE /api/alerts`, 20초 폴링). 상담형 앱(인시던트/위협분석)과 생성형 앱(정책생성기, 피싱 모의훈련 생성기)은 "위협 판정"이 아니라 대상에서 제외. CVE 조회(App 15)는 Claude AI 자체를 쓰지 않는 순수 조회 도구라 마찬가지로 제외. `backend/services/notify.py`, `backend/routers/alerts.py`. ⚠️ 알림 발송(urllib/smtplib)은 블로킹 호출이라 async 라우트에서 직접 기다리면 안 됨 — 실시간 모니터링 WebSocket에서 이미 겪은 함정과 같은 유형이라 `alert_if_critical()`이 내부적으로 `run_in_executor`로 스레드 위임함. 원래 7개 앱에서 Mock 데이터 조합으로 실제 CRITICAL을 트리거해 alerts 카운트 증가·비-CRITICAL 시 미증가·서버 재시작 후 유지까지 curl로 검증 완료(App 16/17은 각 앱 섹션에서 별도 검증)
+- **히스토리 SQLite 영속화**: App 1(대시보드·실시간 모니터링 포함)/2/3/4/5/6/7/8/11/12/14/15/16/17/18/19/20/21의 분석 이력·상담 세션이 `backend/data/history.db`(SQLite, gitignore 대상)에 저장되어 서버 재시작에도 유지됨. 앱마다 저장 형태(단순 이력 리스트 vs 채팅 세션)가 달라도 `backend/services/db.py`의 범용 `app` 구분 단일 테이블(JSON 블롭)로 통일 처리 — `add_entry`/`get_history`/`get_entry`/`update_entry`/`clear_history` 5개 함수로 기존 `history: list[dict]`/`sessions: dict[int, dict]` 패턴을 그대로 대체함. **CTF/모의해킹 연습용 앱(App 9 Pwn/Reverse, App 10 Web CTF 아레나, App 13 모의 해킹 랩)은 서버 재시작 시 초기화되는 것이 의도된 동작이라, App 22(통합 리스크 대시보드)는 자체 결과가 없는 순수 집계 페이지라 이 영속화 대상에서 제외**됨
+- **알림 시스템**: 탐지형 앱 14개(대시보드·실시간모니터링/피싱/취약점/IoC/웹스캐너/인젝션탐지/모델감사/방화벽 정책 감사기/인프라 취약점 스캐너 의존성·네트워크/클라우드 IAM 정책 감사기/시크릿 스캐너/컨테이너·Dockerfile 감사기/DNS·이메일 보안 점검)가 각 앱 기준 최고 심각도(CRITICAL/MALICIOUS/INJECTION)로 판정하면 자동으로 Slack/이메일 알림을 시도함. `SLACK_WEBHOOK_URL` 또는 `SMTP_*`(`.env.example` 참고) 미설정 시 자동 Mock 모드로 동작 — 실제 전송 없이 알림 로그만 기록(다른 앱들의 Mock/Live 패턴과 동일). 알림 로그는 NavBar 우측 종(🔔) 아이콘 드롭다운에서 확인·삭제 가능(`GET/DELETE /api/alerts`, 20초 폴링). 상담형 앱(인시던트/위협분석)과 생성형 앱(정책생성기, 피싱 모의훈련 생성기)은 "위협 판정"이 아니라 대상에서 제외. CVE 조회(App 15)는 Claude AI 자체를 쓰지 않는 순수 조회 도구라 마찬가지로 제외, App 22(통합 리스크 대시보드)도 판정을 내리지 않는 집계 페이지라 제외. `backend/services/notify.py`, `backend/routers/alerts.py`. ⚠️ 알림 발송(urllib/smtplib)은 블로킹 호출이라 async 라우트에서 직접 기다리면 안 됨 — 실시간 모니터링 WebSocket에서 이미 겪은 함정과 같은 유형이라 `alert_if_critical()`이 내부적으로 `run_in_executor`로 스레드 위임함. 원래 7개 앱에서 Mock 데이터 조합으로 실제 CRITICAL을 트리거해 alerts 카운트 증가·비-CRITICAL 시 미증가·서버 재시작 후 유지까지 curl로 검증 완료(App 16/17/18/19/20/21은 각 앱 섹션에서 별도 검증)
 - **n8n 자동화 연동**: 모든 앱이 이미 REST API(`/api/*`)로 노출돼 있어 n8n의 HTTP Request 노드가 코드 수정 없이 그대로 호출 가능. `docs/n8n-integration.md`에 연동 방법 + 자동화용 엔드포인트 요약, `n8n-workflows/`에 바로 Import 가능한 예제 워크플로우 3개(알림 폴링→Slack, CVE 일일 감시→Slack, IoC 일괄분석 Webhook) 제공. 이와 함께 백엔드를 로컬 밖으로 노출하는 경우를 대비해 선택적 API 키 인증(`API_KEY` 환경변수, 미설정 시 기존과 동일하게 인증 없음)을 `backend/services/auth.py` + `main.py`(`/api/*` 라우터 전체에 `Depends`)로 추가 — `/api/mode`는 헬스체크 목적으로 예외. `API_KEY` 미설정/오설정/정설정 3가지 케이스와 IoC 분석·alerts 응답 필드가 예제 워크플로우 가정과 일치하는지 curl로 검증 완료. CVE 검색 예제는 이 세션 네트워크 제한으로 NVD 실호출까지는 못 했으나 `cve_lookup_service.search_cves()` 응답 스키마 확인으로 대체함. ⚠️ `API_KEY`를 켜면 프론트엔드 요청도 헤더가 없어 401을 받게 되므로(가이드에 고지), n8n 전용으로 켜거나 프론트 프록시에 헤더 주입을 추가해야 함(미착수)
 - **n8n Slack 알림 채널 마이그레이션** (2026-09-04, 사용자의 실제 로컬 n8n 인스턴스 `localhost:5678` 대상 작업): 기존에 예제 워크플로우들이 사용자의 다른 용도 채널 `자동-매매`로 Slack 알림을 보내고 있어, 전용 채널 `#ai-security-suite`(신규 생성)로 이전함.
   - `alerts-polling-to-slack` → n8n에 기존에 Import돼 있던 워크플로우의 Slack 노드 채널만 교체
@@ -293,7 +345,12 @@ App 6/16/17을 실제 대상으로 테스트해볼 수 있는 로컬 전용 Dock
 - [x] **CVE 실시간 조회 연동**: App 15 (`/cve-lookup`)로 구현됨, App 3 취약점 스캐너와 연동
 - [x] **방화벽 정책 감사기**: App 16 (`/firewall-audit`)로 구현됨, App 11(정책 생성기)과 반대 방향(감사) 짝
 - [x] **인프라 취약점 스캐너 (의존성+네트워크)**: App 17 (`/infra-scan`)로 구현됨, App 15 NVD 연동 재사용
-- 그 외 후보였던 시크릿 스캐너·통합 리스크 대시보드는 미착수 — 새 아이디어가 생기면 여기에 추가.
+- [x] **클라우드 IAM 정책 감사기**: App 18 (`/iam-audit`)로 구현됨, App 16(방화벽 정책 감사기)과 나란히 놓이는 "권한" 축 감사 도구. 사전 정의 후보는 아니었고 "정보보안 관점에서 더 점검할 게 있는지" 질문에 답하며 세션 중 신설(App 13처럼 Roadmap 목록에 없던 앱도 계속 추가될 수 있음을 보여주는 사례)
+- [x] **시크릿 스캐너**: App 19 (`/secret-scan`)로 구현됨 — 오래전부터 미착수로 남아있던 후보를 드디어 착수. Claude API 미사용(App 15/17에 이은 세 번째)
+- [x] **컨테이너/Dockerfile 감사기**: App 20 (`/container-audit`)로 구현됨, App 16/18과 같은 패턴의 새 감사 대상
+- [x] **DNS/이메일 보안 점검**: App 21 (`/dns-security`)로 구현됨, App 15에 이은 네 번째 Claude API 미사용 앱
+- [x] **통합 리스크 대시보드**: App 22 (`/risk-dashboard`)로 구현됨 — 오래전부터 미착수로 남아있던 후보. 새 분석 없이 기존 히스토리/알림 데이터만 집계
+- 위 5개(App 18~22)는 모두 "정보보안 관점에서 더 추가할 점검이 있을지" 질문 하나에서 이어진 같은 세션의 연속 작업(App 16의 VPN/원격접속 게이트웨이 플랫폼 추가도 같은 흐름). 무선 AP/로드밸런서·WAF 등 App 16의 추가 플랫폼 후보는 여전히 미착수 — 새 아이디어가 생기면 여기에 추가.
 
 ### 외부 자동화 연동
 - [x] **n8n 연동 (Pull: n8n → 이 앱)**: 위 "공통 기능"의 n8n 자동화 연동 항목, `docs/n8n-integration.md` 참고
@@ -342,11 +399,16 @@ test_AI_security/
 │   │   ├── phishing_sim.py    ← App 14 (+ /scenarios, /report/{id})
 │   │   ├── cve_lookup.py      ← App 15 (+ /search, /status) — Claude API 미사용, NVD 공식 API 직접 호출
 │   │   ├── firewall_audit.py  ← App 16 (+ /guide, /report/{id})
-│   │   └── infra_scan.py      ← App 17 (/dependency/*, /network/*, /guide) — Claude API 미사용, NVD 재사용
+│   │   ├── infra_scan.py      ← App 17 (/dependency/*, /network/*, /guide) — Claude API 미사용, NVD 재사용
+│   │   ├── iam_audit.py       ← App 18 (+ /guide, /report/{id})
+│   │   ├── secret_scan.py     ← App 19 (+ /guide, /report/{id}) — Claude API 미사용
+│   │   ├── container_audit.py ← App 20 (+ /guide, /report/{id})
+│   │   ├── dns_security.py    ← App 21 (+ /guide, /report/{id}) — Claude API 미사용
+│   │   └── dashboard_overview.py ← App 22 (/overview 단일 엔드포인트, Claude/외부 API 모두 미사용)
 │   └── services/
 │       ├── claude_service.py
 │       ├── mock_data.py
-│       ├── db.py              ← 히스토리 SQLite 영속화 (범용, App 1/2/3/4/5/6/7/8/11/12/14/15/16/17 공용)
+│       ├── db.py              ← 히스토리 SQLite 영속화 (범용, App 1/2/3/4/5/6/7/8/11/12/14/15/16/17/18/19/20/21 공용)
 │       ├── auth.py            ← 선택적 API 키 인증 (n8n 등 외부 연동용, API_KEY 미설정 시 비활성)
 │       ├── notify.py          ← Critical 탐지 시 Slack/이메일 알림
 │       ├── live_monitor.py    ← App 1 실시간 모니터링용 합성 로그 생성기
@@ -365,7 +427,12 @@ test_AI_security/
 │       ├── phishing_sim_service.py / mock_phishing_sim.py
 │       ├── cve_lookup_service.py
 │       ├── firewall_audit_service.py / mock_firewall_audit.py / firewall_audit_guide.py
-│       └── dependency_scan_service.py / network_scan_service.py
+│       ├── dependency_scan_service.py / network_scan_service.py
+│       ├── iam_audit_service.py / mock_iam_audit.py / iam_audit_guide.py
+│       ├── secret_scanner_service.py
+│       ├── container_audit_service.py / mock_container_audit.py / container_audit_guide.py
+│       ├── dns_security_service.py
+│       └── dashboard_service.py
 └── frontend/
     ├── package.json
     └── src/
@@ -393,7 +460,12 @@ test_AI_security/
             ├── PhishingSimGenerator.jsx
             ├── CveLookup.jsx
             ├── FirewallAudit.jsx
-            └── InfraScanner.jsx
+            ├── InfraScanner.jsx
+            ├── IamAudit.jsx
+            ├── SecretScanner.jsx
+            ├── ContainerAudit.jsx
+            ├── DnsSecurityCheck.jsx
+            └── RiskDashboard.jsx
 ```
 
 ## 실행 방법
@@ -423,11 +495,11 @@ npm run dev
 
 | 페이지/기능 | 추가로 필요한 것 |
 |---|---|
-| `/vuln`, `/web-arena`, `/policy`, `/model-audit`, `/pentest-lab`, `/phishing-sim`, `/firewall-audit` | 없음 — 서버 두 개만 켜면 바로 테스트 가능 |
+| `/vuln`, `/web-arena`, `/policy`, `/model-audit`, `/pentest-lab`, `/phishing-sim`, `/firewall-audit`, `/iam-audit`, `/secret-scan`, `/container-audit`, `/risk-dashboard` | 없음 — 서버 두 개만 켜면 바로 테스트 가능 |
 | `/pwn-lab`의 Pwn/Reverse 6개 챌린지(실제 컴파일·gdb 실행) | Docker Desktop 켜기 또는 WSL Ubuntu 설치 (페이지 0단계에 Docker/WSL 두 가지 방법 안내됨) |
 | `/pwn-lab`의 Misc 3개 챌린지 | 없음 — 컴파일 불필요 |
 | `/web-arena` 공유 스코어보드를 팀원과 같이 쓰기 | `npm run dev -- --host` + 방화벽에서 5180/8000 포트 개방 후 `http://<호스트 IP>:5180` 공유 |
-| `/cve-lookup`, `/infra-scan`의 의존성/네트워크 스캔 | 없음 — 다만 외부 인터넷(services.nvd.nist.gov)에 접속 가능해야 함. `NVD_API_KEY` 없이도 동작(요청 한도만 낮음, 여러 패키지/포트 스캔 시 딜레이가 늘어남) |
+| `/cve-lookup`, `/infra-scan`의 의존성/네트워크 스캔, `/dns-security` | 없음 — 다만 외부 인터넷(services.nvd.nist.gov 또는 dns.google)에 접속 가능해야 함. `/cve-lookup`·`/infra-scan`은 `NVD_API_KEY` 없이도 동작(요청 한도만 낮음, 여러 패키지/포트 스캔 시 딜레이가 늘어남), `/dns-security`는 API 키 자체가 필요 없음 |
 | `/infra-scan`의 네트워크 스캔 대상 | 사설 IP(10/8, 172.16/12, 192.168/16) 또는 로컬호스트만 가능 — 공인 IP는 서버에서 차단됨 |
 | n8n 연동 (`n8n-workflows/`) | 없음 — 서버 두 개만 켜면 바로 Import해서 테스트 가능. 자세한 내용은 `docs/n8n-integration.md` |
 | `test-range/`의 실제 취약 대상으로 App 6/16/17 테스트 | Docker Desktop 켜기 후 `cd test-range && docker compose up -d --build` (자세한 내용은 `test-range/README.md`) |

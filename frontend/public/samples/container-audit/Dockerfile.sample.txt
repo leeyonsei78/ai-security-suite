@@ -1,0 +1,16 @@
+# 예시 파일 — App 20(컨테이너/Dockerfile 감사기) 테스트용
+# 실제로는: cat Dockerfile
+
+FROM node:latest
+
+ENV DB_PASSWORD=SuperSecret123
+
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+
+RUN apt-get update && apt-get install -y curl
+
+EXPOSE 3000
+CMD ["node", "server.js"]

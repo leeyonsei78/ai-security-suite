@@ -1,0 +1,52 @@
+{
+  "_comment": "예시 파일 — App 18(클라우드 IAM 정책 감사기) 테스트용. 실제로는: aws iam get-account-authorization-details --output json",
+  "UserDetailList": [
+    {
+      "UserName": "deploy-bot",
+      "UserPolicyList": [
+        {
+          "PolicyName": "AdminAccess",
+          "PolicyDocument": {
+            "Version": "2012-10-17",
+            "Statement": [{ "Effect": "Allow", "Action": "*", "Resource": "*" }]
+          }
+        }
+      ]
+    },
+    {
+      "UserName": "jkim",
+      "MFADevices": [],
+      "AttachedManagedPolicies": [{ "PolicyName": "PowerUserAccess" }]
+    },
+    {
+      "UserName": "dev-lead",
+      "UserPolicyList": [
+        {
+          "PolicyName": "SelfManage",
+          "PolicyDocument": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Action": ["iam:PutUserPolicy", "iam:AttachUserPolicy"],
+                "Resource": "arn:aws:iam::*:user/${aws:username}"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "AccessKeyMetadata": [
+    { "UserName": "legacy-svc", "AccessKeyId": "AKIAEXAMPLEN4F2", "Status": "Active", "CreateDate": "2024-02-11T00:00:00Z" }
+  ],
+  "RoleDetailList": [
+    {
+      "RoleName": "cross-account-readonly",
+      "AssumeRolePolicyDocument": {
+        "Version": "2012-10-17",
+        "Statement": [{ "Effect": "Allow", "Principal": { "AWS": "*" }, "Action": "sts:AssumeRole" }]
+      }
+    }
+  ]
+}

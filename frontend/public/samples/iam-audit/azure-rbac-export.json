@@ -1,0 +1,33 @@
+{
+  "_comment": "예시 파일 — App 18(클라우드 IAM 정책 감사기) 테스트용. 실제로는: az role assignment list --all --output json 등 여러 명령 결과를 조합",
+  "roleAssignments": [
+    {
+      "principalName": "jane.dev@company.com",
+      "roleDefinitionName": "Owner",
+      "scope": "/subscriptions/00000000-0000-0000-0000-000000000000"
+    },
+    {
+      "principalName": "contractor-ext@partner.com",
+      "principalType": "Guest",
+      "roleDefinitionName": "Contributor",
+      "scope": "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/legacy-project-rg",
+      "note": "프로젝트 종료 1년 경과, 접근 권한 미회수"
+    }
+  ],
+  "users": [
+    { "userPrincipalName": "jane.dev@company.com", "strongAuthenticationMethods": [] }
+  ],
+  "customRoleDefinitions": [
+    {
+      "roleName": "SelfServiceOps",
+      "actions": ["Microsoft.Authorization/roleAssignments/write"],
+      "assignableScopes": ["/"]
+    }
+  ],
+  "servicePrincipals": [
+    {
+      "displayName": "ci-pipeline-sp",
+      "passwordCredentials": [{ "startDateTime": "2023-01-01", "endDateTime": "2099-01-01" }]
+    }
+  ]
+}
