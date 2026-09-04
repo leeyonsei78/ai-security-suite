@@ -45,6 +45,9 @@ def _is_scannable(ip_str: str) -> bool:
     return ip.is_private or ip.is_loopback
 
 
+_HTTP_PORTS = (80, 8080, 8443, 443)
+
+
 def _tcp_scan(ip: str, ports: list[int]) -> list[dict]:
     results = []
     for port in ports:
@@ -56,10 +59,12 @@ def _tcp_scan(ip: str, ports: list[int]) -> list[dict]:
             sock.connect((ip, port))
             state = "open"
             try:
-                if port in (80, 8080, 8443, 443):
-                    sock.sendall(b"HEAD / HTTP/1.0\r\n\r\n")
-                raw = sock.recv(256)
-                banner = raw.decode(errors="ignore").strip().splitlines()[0][:200] if raw else None
+                if port in _HTTP_PORTS:
+                    sock.sendall(b"GET / HTTP/1.1\r\nHost: scan\r\nConnection: close\r\n\r\n")
+                elif port == 6379:
+                    sock.sendall(b"INFO\r\n")  # 구버전 Redis 인라인 커맨드 — redis_version 포함된 응답 유도
+                raw = sock.recv(1024)
+                banner = _extract_banner(raw, port)
             except OSError:
                 banner = None
         except OSError:
@@ -71,10 +76,53 @@ def _tcp_scan(ip: str, ports: list[int]) -> list[dict]:
     return results
 
 
+_TITLE_RE = re.compile(r"<title>(.*?)</title>", re.IGNORECASE | re.DOTALL)
+
+
+def _extract_banner(raw: bytes, port: int) -> str | None:
+    """HTTP는 상태줄이 아니라 Server 헤더(없으면 <title>, 실제로 버전이 body에만 노출되는
+    서버가 있음을 확인)에, Redis는 INFO 응답 중 redis_version 줄에 버전 정보가 있다 —
+    무조건 첫 줄만 쓰면 정작 필요한 버전 정보를 놓친다(실제 구현 중 발견)."""
+    if not raw:
+        return None
+    text = raw.decode(errors="ignore")
+    lines = text.splitlines()
+    if not lines:
+        return None
+    if port in _HTTP_PORTS:
+        for line in lines:
+            if line.lower().startswith("server:"):
+                return line.strip()[:200]
+        m = _TITLE_RE.search(text)
+        if m:
+            title = re.sub(r"\s+", " ", m.group(1)).strip()
+            if title:
+                return title[:200]
+        return lines[0].strip()[:200]
+    if port == 6379:
+        for line in lines:
+            if line.startswith("redis_version:"):
+                return line.strip()[:200]
+        return lines[0].strip()[:200] if lines[0].strip() else None
+    return lines[0].strip()[:200]
+
+
 def _clean_banner(banner: str) -> str:
     cleaned = re.sub(r"[^\x20-\x7e]", " ", banner)
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
     return cleaned
+
+
+def _search_query(port: int, service: str, banner: str) -> str:
+    """NVD 키워드 검색은 CVE 설명에 등장하는 문구와 부분일치해야 걸린다 — 배너 원문을
+    그대로 넣으면(예: 'redis_version:4.0.14') 실제 CVE 설명 문구('Redis 4.0.14')와
+    형식이 달라 매칭이 전혀 안 되는 것을 실제 테스트로 확인했다. 알고 있는 서비스는
+    'Redis 4.0.14'처럼 자연스러운 형태로 재구성하고, 그 외에는 구분자만 공백으로
+    정규화한다(예: 'Apache Tomcat/8.5.19' -> 'Apache Tomcat 8.5.19')."""
+    if port == 6379 and banner.startswith("redis_version:"):
+        return f"Redis {banner.split(':', 1)[1].strip()}"
+    cleaned = _clean_banner(banner)
+    return re.sub(r"[/:_]+", " ", cleaned).strip()
 
 
 async def scan_target(target: str, authorized: bool) -> dict:
@@ -106,7 +154,7 @@ async def scan_target(target: str, authorized: bool) -> dict:
         if lookups_done >= _MAX_CVE_LOOKUPS:
             r["note"] = "CVE 조회 한도(5개 포트)를 넘어 건너뛰었습니다."
             continue
-        query = _clean_banner(r["banner"])
+        query = _search_query(r["port"], r["service"], r["banner"])
         if len(query) < 3:
             r["note"] = "배너가 너무 짧아 CVE 검색을 건너뛰었습니다."
             continue

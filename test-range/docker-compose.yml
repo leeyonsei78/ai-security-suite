@@ -1,0 +1,41 @@
+name: ai-security-suite-test-range
+
+services:
+  juice-shop:
+    image: bkimminich/juice-shop
+    container_name: test-range-juice-shop
+    ports:
+      - "3000:3000"
+    networks: [test-range-net]
+
+  old-tomcat:
+    # 공식 Docker Hub 이미지(tomcat)에 실제로 남아있는 오래된 태그 — 오래된 버전의
+    # HTTP Server 헤더(Apache-Coyote)를 실제로 노출해 App 17 네트워크 스캔의 배너 그랩
+    # + NVD 검색을 테스트하기 위한 용도.
+    image: tomcat:8.5.19-jre8
+    container_name: test-range-old-tomcat
+    ports:
+      - "8080:8080"
+    networks: [test-range-net]
+
+  old-redis:
+    # 공식 Docker Hub 이미지(redis) 구버전 — 기본적으로 인증 없이 노출된다.
+    # protected-mode를 꺼서 컨테이너 밖에서도 접근 가능하게 함 (테스트 목적).
+    image: redis:4.0
+    container_name: test-range-old-redis
+    command: ["redis-server", "--protected-mode", "no"]
+    ports:
+      - "6379:6379"
+    networks: [test-range-net]
+
+  bad-firewall:
+    build: ./bad-firewall
+    container_name: test-range-bad-firewall
+    cap_add: [NET_ADMIN]
+    networks: [test-range-net]
+    # 포트를 게시하지 않음 — 스캔 대상이 아니라 docker exec로 들어가 iptables를
+    # 직접 조회해보는 CLI 실습용 컨테이너.
+
+networks:
+  test-range-net:
+    driver: bridge

@@ -236,6 +236,20 @@ App 2(피싱 탐지기)와 짝을 이루는 "생성기" — 사내 보안 인식
 - 결과의 각 CVE는 App 15 CVE 조회 페이지로 링크(`/cve-lookup?cve=...`, App 3의 CVE 연동과 동일한 패턴)해 NVD 원본 데이터를 바로 대조 가능
 - `backend/routers/infra_scan.py`(dependency/network 두 하위 경로), 히스토리는 `infra_scan_dependency`/`infra_scan_network` 두 앱 이름으로 분리 저장
 - 백엔드 curl로 dependency(flask==0.12/requests==2.6.0, CRITICAL 검출)·network(공인 IP 차단/미승인 차단/127.0.0.1 실제 스캔) 전부 검증, 프론트 `vite build` 성공 + Claude in Chrome으로 실제 브라우저에서 네트워크 스캔 탭 end-to-end(체크박스→스캔 실행→127.0.0.1 실제 결과 렌더링) 확인 완료
+- **⚠️ 아래 "테스트 레인지"로 실제 취약 서비스(Redis/Tomcat) 대상 검증 중 추가로 발견해 수정한 배너/검색어 버그 3건** (`network_scan_service.py`):
+  1. HTTP(포트 80/8080/8443/443) 배너를 응답의 첫 줄(상태줄, 예: `HTTP/1.1 200`)만 잡던 것을 실제 버전 정보가 담긴 `Server:` 헤더를 찾도록 수정. 이 프로젝트의 테스트용 Tomcat 8.5.19는 애초에 `Server:` 헤더 자체를 보내지 않는 것도 확인해, 이 경우 응답 본문의 `<title>` 태그(예: `Apache Tomcat/8.5.19`)에서 추출하는 fallback을 추가 — 실제로 GET 요청을 보내야만 body를 받을 수 있어 기존 HEAD 요청도 GET으로 변경
+  2. Redis(6379)는 연결만 해서는 아무 데이터도 먼저 보내지 않는 프로토콜(요청-응답형)이라 배너가 항상 비어있었음 — 연결 직후 구버전 인라인 커맨드 `INFO\r\n`을 보내 응답에서 `redis_version:` 줄을 파싱하도록 추가
+  3. 배너 원문을 그대로 NVD 키워드 검색에 넣으면(예: `redis_version:4.0.14`) 실제 CVE 설명 문구(`Redis 4.0.14`)와 형식이 달라 전혀 매칭되지 않음을 curl로 직접 비교 검증(빈 검색어 0건 vs 정규화된 검색어 2건) — Redis는 `Redis {버전}` 형태로 재구성, 그 외는 `/`, `:`, `_` 구분자를 공백으로 정규화하도록 `_search_query()` 추가. 수정 후 실제로 Redis 4.0.14 대상 스캔에서 **CVE-2019-10192/10193(HIGH, hyperloglog 버퍼 오버플로우)**을 정확히 찾아내는 것까지 확인 완료
+
+### 테스트 레인지 (`test-range/`)
+App 6/16/17을 실제 대상으로 테스트해볼 수 있는 로컬 전용 Docker Compose 스택 — "취약한 사이트/네트워크/서버/방화벽을 구성할 방법이 있는지 검토해달라"는 요청으로 신설. App 9(Pwn Lab)이 이미 Docker를 요구하므로 새 의존성은 아님. 전부 검증된 공식 이미지(또는 그 위의 커스텀 Dockerfile)만 사용.
+- **juice-shop** (`bkimminich/juice-shop`, 공식) — 포트 3000, App 6 대상
+- **old-tomcat** (`tomcat:8.5.19-jre8`, 공식 이미지의 실제 존재하는 오래된 태그) — 포트 8080, App 17 네트워크 스캔 대상
+- **old-redis** (`redis:4.0`, 공식, `--protected-mode no`) — 포트 6379, App 17 네트워크 스캔 대상
+- **bad-firewall** (커스텀 Dockerfile, App 9와 동일 패턴) — 의도적으로 취약한 iptables 규칙(SSH/DB 전역공개+미사용 디버그 포트+443 중복+OUTPUT 통제 없음, `mock_firewall_audit.py`의 iptables 템플릿과 의도적으로 대응)을 컨테이너 기동 시 실제로 적용. 포트는 게시하지 않음 — `docker exec`로 들어가 `iptables -L -n -v --line-numbers`를 실제로 조회해 App 16에 붙여넣는 CLI 실습용
+- **⚠️ Windows + Docker Desktop 환경에서는 컨테이너의 브리지 IP(172.x)를 Windows 호스트(백엔드가 네이티브로 실행되는 곳)에서 직접 스캔할 수 없음**(Docker Desktop이 WSL2 VM 안에서 컨테이너를 돌리기 때문) — 그래서 모든 서비스를 호스트에 포트 게시하고, App 17 네트워크 스캔 대상은 컨테이너 IP가 아니라 **`127.0.0.1`**을 쓰도록 설계·문서화함
+- 4개 컨테이너 전부 실제로 `docker compose up --build`로 기동해 검증 완료: Juice Shop/Tomcat HTTP 200 확인, Redis PING 확인, bad-firewall의 실제 iptables 규칙을 App 16 API에 그대로 넣어 CRITICAL 판정 확인, 127.0.0.1 대상 App 17 네트워크 스캔으로 Redis의 실제 CVE(CVE-2019-10192/10193) 매칭까지 end-to-end 확인
+- `test-range/docker-compose.yml`, `test-range/bad-firewall/`(Dockerfile+적용 스크립트), `test-range/README.md`(구성 요소별 연결 방법, 위 Windows 주의사항, 안전 수칙)
 
 ---
 
@@ -298,6 +312,7 @@ test_AI_security/
 ├── docs/
 │   └── n8n-integration.md    ← n8n 연동 가이드
 ├── n8n-workflows/             ← n8n Import용 예제 워크플로우 3개
+├── test-range/                 ← App 6/16/17 테스트용 로컬 취약 환경 (Docker Compose)
 ├── backend/
 │   ├── main.py
 │   ├── requirements.txt
@@ -402,6 +417,7 @@ npm run dev
 | `/cve-lookup`, `/infra-scan`의 의존성/네트워크 스캔 | 없음 — 다만 외부 인터넷(services.nvd.nist.gov)에 접속 가능해야 함. `NVD_API_KEY` 없이도 동작(요청 한도만 낮음, 여러 패키지/포트 스캔 시 딜레이가 늘어남) |
 | `/infra-scan`의 네트워크 스캔 대상 | 사설 IP(10/8, 172.16/12, 192.168/16) 또는 로컬호스트만 가능 — 공인 IP는 서버에서 차단됨 |
 | n8n 연동 (`n8n-workflows/`) | 없음 — 서버 두 개만 켜면 바로 Import해서 테스트 가능. 자세한 내용은 `docs/n8n-integration.md` |
+| `test-range/`의 실제 취약 대상으로 App 6/16/17 테스트 | Docker Desktop 켜기 후 `cd test-range && docker compose up -d --build` (자세한 내용은 `test-range/README.md`) |
 
 ## 환경 변수 (.env)
 
