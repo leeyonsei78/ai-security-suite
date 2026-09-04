@@ -26,11 +26,13 @@ const GUIDE_STEPS = [
 const GUIDE_TIPS = [
   'Mock 모드에서는 실제 요청 없이 샘플 결과를 반환합니다.',
   'Live 모드에서는 실제 HTTP 요청으로 헤더·경로·SSL을 점검합니다.',
-  '본인 소유 또는 허가받은 사이트만 스캔하세요.',
+  '본인 소유 또는 허가받은 사이트만 스캔하세요 — 승인 체크박스를 확인해야 스캔이 실행됩니다.',
   '점검 항목: 보안 헤더 7종, 민감 경로 12개, SSL/TLS, 서버 정보 노출',
 ]
 
-const SAMPLE_URLS = ['https://example.com', 'http://testphp.vulnweb.com', 'https://google.com']
+// google.com은 바로 위 안내문("허가받은 사이트만")과 모순되는 예시라 제외하고,
+// 로컬 테스트 레인지(Juice Shop, test-range/)를 기본 예시로 둔다.
+const SAMPLE_URLS = ['http://localhost:3000', 'https://example.com', 'http://testphp.vulnweb.com']
 
 function FindingCard({ f, defaultOpen }) {
   const [open, setOpen] = useState(defaultOpen)
@@ -80,6 +82,7 @@ function SSLBadge({ ssl }) {
 
 export default function WebScanner() {
   const [url, setUrl]         = useState('')
+  const [authorized, setAuthorized] = useState(false)
   const [loading, setLoading] = useState(false)
   const [result, setResult]   = useState(null)
   const [history, setHistory] = useState([])
@@ -87,11 +90,15 @@ export default function WebScanner() {
   const scan = async (target) => {
     const u = (target ?? url).trim()
     if (!u) return
+    if (!authorized) {
+      alert('스캔 전에 "이 사이트를 소유하고 있거나 스캔할 권한이 있음" 체크박스를 확인해주세요.')
+      return
+    }
     setUrl(u)
     setLoading(true)
     setResult(null)
     try {
-      const res = await axios.post('/api/webscan/scan', { url: u })
+      const res = await axios.post('/api/webscan/scan', { url: u, authorized })
       setResult(res.data)
       setHistory(h => [res.data, ...h].slice(0, 8))
     } catch (err) {
@@ -117,6 +124,14 @@ export default function WebScanner() {
 
         <GuidePanel title="웹 취약점 스캐너 사용 가이드" steps={GUIDE_STEPS} tips={GUIDE_TIPS} />
 
+        <div className="bg-red-950/20 border border-red-500/30 rounded-xl p-3 flex gap-2">
+          <ShieldAlert size={16} className="text-red-400 shrink-0 mt-0.5" />
+          <p className="text-xs text-red-200">
+            본인이 소유하고 있거나 명시적으로 승인받은 사이트에만 사용하세요. 무단 스캔은 대상 사이트 약관 위반이나
+            법적 문제로 이어질 수 있습니다.
+          </p>
+        </div>
+
         {/* URL input */}
         <div className="flex gap-3">
           <div className="flex-1 flex items-center bg-slate-800 border border-slate-600 rounded-xl px-4 gap-2 focus-within:border-teal-500 transition-colors">
@@ -131,13 +146,18 @@ export default function WebScanner() {
           </div>
           <button
             onClick={() => scan()}
-            disabled={loading || !url.trim()}
+            disabled={loading || !url.trim() || !authorized}
             className="px-6 py-3 bg-teal-700 hover:bg-teal-600 disabled:bg-slate-700 disabled:text-slate-500 rounded-xl font-semibold text-sm transition-colors flex items-center gap-2 shrink-0"
           >
             <ShieldAlert size={15} />
             {loading ? '스캔 중...' : '웹 취약점 스캔'}
           </button>
         </div>
+
+        <label className="flex items-start gap-2 text-xs text-slate-300 cursor-pointer">
+          <input type="checkbox" checked={authorized} onChange={e => setAuthorized(e.target.checked)} className="mt-0.5" />
+          <span>이 사이트를 소유하고 있거나 스캔할 권한이 있음을 확인합니다.</span>
+        </label>
 
         {/* Sample URLs */}
         <div className="flex items-center gap-2 flex-wrap">

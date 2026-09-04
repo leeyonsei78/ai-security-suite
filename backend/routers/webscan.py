@@ -10,6 +10,7 @@ APP_NAME = "webscan"
 
 class ScanRequest(BaseModel):
     url: str
+    authorized: bool = False
 
 
 @router.post("/scan")
@@ -17,6 +18,8 @@ async def scan(request: ScanRequest):
     url = request.url.strip()
     if not url:
         raise HTTPException(status_code=400, detail="URL required")
+    if not request.authorized:
+        raise HTTPException(status_code=400, detail="authorized=true로 이 사이트에 대한 소유권/테스트 권한을 확인해야 스캔이 실행됩니다.")
     if not (url.startswith("http://") or url.startswith("https://")):
         url = "https://" + url
     if len(url) > 500:
