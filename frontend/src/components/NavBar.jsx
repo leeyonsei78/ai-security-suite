@@ -3,7 +3,7 @@ import { NavLink } from 'react-router-dom'
 import axios from 'axios'
 import {
   Shield, Mail, ShieldAlert, Search, Siren, Globe, FlaskConical, Syringe, Cpu, Swords,
-  ScrollText, BrainCircuit, ShieldCheck, Bell, Trash2, Send, Database,
+  ScrollText, BrainCircuit, ShieldCheck, Bell, Trash2, Send, Database, ShieldQuestion, Radar,
 } from 'lucide-react'
 
 const links = [
@@ -22,6 +22,8 @@ const links = [
   { to: '/pentest-lab', icon: ShieldCheck, label: '모의 해킹 랩' },
   { to: '/phishing-sim', icon: Send, label: '피싱 모의훈련 생성기' },
   { to: '/cve-lookup', icon: Database, label: 'CVE 조회' },
+  { to: '/firewall-audit', icon: ShieldQuestion, label: '방화벽 정책 감사기' },
+  { to: '/infra-scan', icon: Radar, label: '인프라 취약점 스캐너' },
 ]
 
 function AlertBell() {

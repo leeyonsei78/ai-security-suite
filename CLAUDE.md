@@ -21,6 +21,8 @@ Claude AI를 활용한 보안 분석 도구 모음.
 | 13 | 모의 해킹 랩 | ✅ 완료 |
 | 14 | 피싱 모의훈련 이메일 생성기 | ✅ 완료 |
 | 15 | CVE 실시간 조회 | ✅ 완료 |
+| 16 | 방화벽 정책 감사기 | ✅ 완료 |
+| 17 | 인프라 취약점 스캐너 (의존성+네트워크) | ✅ 완료 |
 
 ---
 
@@ -213,6 +215,28 @@ App 2(피싱 탐지기)와 짝을 이루는 "생성기" — 사내 보안 인식
 - `backend/routers/cve_lookup.py`, `backend/services/cve_lookup_service.py`
 - 백엔드는 curl로 실제 NVD API 대상 검증 완료, 프론트는 `vite build` 성공 + 사용자 브라우저 확인 필요
 
+### App 16: 방화벽 정책 감사기 `/firewall-audit`
+"방화벽 정책이 바른지 수정이 필요한지 검토하는 프로그램"을 만들어달라는 사용자 요청으로 신설. App 11(보안 정책 생성기)이 "새 정책을 생성"하는 것과 정반대 방향 — **이미 존재하는** 방화벽 규칙을 붙여넣으면 AI가 무엇이 잘못됐는지 감사(audit)한다.
+- 입력: 방화벽 플랫폼 4종(Linux iptables/nftables, AWS 보안그룹, Windows 방화벽, 기타 벤더 장비) 선택 + 실제 규칙 텍스트 붙여넣기 + 환경 컨텍스트(선택)
+- 각 플랫폼에서 실제로 규칙을 어떻게 뽑아오는지 명령어까지 안내(`GET /api/firewall-audit/guide`, `backend/services/firewall_audit_guide.py`) — App 3 recon_guide.py/App 11 policy_guide.py와 동일한 패턴
+- 출력: 종합 위험도(CRITICAL~INFO) + 규칙별 발견 사항(과도 허용/중복/가려진 규칙 Shadowed/충돌/미사용/누락된 통제/컴플라이언스 위반 7종 issue_type, 해당 규칙 원문 인용, 구체적 수정안) + 컴플라이언스 참고
+- Mock/Live 모드는 기존 패턴(App 11/vulnerability_service와 동일) 그대로 사용 — `backend/services/firewall_audit_service.py`(Claude 시스템 프롬프트 + `_enrich()`로 심각도별 통계 집계), `mock_firewall_audit.py`(플랫폼별 큐레이션된 mock 감사 결과 4종)
+- Markdown 리포트 다운로드에 "다음 단계"로 App 11(보안 정책 생성기) 링크 포함 — 감사에서 발견한 문제를 반영한 새 정책 초안을 이어서 만들 수 있게 상호 연결
+- 탐지형 앱으로 분류해 알림 시스템 대상에 포함(종합 위험도 CRITICAL 시 알림) — 8번째 탐지형 앱
+- 백엔드 curl로 analyze(AWS 보안그룹 샘플, CRITICAL 3건 검출)/guide/report/alerts 카운트 증가까지 검증, 프론트 `vite build` 성공 + Claude in Chrome으로 실제 브라우저에서 규칙 입력→감사 실행→결과 렌더링까지 end-to-end 확인 완료
+
+### App 17: 인프라 취약점 스캐너 `/infra-scan`
+"취약점 점검(=취약점 분석) 프로그램"을 만들어달라는 요청 — 기존 App 3(설정파일/코드 텍스트 분석)·App 6(웹 URL 전용 실시간 점검)과 달리, 사용자가 "의존성 스캐너"와 "네트워크 스캐너" 둘 다 원한다고 선택해 두 모드를 한 앱의 탭으로 구현. **이 프로젝트에서 App 15(CVE 조회)에 이어 두 번째로 Claude API를 쓰지 않는 앱** — 대신 App 15의 NVD 연동을 재사용해 항상 실시간 외부 데이터로 동작한다(Mock 모드 없음).
+- **탭 1: 의존성(SCA) 스캔** — `requirements.txt`(pip)/`package.json`(npm) 텍스트를 붙여넣으면 패키지명+버전을 파싱해 NVD 키워드 검색으로 알려진 CVE를 찾는다. 레이트리밋 보호를 위해 한 번에 최대 8개 패키지, 호출 사이 delay(키 없으면 6.5초, 있으면 0.7초). `backend/services/dependency_scan_service.py`
+- **탭 2: 네트워크 라이브 스캔** — 실제 TCP connect 스캔(흔한 서비스 포트 ~25개, 포트당 0.6초 타임아웃) + 배너 그랩 → 배너 문자열로 NVD 검색. `backend/services/network_scan_service.py`
+  - **안전 설계**: 사설 IP 대역(10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16)과 로컬호스트만 서버 측에서 강제로 허용 — 공인 IP는 소유권 확인이 불가능해 원천 차단(App 10 SSRF 챌린지가 클라우드 메타데이터 IP를 방어적으로 차단한 것과 같은 이유). `authorized: true` 승인도 서버 측에서 함께 검증. 블로킹 소켓 호출은 `run_in_executor`로 스레드 위임(이 프로젝트에서 반복된 "블로킹 호출을 async 라우트에서 그대로 기다리면 이벤트 루프가 막힌다" 교훈과 동일 패턴)
+  - 실제 로컬 PC 대상(`127.0.0.1`)으로 검증한 결과 실제 열린 포트(135 MSRPC, 445 SMB, 3306 MySQL)를 정확히 탐지함을 확인
+- **⚠️ 구현 중 발견한 정확도 문제와 수정**: NVD 키워드 검색은 CPE 기반 정밀 매칭이 아니라서, 흔한 영단어인 패키지명(`requests`)으로 검색하면 무관한 CVE가 다수 섞여 나옴을 실제 검증 중 발견(예: `requests==2.6.0` 검색 시 Ziproxy/WSO2/PHP/NETGEAR 등 전혀 무관한 CVE 10건 반환). NVD 검색 결과의 `description`에 패키지명(또는 서비스명)이 실제로 포함된 것만 남기는 관련성 필터를 추가해 10건→4건으로 개선했으나, "requests"처럼 흔한 단어는 필터를 거쳐도 일부 오탐이 남을 수 있어 UI에 "best-effort 매칭, 정밀 SCA는 pip-audit/npm audit/Trivy 등 전용 도구 권장" 고지를 여러 곳(가이드 배너, 결과별 note, 리포트)에 명시함 — CPE 미사용 키워드 검색 기반 도구의 근본적 한계로 인지하고 넘어감
+- 탐지형 앱으로 분류해 알림 시스템 대상에 포함(매칭된 CVE 중 CRITICAL 존재 시 알림) — 9/10번째 탐지형 앱(의존성/네트워크 각각 별도 앱 이름)
+- 결과의 각 CVE는 App 15 CVE 조회 페이지로 링크(`/cve-lookup?cve=...`, App 3의 CVE 연동과 동일한 패턴)해 NVD 원본 데이터를 바로 대조 가능
+- `backend/routers/infra_scan.py`(dependency/network 두 하위 경로), 히스토리는 `infra_scan_dependency`/`infra_scan_network` 두 앱 이름으로 분리 저장
+- 백엔드 curl로 dependency(flask==0.12/requests==2.6.0, CRITICAL 검출)·network(공인 IP 차단/미승인 차단/127.0.0.1 실제 스캔) 전부 검증, 프론트 `vite build` 성공 + Claude in Chrome으로 실제 브라우저에서 네트워크 스캔 탭 end-to-end(체크박스→스캔 실행→127.0.0.1 실제 결과 렌더링) 확인 완료
+
 ---
 
 ## 공통 기능
@@ -220,9 +244,19 @@ App 2(피싱 탐지기)와 짝을 이루는 "생성기" — 사내 보안 인식
 - **Mock / Live 모드**: `.env`에 `ANTHROPIC_API_KEY` 없으면 자동 Mock 모드
 - **사용 가이드**: 모든 페이지에 접이식 GuidePanel 포함
 - **네비게이션 바**: MOCK/LIVE 배지 + 전체 메뉴
-- **히스토리 SQLite 영속화**: App 1(대시보드·실시간 모니터링 포함)/2/3/4/5/6/7/8/11/12/14/15의 분석 이력·상담 세션이 `backend/data/history.db`(SQLite, gitignore 대상)에 저장되어 서버 재시작에도 유지됨. 앱마다 저장 형태(단순 이력 리스트 vs 채팅 세션)가 달라도 `backend/services/db.py`의 범용 `app` 구분 단일 테이블(JSON 블롭)로 통일 처리 — `add_entry`/`get_history`/`get_entry`/`update_entry`/`clear_history` 5개 함수로 기존 `history: list[dict]`/`sessions: dict[int, dict]` 패턴을 그대로 대체함. **CTF/모의해킹 연습용 앱(App 9 Pwn/Reverse, App 10 Web CTF 아레나, App 13 모의 해킹 랩)은 서버 재시작 시 초기화되는 것이 의도된 동작이라 이 영속화 대상에서 제외**됨
-- **알림 시스템**: 탐지형 앱 7개(대시보드·실시간모니터링/피싱/취약점/IoC/웹스캐너/인젝션탐지/모델감사)가 각 앱 기준 최고 심각도(CRITICAL/MALICIOUS/INJECTION)로 판정하면 자동으로 Slack/이메일 알림을 시도함. `SLACK_WEBHOOK_URL` 또는 `SMTP_*`(`.env.example` 참고) 미설정 시 자동 Mock 모드로 동작 — 실제 전송 없이 알림 로그만 기록(다른 앱들의 Mock/Live 패턴과 동일). 알림 로그는 NavBar 우측 종(🔔) 아이콘 드롭다운에서 확인·삭제 가능(`GET/DELETE /api/alerts`, 20초 폴링). 상담형 앱(인시던트/위협분석)과 생성형 앱(정책생성기, 피싱 모의훈련 생성기)은 "위협 판정"이 아니라 대상에서 제외. CVE 조회(App 15)는 Claude AI 자체를 쓰지 않는 순수 조회 도구라 마찬가지로 제외. `backend/services/notify.py`, `backend/routers/alerts.py`. ⚠️ 알림 발송(urllib/smtplib)은 블로킹 호출이라 async 라우트에서 직접 기다리면 안 됨 — 실시간 모니터링 WebSocket에서 이미 겪은 함정과 같은 유형이라 `alert_if_critical()`이 내부적으로 `run_in_executor`로 스레드 위임함. 7개 앱 전부에서 Mock 데이터 조합으로 실제 CRITICAL을 트리거해 alerts 카운트 증가·비-CRITICAL 시 미증가·서버 재시작 후 유지까지 curl로 검증 완료
+- **히스토리 SQLite 영속화**: App 1(대시보드·실시간 모니터링 포함)/2/3/4/5/6/7/8/11/12/14/15/16/17(의존성+네트워크 두 앱 이름)의 분석 이력·상담 세션이 `backend/data/history.db`(SQLite, gitignore 대상)에 저장되어 서버 재시작에도 유지됨. 앱마다 저장 형태(단순 이력 리스트 vs 채팅 세션)가 달라도 `backend/services/db.py`의 범용 `app` 구분 단일 테이블(JSON 블롭)로 통일 처리 — `add_entry`/`get_history`/`get_entry`/`update_entry`/`clear_history` 5개 함수로 기존 `history: list[dict]`/`sessions: dict[int, dict]` 패턴을 그대로 대체함. **CTF/모의해킹 연습용 앱(App 9 Pwn/Reverse, App 10 Web CTF 아레나, App 13 모의 해킹 랩)은 서버 재시작 시 초기화되는 것이 의도된 동작이라 이 영속화 대상에서 제외**됨
+- **알림 시스템**: 탐지형 앱 10개(대시보드·실시간모니터링/피싱/취약점/IoC/웹스캐너/인젝션탐지/모델감사/방화벽 정책 감사기/인프라 취약점 스캐너 의존성·네트워크)가 각 앱 기준 최고 심각도(CRITICAL/MALICIOUS/INJECTION)로 판정하면 자동으로 Slack/이메일 알림을 시도함. `SLACK_WEBHOOK_URL` 또는 `SMTP_*`(`.env.example` 참고) 미설정 시 자동 Mock 모드로 동작 — 실제 전송 없이 알림 로그만 기록(다른 앱들의 Mock/Live 패턴과 동일). 알림 로그는 NavBar 우측 종(🔔) 아이콘 드롭다운에서 확인·삭제 가능(`GET/DELETE /api/alerts`, 20초 폴링). 상담형 앱(인시던트/위협분석)과 생성형 앱(정책생성기, 피싱 모의훈련 생성기)은 "위협 판정"이 아니라 대상에서 제외. CVE 조회(App 15)는 Claude AI 자체를 쓰지 않는 순수 조회 도구라 마찬가지로 제외. `backend/services/notify.py`, `backend/routers/alerts.py`. ⚠️ 알림 발송(urllib/smtplib)은 블로킹 호출이라 async 라우트에서 직접 기다리면 안 됨 — 실시간 모니터링 WebSocket에서 이미 겪은 함정과 같은 유형이라 `alert_if_critical()`이 내부적으로 `run_in_executor`로 스레드 위임함. 원래 7개 앱에서 Mock 데이터 조합으로 실제 CRITICAL을 트리거해 alerts 카운트 증가·비-CRITICAL 시 미증가·서버 재시작 후 유지까지 curl로 검증 완료(App 16/17은 각 앱 섹션에서 별도 검증)
 - **n8n 자동화 연동**: 모든 앱이 이미 REST API(`/api/*`)로 노출돼 있어 n8n의 HTTP Request 노드가 코드 수정 없이 그대로 호출 가능. `docs/n8n-integration.md`에 연동 방법 + 자동화용 엔드포인트 요약, `n8n-workflows/`에 바로 Import 가능한 예제 워크플로우 3개(알림 폴링→Slack, CVE 일일 감시→Slack, IoC 일괄분석 Webhook) 제공. 이와 함께 백엔드를 로컬 밖으로 노출하는 경우를 대비해 선택적 API 키 인증(`API_KEY` 환경변수, 미설정 시 기존과 동일하게 인증 없음)을 `backend/services/auth.py` + `main.py`(`/api/*` 라우터 전체에 `Depends`)로 추가 — `/api/mode`는 헬스체크 목적으로 예외. `API_KEY` 미설정/오설정/정설정 3가지 케이스와 IoC 분석·alerts 응답 필드가 예제 워크플로우 가정과 일치하는지 curl로 검증 완료. CVE 검색 예제는 이 세션 네트워크 제한으로 NVD 실호출까지는 못 했으나 `cve_lookup_service.search_cves()` 응답 스키마 확인으로 대체함. ⚠️ `API_KEY`를 켜면 프론트엔드 요청도 헤더가 없어 401을 받게 되므로(가이드에 고지), n8n 전용으로 켜거나 프론트 프록시에 헤더 주입을 추가해야 함(미착수)
+- **n8n Slack 알림 채널 마이그레이션** (2026-09-04, 사용자의 실제 로컬 n8n 인스턴스 `localhost:5678` 대상 작업): 기존에 예제 워크플로우들이 사용자의 다른 용도 채널 `자동-매매`로 Slack 알림을 보내고 있어, 전용 채널 `#ai-security-suite`(신규 생성)로 이전함.
+  - `alerts-polling-to-slack` → n8n에 기존에 Import돼 있던 워크플로우의 Slack 노드 채널만 교체
+  - `cve-daily-watch`, `ioc-batch-analysis`는 이번에 처음 n8n에 Import(클립보드 붙여넣기로 캔버스에 paste하는 방식 — n8n이 워크플로우 JSON 붙여넣기를 자동 인식해 노드로 펼쳐줌)
+  - 3개 워크플로우 모두 Publish(활성화)까지 완료 — 즉 CVE 워크플로우의 매일 9시 스케줄과 IoC 워크플로우의 프로덕션 Webhook(`http://localhost:5678/webhook/ioc-batch-analysis`)이 실제로 살아있는 상태
+  - ⚠️ **실제 발견한 버그 2건**(n8n 인스턴스 자체의 동작 방식 관련, 이 프로젝트 코드 버그 아님):
+    1. 이 n8n 인스턴스는 노드 파라미터의 `$env.*` 표현식 접근을 실행 시점에 차단함(`access to env vars denied` 에러) — `n8n-workflows/*.json` 예제가 쓰는 `{{ $env.AI_SECURITY_SUITE_BASE_URL || 'http://localhost:8000' }}` 패턴이 새로 Import한 워크플로우 2개(cve-daily-watch, ioc-batch-analysis)에서 전부 이 에러로 실패함. 기존 `alerts-polling-to-slack`는 이미 URL이 리터럴 값 `http://host.docker.internal:8000`으로 고정돼 있어(n8n이 Docker로 떠 있어 host.docker.internal 필요) 영향 없었음. 두 워크플로우의 HTTP Request 노드 URL을 동일하게 `http://host.docker.internal:8000/api/...` 리터럴로 바꿔서 해결 — 이 환경에서 새 워크플로우를 Import할 때는 `$env` 표현식 대신 항상 이 리터럴 URL을 써야 함
+    2. 클립보드 붙여넣기 Import 시 PowerShell `Get-Content`(인코딩 미지정)가 UTF-8 JSON을 시스템 기본 코드페이지로 잘못 읽어 한글이 깨짐(mojibake) → `[System.IO.File]::ReadAllText(path, [System.Text.Encoding]::UTF8)`로 명시적 UTF-8 읽기 후 `Set-Clipboard`해야 함
+  - **Critical Alerts, CVE Daily Watch 워크플로우**: 수동 Execute workflow로 실제 Slack 발송까지 검증 완료(`slack_read_channel`로 메시지 도착 확인) — Critical Alerts는 신규 MALICIOUS IoC 알림 1건, CVE Daily Watch는 log4j/openssl/struts 중 CVSS≥7.0인 실제 NVD 데이터 7건이 그대로 도착함
+  - **IoC Batch Analysis 워크플로우**: 실제 프로덕션 Webhook에 curl로 POST해 검증. Slack 메시지는 도착했으나 메시지 본문 맨 앞에 의도치 않은 `=` 문자가 그대로 노출되는 버그가 있었음(예: `=악성 IoC 1건 중...`) — 클립보드 붙여넣기로 Message Text 필드를 고칠 때, 필드가 이미 expression 모드라 앞의 `=`를 붙이면 안 되는데 붙여서 발생. **(2026-09-04 후속 세션에서 수정 완료)**: `Slack: malicious IoC found` 노드의 Message Text 맨 앞 `=` 한 글자만 삭제 후 재Publish. 프로덕션 Webhook에 `{"content":"1.1.1.1"}`로 재검증해 `slack_read_channel`로 실제 Slack 메시지가 `=` 없이 `악성 IoC 1건 중 확정 악성 발견: 1.1.1.1 (봇넷 노드)`로 정상 도착하는 것까지 확인
+  - Slack 채널 `#ai-security-suite` ID: `C0BUZ3AG3R7`
 
 ---
 
@@ -236,6 +270,8 @@ App 2(피싱 탐지기)와 짝을 이루는 "생성기" — 사내 보안 인식
 ### 새 도구 추가
 - [x] **피싱 모의훈련 이메일 생성기**: App 14 (`/phishing-sim`)로 구현됨
 - [x] **CVE 실시간 조회 연동**: App 15 (`/cve-lookup`)로 구현됨, App 3 취약점 스캐너와 연동
+- [x] **방화벽 정책 감사기**: App 16 (`/firewall-audit`)로 구현됨, App 11(정책 생성기)과 반대 방향(감사) 짝
+- [x] **인프라 취약점 스캐너 (의존성+네트워크)**: App 17 (`/infra-scan`)로 구현됨, App 15 NVD 연동 재사용
 - 그 외 후보였던 시크릿 스캐너·통합 리스크 대시보드는 미착수 — 새 아이디어가 생기면 여기에 추가.
 
 ### 외부 자동화 연동
@@ -282,11 +318,13 @@ test_AI_security/
 │   │   ├── monitor.py         ← App 1 실시간 모니터링 (WebSocket /ws)
 │   │   ├── pentest_lab.py     ← App 13 (+ /stages, /exploit-template)
 │   │   ├── phishing_sim.py    ← App 14 (+ /scenarios, /report/{id})
-│   │   └── cve_lookup.py      ← App 15 (+ /search, /status) — Claude API 미사용, NVD 공식 API 직접 호출
+│   │   ├── cve_lookup.py      ← App 15 (+ /search, /status) — Claude API 미사용, NVD 공식 API 직접 호출
+│   │   ├── firewall_audit.py  ← App 16 (+ /guide, /report/{id})
+│   │   └── infra_scan.py      ← App 17 (/dependency/*, /network/*, /guide) — Claude API 미사용, NVD 재사용
 │   └── services/
 │       ├── claude_service.py
 │       ├── mock_data.py
-│       ├── db.py              ← 히스토리 SQLite 영속화 (범용, App 1/2/3/4/5/6/7/8/11/12/14/15 공용)
+│       ├── db.py              ← 히스토리 SQLite 영속화 (범용, App 1/2/3/4/5/6/7/8/11/12/14/15/16/17 공용)
 │       ├── auth.py            ← 선택적 API 키 인증 (n8n 등 외부 연동용, API_KEY 미설정 시 비활성)
 │       ├── notify.py          ← Critical 탐지 시 Slack/이메일 알림
 │       ├── live_monitor.py    ← App 1 실시간 모니터링용 합성 로그 생성기
@@ -303,7 +341,9 @@ test_AI_security/
 │       ├── model_audit_service.py / mock_model_audit.py / owasp_llm_reference.py
 │       ├── pentest_lab.py
 │       ├── phishing_sim_service.py / mock_phishing_sim.py
-│       └── cve_lookup_service.py
+│       ├── cve_lookup_service.py
+│       ├── firewall_audit_service.py / mock_firewall_audit.py / firewall_audit_guide.py
+│       └── dependency_scan_service.py / network_scan_service.py
 └── frontend/
     ├── package.json
     └── src/
@@ -329,7 +369,9 @@ test_AI_security/
             ├── ModelAudit.jsx
             ├── PentestLab.jsx
             ├── PhishingSimGenerator.jsx
-            └── CveLookup.jsx
+            ├── CveLookup.jsx
+            ├── FirewallAudit.jsx
+            └── InfraScanner.jsx
 ```
 
 ## 실행 방법
@@ -353,11 +395,12 @@ npm run dev
 
 | 페이지/기능 | 추가로 필요한 것 |
 |---|---|
-| `/vuln`, `/web-arena`, `/policy`, `/model-audit`, `/pentest-lab`, `/phishing-sim` | 없음 — 서버 두 개만 켜면 바로 테스트 가능 |
+| `/vuln`, `/web-arena`, `/policy`, `/model-audit`, `/pentest-lab`, `/phishing-sim`, `/firewall-audit` | 없음 — 서버 두 개만 켜면 바로 테스트 가능 |
 | `/pwn-lab`의 Pwn/Reverse 6개 챌린지(실제 컴파일·gdb 실행) | Docker Desktop 켜기 또는 WSL Ubuntu 설치 (페이지 0단계에 Docker/WSL 두 가지 방법 안내됨) |
 | `/pwn-lab`의 Misc 3개 챌린지 | 없음 — 컴파일 불필요 |
 | `/web-arena` 공유 스코어보드를 팀원과 같이 쓰기 | `npm run dev -- --host` + 방화벽에서 5173/8000 포트 개방 후 `http://<호스트 IP>:5173` 공유 |
-| `/cve-lookup` | 없음 — 다만 외부 인터넷(services.nvd.nist.gov)에 접속 가능해야 함. `NVD_API_KEY` 없이도 동작(요청 한도만 낮음) |
+| `/cve-lookup`, `/infra-scan`의 의존성/네트워크 스캔 | 없음 — 다만 외부 인터넷(services.nvd.nist.gov)에 접속 가능해야 함. `NVD_API_KEY` 없이도 동작(요청 한도만 낮음, 여러 패키지/포트 스캔 시 딜레이가 늘어남) |
+| `/infra-scan`의 네트워크 스캔 대상 | 사설 IP(10/8, 172.16/12, 192.168/16) 또는 로컬호스트만 가능 — 공인 IP는 서버에서 차단됨 |
 | n8n 연동 (`n8n-workflows/`) | 없음 — 서버 두 개만 켜면 바로 Import해서 테스트 가능. 자세한 내용은 `docs/n8n-integration.md` |
 
 ## 환경 변수 (.env)

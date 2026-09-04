@@ -18,6 +18,8 @@ from routers.pentest_lab import router as pentest_lab_router
 from routers.alerts import router as alerts_router
 from routers.phishing_sim import router as phishing_sim_router
 from routers.cve_lookup import router as cve_lookup_router
+from routers.firewall_audit import router as firewall_audit_router
+from routers.infra_scan import router as infra_scan_router
 from services.claude_service import IS_MOCK
 
 app = FastAPI(title="AI Security Suite", version="1.0.0")
@@ -55,6 +57,8 @@ app.include_router(pentest_lab_router, dependencies=_authed)
 app.include_router(alerts_router, dependencies=_authed)
 app.include_router(phishing_sim_router, dependencies=_authed)
 app.include_router(cve_lookup_router, dependencies=_authed)
+app.include_router(firewall_audit_router, dependencies=_authed)
+app.include_router(infra_scan_router, dependencies=_authed)
 
 
 @app.get("/")

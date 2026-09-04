@@ -43,6 +43,9 @@ APP_LABELS = {
     "webscan": "웹 취약점 스캐너",
     "injection": "프롬프트 인젝션 탐지기",
     "model_audit": "AI 모델 감사",
+    "firewall_audit": "방화벽 정책 감사기",
+    "infra_scan_dependency": "인프라 취약점 스캐너 (의존성)",
+    "infra_scan_network": "인프라 취약점 스캐너 (네트워크)",
 }
 
 ALERTS_APP = "alerts"

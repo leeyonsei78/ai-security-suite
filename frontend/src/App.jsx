@@ -17,6 +17,8 @@ import ModelAudit from './pages/ModelAudit'
 import PentestLab from './pages/PentestLab'
 import PhishingSimGenerator from './pages/PhishingSimGenerator'
 import CveLookup from './pages/CveLookup'
+import FirewallAudit from './pages/FirewallAudit'
+import InfraScanner from './pages/InfraScanner'
 
 export default function App() {
   const [isMock, setIsMock] = useState(null)
@@ -44,6 +46,8 @@ export default function App() {
         <Route path="/pentest-lab" element={<PentestLab />} />
         <Route path="/phishing-sim" element={<PhishingSimGenerator />} />
         <Route path="/cve-lookup" element={<CveLookup />} />
+        <Route path="/firewall-audit" element={<FirewallAudit />} />
+        <Route path="/infra-scan" element={<InfraScanner />} />
       </Routes>
     </BrowserRouter>
   )
