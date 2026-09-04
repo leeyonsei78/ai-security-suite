@@ -1,0 +1,17 @@
+# 예시 파일 — App 16(방화벽 정책 감사기) 테스트용
+# 실제로는 관리자 PowerShell에서:
+#   Get-NetFirewallRule | Where-Object Enabled -eq True | Select-Object DisplayName,Direction,Action,Profile | Format-Table -AutoSize
+#   netsh advfirewall show allprofiles
+
+DisplayName                              Direction Action Profile
+-----------                              --------- ------ -------
+File and Printer Sharing (SMB-In)        Inbound   Allow  Any
+RemoteDesktop-UserMode-In-TCP             Inbound   Allow  Any
+CustomApp-Debug-5000                      Inbound   Allow  Any
+Core Networking - DNS (UDP-Out)           Outbound  Allow  Any
+
+# netsh advfirewall show allprofiles 중 로깅 설정 발췌
+Public Profile Settings:
+Logging:
+LogAllowedConnections           Disable
+LogDroppedConnections           Disable

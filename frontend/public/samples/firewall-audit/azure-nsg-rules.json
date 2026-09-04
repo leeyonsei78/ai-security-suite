@@ -1,0 +1,63 @@
+{
+  "_comment": "예시 파일 — App 16(방화벽 정책 감사기) 테스트용. 실제로는: az network nsg show --name <NSG이름> --resource-group <리소스그룹>",
+  "name": "web-prod-nsg",
+  "securityRules": [
+    {
+      "name": "Allow-SSH",
+      "priority": 100,
+      "direction": "Inbound",
+      "access": "Allow",
+      "protocol": "Tcp",
+      "sourceAddressPrefix": "*",
+      "sourcePortRange": "*",
+      "destinationAddressPrefix": "*",
+      "destinationPortRange": "22"
+    },
+    {
+      "name": "Allow-RDP",
+      "priority": 110,
+      "direction": "Inbound",
+      "access": "Allow",
+      "protocol": "Tcp",
+      "sourceAddressPrefix": "*",
+      "sourcePortRange": "*",
+      "destinationAddressPrefix": "*",
+      "destinationPortRange": "3389"
+    },
+    {
+      "name": "Allow-Any-Any",
+      "priority": 120,
+      "direction": "Inbound",
+      "access": "Allow",
+      "protocol": "*",
+      "sourceAddressPrefix": "*",
+      "sourcePortRange": "*",
+      "destinationAddressPrefix": "*",
+      "destinationPortRange": "*"
+    },
+    {
+      "name": "Deny-DB-External",
+      "priority": 200,
+      "direction": "Inbound",
+      "access": "Deny",
+      "protocol": "Tcp",
+      "sourceAddressPrefix": "Internet",
+      "sourcePortRange": "*",
+      "destinationAddressPrefix": "*",
+      "destinationPortRange": "1433"
+    }
+  ],
+  "defaultSecurityRules": [
+    {
+      "name": "AllowInternetOutBound",
+      "priority": 65001,
+      "direction": "Outbound",
+      "access": "Allow",
+      "protocol": "*",
+      "sourceAddressPrefix": "*",
+      "sourcePortRange": "*",
+      "destinationAddressPrefix": "Internet",
+      "destinationPortRange": "*"
+    }
+  ]
+}

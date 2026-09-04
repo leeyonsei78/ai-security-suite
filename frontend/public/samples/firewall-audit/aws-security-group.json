@@ -1,0 +1,41 @@
+{
+  "_comment": "예시 파일 — App 16(방화벽 정책 감사기) 테스트용. 실제로는: aws ec2 describe-security-groups --group-ids sg-0a1b2c3d",
+  "SecurityGroups": [
+    {
+      "GroupId": "sg-0a1b2c3d",
+      "GroupName": "web-prod-sg",
+      "Description": "Production web/app servers",
+      "VpcId": "vpc-0123456789abcdef0",
+      "IpPermissions": [
+        {
+          "IpProtocol": "tcp",
+          "FromPort": 22,
+          "ToPort": 22,
+          "IpRanges": [{ "CidrIp": "0.0.0.0/0", "Description": "SSH admin access" }]
+        },
+        {
+          "IpProtocol": "tcp",
+          "FromPort": 3389,
+          "ToPort": 3389,
+          "IpRanges": [{ "CidrIp": "0.0.0.0/0", "Description": "RDP admin access" }]
+        },
+        {
+          "IpProtocol": "-1",
+          "UserIdGroupPairs": [{ "GroupId": "sg-0a1b2c3d", "Description": "inter-instance traffic" }]
+        },
+        {
+          "IpProtocol": "tcp",
+          "FromPort": 5432,
+          "ToPort": 5432,
+          "IpRanges": [{ "CidrIp": "0.0.0.0/0", "Description": "postgres" }]
+        }
+      ],
+      "IpPermissionsEgress": [
+        {
+          "IpProtocol": "-1",
+          "IpRanges": [{ "CidrIp": "0.0.0.0/0" }]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+# 예시 파일 — App 16(방화벽 정책 감사기) 테스트용 (Fortinet/Palo Alto/Cisco ASA 등 벤더 장비 공통 예시)
+# 실제로는 장비 CLI에서: show running-config firewall policy (Fortinet) / show running-config security-policy (Palo Alto) / show access-list (Cisco ASA)
+
+policy #1: internal->wan  tcp/443 permit  (HTTPS outbound)
+policy #2: internal->wan  tcp/80  permit  (HTTP outbound)
+policy #3: any any any any allow
+policy #7: internal->dmz tcp/22 deny
+policy #8: internal->dmz tcp/23 deny
+policy #9: internal->dmz tcp/3389 deny
+policy #12: dmz->internal any deny
+policy #20: tcp/8080 permit (no description, last modified 2 years ago)

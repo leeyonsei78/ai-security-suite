@@ -1,0 +1,39 @@
+[
+  {
+    "_comment": "예시 파일 — App 16(방화벽 정책 감사기) 테스트용. 실제로는: gcloud compute firewall-rules list --format=json",
+    "name": "default-allow-ssh",
+    "network": "https://www.googleapis.com/compute/v1/projects/my-project/global/networks/default",
+    "direction": "INGRESS",
+    "priority": 65534,
+    "sourceRanges": ["0.0.0.0/0"],
+    "allowed": [{ "IPProtocol": "tcp", "ports": ["22"] }],
+    "disabled": false
+  },
+  {
+    "name": "default-allow-rdp",
+    "network": "https://www.googleapis.com/compute/v1/projects/my-project/global/networks/default",
+    "direction": "INGRESS",
+    "priority": 65534,
+    "sourceRanges": ["0.0.0.0/0"],
+    "allowed": [{ "IPProtocol": "tcp", "ports": ["3389"] }],
+    "disabled": false
+  },
+  {
+    "name": "allow-internal-legacy",
+    "network": "https://www.googleapis.com/compute/v1/projects/my-project/global/networks/default",
+    "direction": "INGRESS",
+    "priority": 1000,
+    "sourceRanges": ["10.0.0.0/8"],
+    "allowed": [{ "IPProtocol": "all" }],
+    "disabled": false
+  },
+  {
+    "name": "default-allow-icmp",
+    "network": "https://www.googleapis.com/compute/v1/projects/my-project/global/networks/default",
+    "direction": "INGRESS",
+    "priority": 65534,
+    "sourceRanges": ["0.0.0.0/0"],
+    "allowed": [{ "IPProtocol": "icmp" }],
+    "disabled": false
+  }
+]

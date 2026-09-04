@@ -11,6 +11,8 @@ IS_MOCK = not _api_key or _api_key == "your_anthropic_api_key_here"
 SOURCE_LABELS = {
     "iptables": "Linux iptables/nftables",
     "aws_sg": "AWS 보안그룹(Security Group)",
+    "azure_nsg": "Azure NSG(네트워크 보안 그룹)",
+    "gcp_fw": "GCP 방화벽 규칙(Firewall Rules)",
     "windows_fw": "Windows 방화벽",
     "other": "기타/벤더 장비 (Fortinet, Palo Alto 등)",
 }

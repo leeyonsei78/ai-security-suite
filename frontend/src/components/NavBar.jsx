@@ -1,30 +1,64 @@
 import { useState, useEffect, useRef } from 'react'
-import { NavLink } from 'react-router-dom'
+import { NavLink, useLocation } from 'react-router-dom'
 import axios from 'axios'
 import {
   Shield, Mail, ShieldAlert, Search, Siren, Globe, FlaskConical, Syringe, Cpu, Swords,
   ScrollText, BrainCircuit, ShieldCheck, Bell, Trash2, Send, Database, ShieldQuestion, Radar,
+  ChevronDown,
 } from 'lucide-react'
 
-const links = [
-  { to: '/', icon: Shield, label: '보안 대시보드' },
-  { to: '/phishing', icon: Mail, label: '피싱 탐지기' },
-  { to: '/vuln', icon: ShieldAlert, label: '취약점 스캐너' },
-  { to: '/ioc', icon: Search, label: 'IoC 분석기' },
-  { to: '/incident', icon: Siren, label: '인시던트 대응' },
-  { to: '/webscan', icon: Globe, label: '웹 스캐너' },
-  { to: '/threat', icon: FlaskConical, label: '위협 분석 랩' },
-  { to: '/injection', icon: Syringe, label: '인젝션 탐지기' },
-  { to: '/pwn-lab', icon: Cpu, label: 'Pwn/Reverse 실습실' },
-  { to: '/web-arena', icon: Swords, label: 'Web CTF 아레나' },
-  { to: '/policy', icon: ScrollText, label: '보안 정책 생성기' },
-  { to: '/model-audit', icon: BrainCircuit, label: 'AI 모델 감사' },
-  { to: '/pentest-lab', icon: ShieldCheck, label: '모의 해킹 랩' },
-  { to: '/phishing-sim', icon: Send, label: '피싱 모의훈련 생성기' },
-  { to: '/cve-lookup', icon: Database, label: 'CVE 조회' },
-  { to: '/firewall-audit', icon: ShieldQuestion, label: '방화벽 정책 감사기' },
-  { to: '/infra-scan', icon: Radar, label: '인프라 취약점 스캐너' },
+const groups = [
+  {
+    key: 'detect',
+    label: '탐지·분석',
+    icon: ShieldAlert,
+    links: [
+      { to: '/', icon: Shield, label: '보안 대시보드' },
+      { to: '/phishing', icon: Mail, label: '피싱 탐지기' },
+      { to: '/vuln', icon: ShieldAlert, label: '취약점 스캐너' },
+      { to: '/ioc', icon: Search, label: 'IoC 분석기' },
+      { to: '/webscan', icon: Globe, label: '웹 스캐너' },
+      { to: '/threat', icon: FlaskConical, label: '위협 분석 랩' },
+      { to: '/injection', icon: Syringe, label: '인젝션 탐지기' },
+      { to: '/model-audit', icon: BrainCircuit, label: 'AI 모델 감사' },
+      { to: '/firewall-audit', icon: ShieldQuestion, label: '방화벽 정책 감사기' },
+      { to: '/infra-scan', icon: Radar, label: '인프라 취약점 스캐너' },
+    ],
+  },
+  {
+    key: 'respond',
+    label: '대응·생성',
+    icon: Siren,
+    links: [
+      { to: '/incident', icon: Siren, label: '인시던트 대응' },
+      { to: '/policy', icon: ScrollText, label: '보안 정책 생성기' },
+      { to: '/phishing-sim', icon: Send, label: '피싱 모의훈련 생성기' },
+    ],
+  },
+  {
+    key: 'practice',
+    label: '실습·CTF',
+    icon: Swords,
+    links: [
+      { to: '/pwn-lab', icon: Cpu, label: 'Pwn/Reverse 실습실' },
+      { to: '/web-arena', icon: Swords, label: 'Web CTF 아레나' },
+      { to: '/pentest-lab', icon: ShieldCheck, label: '모의 해킹 랩' },
+    ],
+  },
+  {
+    key: 'lookup',
+    label: '조회',
+    icon: Database,
+    links: [
+      { to: '/cve-lookup', icon: Database, label: 'CVE 조회' },
+    ],
+  },
 ]
+
+function findGroupKeyByPath(pathname) {
+  const g = groups.find(g => g.links.some(l => l.to === pathname))
+  return g ? g.key : groups[0].key
+}
 
 function AlertBell() {
   const [alerts, setAlerts] = useState([])
@@ -106,41 +140,73 @@ function AlertBell() {
 }
 
 export default function NavBar({ isMock }) {
+  const location = useLocation()
+  const [openGroup, setOpenGroup] = useState(() => findGroupKeyByPath(location.pathname))
+
+  useEffect(() => {
+    setOpenGroup(findGroupKeyByPath(location.pathname))
+  }, [location.pathname])
+
+  const activeGroupKey = findGroupKeyByPath(location.pathname)
+  const currentGroup = groups.find(g => g.key === openGroup)
+
+  const toggleGroup = (key) => {
+    setOpenGroup(prev => (prev === key ? null : key))
+  }
+
   return (
-    <nav className="bg-slate-900 border-b border-slate-700 px-6 py-0 flex items-center gap-1 overflow-x-auto">
-      <div className="flex items-center gap-2 pr-6 py-3 border-r border-slate-700 mr-2 shrink-0 whitespace-nowrap">
-        <Shield className="text-blue-400" size={20} />
-        <span className="font-bold text-sm">AI Security Suite</span>
-        {isMock !== null && (
-          <span className={`text-xs font-bold px-1.5 py-0.5 rounded ml-1 ${isMock ? 'bg-amber-500/20 text-amber-400' : 'bg-green-500/20 text-green-400'}`}>
-            {isMock ? 'MOCK' : 'LIVE'}
-          </span>
-        )}
-      </div>
-      {links.map(({ to, icon: Icon, label, disabled }) =>
-        disabled ? (
-          <span key={to} className="flex items-center gap-1.5 px-4 py-3 text-sm text-slate-600 cursor-not-allowed shrink-0 whitespace-nowrap">
-            <Icon size={15} />{label}
-            <span className="text-xs bg-slate-700 px-1 rounded">준비중</span>
-          </span>
-        ) : (
-          <NavLink
-            key={to}
-            to={to}
-            end
-            className={({ isActive }) =>
-              `flex items-center gap-1.5 px-4 py-3 text-sm transition-colors border-b-2 shrink-0 whitespace-nowrap ${
-                isActive
+    <nav className="bg-slate-900 border-b border-slate-700">
+      <div className="px-6 flex items-center gap-1 overflow-x-auto">
+        <div className="flex items-center gap-2 pr-6 py-3 border-r border-slate-700 mr-2 shrink-0 whitespace-nowrap">
+          <Shield className="text-blue-400" size={20} />
+          <span className="font-bold text-sm">AI Security Suite</span>
+          {isMock !== null && (
+            <span className={`text-xs font-bold px-1.5 py-0.5 rounded ml-1 ${isMock ? 'bg-amber-500/20 text-amber-400' : 'bg-green-500/20 text-green-400'}`}>
+              {isMock ? 'MOCK' : 'LIVE'}
+            </span>
+          )}
+        </div>
+        {groups.map(({ key, label, icon: Icon }) => {
+          const isOpen = openGroup === key
+          const isActiveGroup = activeGroupKey === key
+          return (
+            <button
+              key={key}
+              onClick={() => toggleGroup(key)}
+              className={`flex items-center gap-1.5 px-4 py-3 text-sm transition-colors border-b-2 shrink-0 whitespace-nowrap ${
+                isOpen || isActiveGroup
                   ? 'border-blue-400 text-blue-400'
                   : 'border-transparent text-slate-400 hover:text-slate-200'
-              }`
-            }
-          >
-            <Icon size={15} />{label}
-          </NavLink>
-        )
+              }`}
+            >
+              <Icon size={15} />{label}
+              <ChevronDown size={13} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+            </button>
+          )
+        })}
+        <AlertBell />
+      </div>
+
+      {currentGroup && (
+        <div className="px-6 flex items-center gap-1 overflow-x-auto border-t border-slate-800 bg-slate-950/40">
+          {currentGroup.links.map(({ to, icon: Icon, label }) => (
+            <NavLink
+              key={to}
+              to={to}
+              end
+              className={({ isActive }) =>
+                `flex items-center gap-1.5 px-4 py-2.5 text-sm transition-colors border-b-2 shrink-0 whitespace-nowrap ${
+                  isActive
+                    ? 'border-blue-400 text-blue-300'
+                    : 'border-transparent text-slate-500 hover:text-slate-200'
+                }`
+              }
+            >
+              <Icon size={14} />{label}
+            </NavLink>
+          ))}
+        </div>
       )}
-      <AlertBell />
     </nav>
   )
 }

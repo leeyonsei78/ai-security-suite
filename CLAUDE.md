@@ -219,13 +219,16 @@ App 2(피싱 탐지기)와 짝을 이루는 "생성기" — 사내 보안 인식
 
 ### App 16: 방화벽 정책 감사기 `/firewall-audit`
 "방화벽 정책이 바른지 수정이 필요한지 검토하는 프로그램"을 만들어달라는 사용자 요청으로 신설. App 11(보안 정책 생성기)이 "새 정책을 생성"하는 것과 정반대 방향 — **이미 존재하는** 방화벽 규칙을 붙여넣으면 AI가 무엇이 잘못됐는지 감사(audit)한다.
-- 입력: 방화벽 플랫폼 4종(Linux iptables/nftables, AWS 보안그룹, Windows 방화벽, 기타 벤더 장비) 선택 + 실제 규칙 텍스트 붙여넣기 + 환경 컨텍스트(선택)
+- 입력: 방화벽 플랫폼 6종(Linux iptables/nftables, AWS 보안그룹, Azure NSG, GCP 방화벽 규칙, Windows 방화벽, 기타 벤더 장비) 선택 + 실제 규칙 텍스트 붙여넣기 또는 파일 업로드 + 환경 컨텍스트(선택)
 - 각 플랫폼에서 실제로 규칙을 어떻게 뽑아오는지 명령어까지 안내(`GET /api/firewall-audit/guide`, `backend/services/firewall_audit_guide.py`) — App 3 recon_guide.py/App 11 policy_guide.py와 동일한 패턴
+- **파일 업로드**: "다운로드한 정책 파일을 그대로 업로드해서 점검하면 되지 않냐"는 사용자 제안으로 추가. 백엔드 변경 없이 프론트에서 `FileReader`로 파일을 텍스트로 읽어 기존 붙여넣기 textarea에 채우는 방식(바이너리 export는 텍스트로 못 읽으므로 미지원 — Windows GUI의 `.wfw` 등은 안내에서 제외 처리). 업로드 즉시 테스트해볼 수 있도록 플랫폼별 예시 파일 6종을 `frontend/public/samples/firewall-audit/`에 제공(`mock_firewall_audit.py`의 큐레이션 시나리오와 내용이 정확히 대응하도록 작성)
+- **Azure NSG / GCP 방화벽 규칙**: 기존 AWS 보안그룹 하나뿐이던 클라우드 카테고리를 독립 플랫폼으로 분리 추가("클라우드는 다른 제공자도 되냐"는 질문에 착수). Azure는 우선순위(priority) 낮은 Any-Any 규칙이 뒤 규칙을 가리는(shadowed) 패턴, GCP는 기본 생성되는 SSH/RDP 허용 규칙 + targetTags 없는 규칙이 전체 인스턴스에 적용되는 패턴을 mock 시나리오로 큐레이션
 - 출력: 종합 위험도(CRITICAL~INFO) + 규칙별 발견 사항(과도 허용/중복/가려진 규칙 Shadowed/충돌/미사용/누락된 통제/컴플라이언스 위반 7종 issue_type, 해당 규칙 원문 인용, 구체적 수정안) + 컴플라이언스 참고
-- Mock/Live 모드는 기존 패턴(App 11/vulnerability_service와 동일) 그대로 사용 — `backend/services/firewall_audit_service.py`(Claude 시스템 프롬프트 + `_enrich()`로 심각도별 통계 집계), `mock_firewall_audit.py`(플랫폼별 큐레이션된 mock 감사 결과 4종)
+- Mock/Live 모드는 기존 패턴(App 11/vulnerability_service와 동일) 그대로 사용 — `backend/services/firewall_audit_service.py`(Claude 시스템 프롬프트 + `_enrich()`로 심각도별 통계 집계), `mock_firewall_audit.py`(플랫폼별 큐레이션된 mock 감사 결과 6종)
 - Markdown 리포트 다운로드에 "다음 단계"로 App 11(보안 정책 생성기) 링크 포함 — 감사에서 발견한 문제를 반영한 새 정책 초안을 이어서 만들 수 있게 상호 연결
 - 탐지형 앱으로 분류해 알림 시스템 대상에 포함(종합 위험도 CRITICAL 시 알림) — 8번째 탐지형 앱
 - 백엔드 curl로 analyze(AWS 보안그룹 샘플, CRITICAL 3건 검출)/guide/report/alerts 카운트 증가까지 검증, 프론트 `vite build` 성공 + Claude in Chrome으로 실제 브라우저에서 규칙 입력→감사 실행→결과 렌더링까지 end-to-end 확인 완료
+- Azure NSG/GCP 추가분은 6개 플랫폼 ID가 guide/service/mock 세 모듈에서 누락 없이 일치하는지 스크립트로 검증 + 실행 중이던 백엔드(auto-reload)에 실제 analyze 호출로 CRITICAL 판정 확인, 예시 파일 6종 전부 200 응답·JSON 유효성 확인까지 완료 — 다만 이 세션은 Chrome 확장 연결이 끊겨 있어 새 플랫폼 버튼의 실제 브라우저 렌더링(6개 2열 그리드 레이아웃)은 사용자 확인 필요
 
 ### App 17: 인프라 취약점 스캐너 `/infra-scan`
 "취약점 점검(=취약점 분석) 프로그램"을 만들어달라는 요청 — 기존 App 3(설정파일/코드 텍스트 분석)·App 6(웹 URL 전용 실시간 점검)과 달리, 사용자가 "의존성 스캐너"와 "네트워크 스캐너" 둘 다 원한다고 선택해 두 모드를 한 앱의 탭으로 구현. **이 프로젝트에서 App 15(CVE 조회)에 이어 두 번째로 Claude API를 쓰지 않는 앱** — 대신 App 15의 NVD 연동을 재사용해 항상 실시간 외부 데이터로 동작한다(Mock 모드 없음).
@@ -405,8 +408,14 @@ npm install
 npm run dev
 ```
 
-서버 두 개를 띄운 뒤 `http://localhost:5173` 접속. 주요 페이지: `/vuln`(취약점 스캐너),
+서버 두 개를 띄운 뒤 `http://localhost:5180` 접속. 주요 페이지: `/vuln`(취약점 스캐너),
 `/pwn-lab`(Pwn/Reverse/Misc 실습실), `/web-arena`(Web CTF 아레나) — 나머지는 NavBar 참고.
+
+> ⚠️ 프론트 기본 포트는 5173이 아니라 **5180**이다(`frontend/vite.config.js`). 이 개발 PC에서 Windows가
+> Hyper-V/WSL2 때문에 TCP 5075~5174 범위를 포트 예약(exclude)해놔서 5173이 `EACCES: permission denied`로
+> 막혀 있는 것을 확인하고(`netsh interface ipv4 show excludedportrange protocol=tcp`) 5180으로 변경함
+> (2026-09-04). 다른 환경으로 옮기면 이 예약 범위가 달라질 수 있으니, 포트 충돌이 다시 발생하면 같은 명령으로
+> 확인 후 `vite.config.js`의 `server.port`를 예약 범위 밖 값으로 바꾸면 된다.
 
 ### 기능별로 서버 외에 추가로 필요한 것
 
@@ -415,7 +424,7 @@ npm run dev
 | `/vuln`, `/web-arena`, `/policy`, `/model-audit`, `/pentest-lab`, `/phishing-sim`, `/firewall-audit` | 없음 — 서버 두 개만 켜면 바로 테스트 가능 |
 | `/pwn-lab`의 Pwn/Reverse 6개 챌린지(실제 컴파일·gdb 실행) | Docker Desktop 켜기 또는 WSL Ubuntu 설치 (페이지 0단계에 Docker/WSL 두 가지 방법 안내됨) |
 | `/pwn-lab`의 Misc 3개 챌린지 | 없음 — 컴파일 불필요 |
-| `/web-arena` 공유 스코어보드를 팀원과 같이 쓰기 | `npm run dev -- --host` + 방화벽에서 5173/8000 포트 개방 후 `http://<호스트 IP>:5173` 공유 |
+| `/web-arena` 공유 스코어보드를 팀원과 같이 쓰기 | `npm run dev -- --host` + 방화벽에서 5180/8000 포트 개방 후 `http://<호스트 IP>:5180` 공유 |
 | `/cve-lookup`, `/infra-scan`의 의존성/네트워크 스캔 | 없음 — 다만 외부 인터넷(services.nvd.nist.gov)에 접속 가능해야 함. `NVD_API_KEY` 없이도 동작(요청 한도만 낮음, 여러 패키지/포트 스캔 시 딜레이가 늘어남) |
 | `/infra-scan`의 네트워크 스캔 대상 | 사설 IP(10/8, 172.16/12, 192.168/16) 또는 로컬호스트만 가능 — 공인 IP는 서버에서 차단됨 |
 | n8n 연동 (`n8n-workflows/`) | 없음 — 서버 두 개만 켜면 바로 Import해서 테스트 가능. 자세한 내용은 `docs/n8n-integration.md` |
