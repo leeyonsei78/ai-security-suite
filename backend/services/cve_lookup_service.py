@@ -8,6 +8,7 @@ import os
 import re
 import httpx
 from dotenv import load_dotenv
+from services import mode_manager, cve_offline_store
 
 load_dotenv()
 
@@ -16,6 +17,12 @@ _BASE_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
 _CVE_ID_RE = re.compile(r"^CVE-\d{4}-\d{4,}$", re.IGNORECASE)
 
 HAS_API_KEY = bool(_NVD_API_KEY)
+
+
+async def get_network_mode() -> str:
+    """'online'(NVD 실시간 조회) 또는 'offline'(로컬 캐시/가져온 피드만 조회) — 폐쇄망에서는
+    자동으로 offline이 감지된다."""
+    return await mode_manager.get_external_api_mode("cve", "https://services.nvd.nist.gov/")
 
 
 def is_valid_cve_id(cve_id: str) -> bool:
@@ -73,6 +80,16 @@ async def lookup_cve(cve_id: str) -> dict:
     if not is_valid_cve_id(cve_id):
         return {"error": "invalid_format", "message": f"올바른 CVE ID 형식이 아닙니다: {cve_id} (예: CVE-2021-44228)"}
 
+    if await get_network_mode() == "offline":
+        cached = cve_offline_store.get(cve_id)
+        if cached:
+            return cached
+        return {
+            "error": "offline_not_cached",
+            "message": f"폐쇄망(오프라인) 모드입니다 — {cve_id}는 로컬 캐시에 없습니다. "
+                       "인터넷이 되는 환경에서 한 번 조회해두거나, NVD 데이터 피드를 가져오기(import) 하세요.",
+        }
+
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.get(_BASE_URL, params={"cveId": cve_id}, headers=_headers())
@@ -91,7 +108,9 @@ async def lookup_cve(cve_id: str) -> dict:
     if not vulns:
         return {"error": "not_found", "message": f"{cve_id}를 NVD에서 찾을 수 없습니다."}
 
-    return _normalize(vulns[0]["cve"])
+    normalized = _normalize(vulns[0]["cve"])
+    cve_offline_store.upsert(cve_id, normalized, source="live")
+    return normalized
 
 
 async def search_cves(keyword: str, results_per_page: int = 10) -> dict:
@@ -100,6 +119,11 @@ async def search_cves(keyword: str, results_per_page: int = 10) -> dict:
         return {"error": "invalid_query", "message": "검색어는 3자 이상 입력하세요."}
 
     results_per_page = max(1, min(results_per_page, 20))
+
+    if await get_network_mode() == "offline":
+        results = cve_offline_store.search(keyword, limit=results_per_page)
+        return {"results": results, "total_results": len(results), "_offline_cache": True}
+
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
             resp = await client.get(
@@ -121,6 +145,8 @@ async def search_cves(keyword: str, results_per_page: int = 10) -> dict:
     vulns = data.get("vulnerabilities", [])
     results = [_normalize(v["cve"]) for v in vulns]
     for r in results:
+        if r.get("id"):
+            cve_offline_store.upsert(r["id"], r, source="live")
         if r["description"] and len(r["description"]) > 220:
             r["description"] = r["description"][:220].rstrip() + "..."
     return {"results": results, "total_results": data.get("totalResults", len(results))}

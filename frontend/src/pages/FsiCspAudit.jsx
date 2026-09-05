@@ -2,9 +2,113 @@ import { useState, useEffect } from 'react'
 import axios from 'axios'
 import {
   Landmark, Building2, Cloud, Download, Trash2, AlertTriangle, BadgeCheck, ExternalLink, ListChecks,
+  Server, WifiOff, FlaskConical, ChevronDown, ChevronUp, MapPin, Terminal, Info,
 } from 'lucide-react'
 import GuidePanel from '../components/GuidePanel'
 import SeverityBadge from '../components/SeverityBadge'
+import FileUploadButton from '../components/FileUploadButton'
+import CopyButton from '../components/CopyButton'
+
+const MODE_BADGE = {
+  cloud:   { icon: Cloud,        label: 'Claude Cloud로 분석됨', color: 'text-green-400',  bg: 'bg-green-500/10 border-green-500/30' },
+  local:   { icon: Server,       label: '로컬 LLM으로 분석됨',    color: 'text-blue-400',   bg: 'bg-blue-500/10 border-blue-500/30' },
+  offline: { icon: WifiOff,      label: '오프라인 규칙 기반으로 분석됨(폐쇄망)', color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/30' },
+  mock:    { icon: FlaskConical, label: 'Mock 데모 데이터 (학습용, 실제 분석 아님)', color: 'text-slate-400', bg: 'bg-slate-500/10 border-slate-500/30' },
+}
+
+function DomainCollectionCard({ item }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="border border-slate-700 rounded-lg overflow-hidden bg-slate-900/60">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-slate-800/60"
+      >
+        <span className="text-xs font-medium text-amber-300 flex-1">{item.domain}</span>
+        {open ? <ChevronUp size={13} className="text-slate-500" /> : <ChevronDown size={13} className="text-slate-500" />}
+      </button>
+      {open && (
+        <div className="px-3 pb-3 space-y-2 border-t border-slate-800 pt-2">
+          <p className="text-[11px] text-slate-300 flex items-start gap-1.5">
+            <MapPin size={12} className="text-amber-400 shrink-0 mt-0.5" />
+            <span><span className="text-slate-500">어디서:</span> {item.where}</span>
+          </p>
+          {item.what_to_check && (
+            <p className="text-[11px] text-slate-400 flex items-start gap-1.5">
+              <Info size={12} className="text-slate-500 shrink-0 mt-0.5" />
+              <span><span className="text-slate-500">뭘 확인:</span> {item.what_to_check}</span>
+            </p>
+          )}
+          {item.how && (
+            <p className="text-[11px] text-slate-400 flex items-start gap-1.5">
+              <Info size={12} className="text-slate-500 shrink-0 mt-0.5" />
+              <span><span className="text-slate-500">어떻게:</span> {item.how}</span>
+            </p>
+          )}
+          {item.commands?.length > 0 && (
+            <div className="flex items-start gap-1.5">
+              <Terminal size={12} className="text-slate-500 shrink-0 mt-1" />
+              <pre className="flex-1 bg-slate-950 border border-slate-800 rounded-lg p-2 overflow-x-auto">
+                <code className="text-[10.5px] text-amber-300 font-mono whitespace-pre">{item.commands.join('\n')}</code>
+              </pre>
+              <CopyButton text={item.commands.join('\n')} />
+            </div>
+          )}
+          {item.cross_link && (
+            <p className="text-[10.5px] text-slate-500 italic">{item.cross_link}</p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function DataCollectionGuide({ collection, usageNote }) {
+  const [expanded, setExpanded] = useState(false)
+  if (!collection?.length) return null
+  return (
+    <div className="bg-slate-950/60 border border-slate-700 rounded-xl p-3 space-y-2">
+      <button onClick={() => setExpanded(e => !e)} className="w-full flex items-center gap-2 text-left">
+        <MapPin size={13} className="text-amber-400" />
+        <span className="text-xs font-semibold text-amber-300 flex-1">분야별 정보 수집 가이드 — 어디서 뭘 가져오는지</span>
+        {expanded ? <ChevronUp size={13} className="text-slate-500" /> : <ChevronDown size={13} className="text-slate-500" />}
+      </button>
+      {expanded && (
+        <div className="space-y-2 pt-1">
+          {usageNote && (
+            <p className="text-[11px] text-amber-200 bg-amber-950/40 border border-amber-500/30 rounded-lg px-2.5 py-2 flex items-start gap-1.5">
+              <Info size={12} className="shrink-0 mt-0.5" />
+              <span>{usageNote}</span>
+            </p>
+          )}
+          <div className="space-y-1.5">
+            {collection.map(item => <DomainCollectionCard key={item.domain} item={item} />)}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ModeBanner({ result }) {
+  if (!result?.mode) return null
+  const cfg = MODE_BADGE[result.mode] ?? MODE_BADGE.offline
+  const Icon = cfg.icon
+  return (
+    <div className={`border rounded-xl p-3 flex items-start gap-2 ${cfg.bg}`}>
+      <Icon size={14} className={`${cfg.color} shrink-0 mt-0.5`} />
+      <div>
+        <p className={`text-xs font-semibold ${cfg.color}`}>{cfg.label}</p>
+        {result.fallback_reason && (
+          <p className="text-xs text-slate-400 mt-1">{result.fallback_reason}</p>
+        )}
+        {result.engine_note && (
+          <p className="text-xs text-slate-400 mt-1">{result.engine_note}</p>
+        )}
+      </div>
+    </div>
+  )
+}
 
 const STEPS = [
   '평가 유형을 선택합니다 — CSP(클라우드 제공자) 자체를 평가할지, 우리 회사가 구성한 클라우드 환경을 점검할지.',
@@ -39,12 +143,13 @@ export default function FsiCspAudit() {
 
   const meta = guide?.assessment_types?.[assessmentType]
 
-  const analyze = async () => {
-    if (!content.trim()) return
+  const analyze = async (contentOverride) => {
+    const body = contentOverride ?? content
+    if (!body.trim()) return
     setLoading(true)
     setResult(null)
     try {
-      const res = await axios.post('/api/fsi-csp-audit/analyze', { assessment_type: assessmentType, content, context })
+      const res = await axios.post('/api/fsi-csp-audit/analyze', { assessment_type: assessmentType, content: body, context })
       setResult(res.data)
       setHistory(h => [res.data, ...h].slice(0, 10))
     } catch (err) {
@@ -132,8 +237,16 @@ export default function FsiCspAudit() {
               </div>
             )}
 
+            <DataCollectionGuide
+              collection={guide?.data_collection?.[assessmentType]}
+              usageNote={assessmentType === 'cloud_env_management' ? guide?.command_usage_note : null}
+            />
+
             <div>
-              <p className="text-xs font-semibold text-slate-400 mb-2">점검 대상 내용 (붙여넣기)</p>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-semibold text-slate-400">점검 대상 내용 (붙여넣기)</p>
+                <FileUploadButton onExtracted={(text) => { setContent(text); analyze(text) }} />
+              </div>
               <textarea
                 value={content}
                 onChange={e => setContent(e.target.value)}
@@ -155,7 +268,7 @@ export default function FsiCspAudit() {
             </div>
 
             <button
-              onClick={analyze}
+              onClick={() => analyze()}
               disabled={loading || !content.trim()}
               className="w-full py-3 bg-amber-600 hover:bg-amber-700 disabled:bg-slate-700 disabled:text-slate-500 rounded-xl font-semibold transition-colors"
             >
@@ -194,6 +307,7 @@ export default function FsiCspAudit() {
 
             {result && (
               <div className="space-y-4">
+                <ModeBanner result={result} />
                 <div className="bg-slate-800 border border-slate-700 rounded-xl p-4">
                   <div className="flex items-start justify-between gap-3 mb-2">
                     <div className="flex items-center gap-2">

@@ -78,6 +78,29 @@ Claude AI를 활용한 보안 분석 도구 모음.
   - **입력 유형별 획득 방법** (`input_type_sources`): 스캐너의 4개 입력 유형(포트 스캔/설정 파일/코드/메모리 덤프) 각각을 실제로 어떻게 얻는지 명시적으로 안내 — 설정 파일(SSH 직접 접속, 클라우드 콘솔 export), 코드(자체 소스, 노출된 .git 복구 git-dumper, JS 소스맵), 메모리 덤프(Windows: Magnet RAM Capture/FTK Imager/winpmem, Linux: LiME, VM 스냅샷 파일) — 포트 스캔 외 3종은 기존에 누락돼 있던 것을 사용자 지적으로 보완함
   - `GET /api/vuln/recon-script`로 다운로드, `recon_guide` 필드로 `/api/vuln/scenarios`에 함께 포함 (`backend/services/recon_guide.py`)
   - ⚠️ `example.com`(IANA 예약 테스트 도메인) 대상으로 실제 실행·검증 완료 (DNS/포트스캔/HTTP헤더/SSL 모두 정상 동작, Windows 콘솔 cp949 인코딩 문제 발견 후 수정함)
+  - **"어디에 입력하는지" + 실행 예시 추가** (2026-09-05, 사용자가 스크린샷과 함께 "어디에 명령어를 넣어야 하는지, 예시도 추가해서 실수 없도록"이라고 지적 — App24의 `COMMAND_USAGE_NOTE`와 동일한 UX 결함): 명령어만 나열돼 있고 "터미널에 입력하는 것"이라는 설명도, `<target>` 같은 꺾쇠괄호를 실제 값으로 바꾼 완성된 예시도 없었음. `RECON_GUIDE`에 `usage_note`(터미널 입력 대상이라는 점 + 결과를 스캐너 입력창에 붙여넣으라는 설명, 프론트에 파란색 배너로 상시 노출) + 12개 명령 전부에 `example`(전부 `example.com` 기준 즉시 실행 가능한 완성된 명령, "↳ 예시:" 라인으로 원 명령 바로 아래 복사 버튼과 함께 표시) 추가. `dig axfr`의 `<nameserver>`는 실제 example.com의 네임서버(`a.iana-servers.net`)로 채움. **교훈**: "정보 수집 명령어 나열" 패턴을 쓰는 가이드는 매번 ① 어디에 입력하는지 ② 꺾쇠괄호를 채운 실행 가능한 예시 두 가지를 처음부터 포함할 것 — App24 때 배운 교훈이 App3에는 아직 반영 안 돼 있었던 것.
+  - **후속 1 (같은 날)**: 사용자가 "recon.py를 어디서 다운로드하는지"와 "--skip-confirm 예시도 추가"를 이어서 요청 — 실제 다운로드 버튼이 패널 맨 아래(카테고리·입력유형·진행순서를 다 지나야 나옴)에 있어 "recon.py (아래 다운로드)"라는 문구만으로는 한참 스크롤해야 하는 게 진짜 원인이었음. `recon.py` 행에 `download: true` 플래그를 추가해 그 자리에 바로 [지금 다운로드] 버튼을 인라인으로 렌더링하도록 수정(맨 아래 버튼은 그대로 유지, 두 경로 다 됨). `example` 필드가 문자열 하나만 지원하던 것을 배열도 지원하도록 프론트를 확장(`Array.isArray` 분기, 기존 11개 문자열 항목은 하위 호환)해, recon.py 행에 기본 실행 예시 + `--skip-confirm` 예시 두 줄을 각각 복사 버튼과 함께 표시. **교훈**: "아래 다운로드"처럼 위치를 텍스트로만 가리키는 안내는 그 사이에 콘텐츠가 많으면 사실상 안내가 안 되는 것과 같음 — 다운로드/액션 버튼은 그 액션을 언급하는 지점에 바로 놓을 것.
+  - **후속 2 (같은 날)**: 사용자가 실제로 `dig ANY naver.com +noall +answer`를 PowerShell에서 실행하다 `CommandNotFoundException`을 만남 — `dig`가 Windows 기본 내장이 아니라는 caveat이 `whois` 항목에만 있고 `dig`에는 빠져 있던 실제 누락. `dig`/`dig axfr` 두 항목 note에 Windows 미포함 고지 추가 + PowerShell 내장 대안 `Resolve-DnsName -Name <domain> -Type ANY`을 DNS 카테고리 두 번째 항목으로 신규 추가(예시 포함) — WSL 설치 없이 바로 되는 경로를 우선 제시. zone transfer(`dig axfr`)는 안정적인 PowerShell 대안이 없어 WSL/Docker 권장으로 유지.
+  - **후속 3 (같은 날) — 전체 12개 명령 Windows 호환성 전수 점검**: 사용자가 whois 스크린샷과 함께 "Windows인 경우와 아닌 경우를 구분해서 각각 예시를, 초보자가 모두 따라할 수 있게"를 요청한 직후, 실제로 `gobuster`(`CommandNotFoundException`)와 `openssl ... </dev/null`(`< 연산자는 나중에 사용하도록 예약` 파서 오류 — 명령을 찾은 것과 무관하게 PowerShell이 유닉스 리다이렉션 문법 자체를 파싱 못 함)까지 연달아 겪어, dig/whois 때처럼 하나씩 반응하지 않고 가이드의 12개 명령 전체를 한 번에 감사함. WebSearch로 각 도구의 실제 Windows 지원 형태를 확인(짐작 대신 검증) 후 도구별로 다른 처방을 적용:
+    - **공식 Windows 바이너리 있음** → 그 바이너리 사용법 안내: `nmap`(nmap.org 설치본), `subfinder`(projectdiscovery 공식 GitHub release), `gobuster`(OJ/gobuster 공식 release, `.7z`라 7-Zip 필요 — 압축 해제 도구 필요성까지 명시)
+    - **Windows에 이미 내장돼 있지만 다른 것으로 가려짐** → `curl`: Windows 10/11에 진짜 curl.exe가 이미 있는데 PowerShell의 `curl` 별칭이 `Invoke-WebRequest`를 가리켜서 `-I` 옵션이 씹힘 — `curl.exe`로 확장자를 명시하면 진짜 curl 실행됨(이 프로젝트에서 처음 다룬 "설치 문제가 아니라 별칭 문제"유형)
+    - **유닉스 셸 문법 자체가 PowerShell에 없음** → `openssl`: 명령/도구 유무와 무관하게 `</dev/null` 리다이렉션 자체가 파서 단계에서 실패 — 이 프로젝트 환경에 이미 있는 **Git Bash**(Git for Windows에 포함된 openssl.exe도 함께 있어 원본 명령 그대로 동작)를 1순위로, PowerShell을 꼭 써야 하면 `echo "" | openssl ...`로 리다이렉션을 파이프로 바꾼 대체 명령을 2순위로 제시
+    - **도구 자체의 공식 Docker 이미지 존재** → `testssl.sh`: 제작자(drwetter)가 공식 배포하는 `drwetter/testssl.sh` 이미지로 Docker Desktop에서 바로 실행(이 프로젝트에 이미 Docker Desktop 사용 관행이 있어 가장 마찰 적은 경로) — test-range의 LocalStack처럼 "실제로 공식/신뢰 가능한 이미지인지"를 WebSearch로 먼저 확인한 뒤에만 권장 이미지로 채택(프로젝트의 "검증된 공식 이미지만 사용" 원칙 유지)
+    - **Windows 네이티브 대안 없음, WSL 권장** → `whatweb`(Ruby 기반), `theHarvester`(의존성 복잡) — 억지로 Windows 대안을 찾기보다 정직하게 WSL 권장으로 유지
+    - `whois`도 이 타이밍에 Sysinternals 공식 `whois64.exe`(설치 없이 압축 풀어 바로 실행) 대안 행을 신규 추가
+    - 프론트 `example` 필드가 문자열 하나만 지원하던 것에서 이미 배열도 지원하도록 확장돼 있어(후속 1 작업 때), openssl/whatweb처럼 "명령 두 개(Git Bash용/PowerShell용, 또는 설치+실행 두 단계)"가 필요한 항목도 코드 변경 없이 바로 배열로 표현 가능했음.
+    - **일반화된 교훈**: Windows용 CLI 도구 가이드를 작성할 때는 매번 "왜 안 되는지"가 서로 다른 이유(①아예 없음 ②있는데 가려짐 ③있어도 셸 문법이 다름)일 수 있다는 걸 전제하고, 도구마다 실제로(WebSearch로) 확인한 뒤 그에 맞는 처방(공식 바이너리/내장 대안/셸 변경/공식 Docker 이미지/WSL)을 골라 쓸 것 — 한 가지 만능 해법("WSL 쓰세요")으로 뭉뚱그리면 아직 남은 항목마다 사용자가 또 한 번씩 에러를 겪게 됨.
+  - **후속 4 (같은 날) — 노트를 채팅 수준의 가독성으로**: 사용자가 채팅으로 준 정리된 설명("위 내용을 설명 페이지에 추가해줘")을 페이지에 반영해달라고 요청 — 실제로는 후속 3에서 이미 `note` 필드에 내용 자체는 다 들어가 있었지만, 명령/복사버튼과 한 줄에 `flex-wrap`으로 욱여넣어져 있어 길어진 문장(gobuster/openssl/whois 등)이 짧은 배지들 사이에 끼어 가독성이 나빴던 게 진짜 문제였음. `note`를 명령/예시 줄과 분리해 왼쪽 테두리가 있는 별도 문단으로 렌더링하도록 바꾸고, `Linkify` 컴포넌트를 신설해 `note` 안의 `https://` URL을 실제 클릭 가능한 링크로 표시(기존엔 `nmap.org/...`처럼 프로토콜 없는 텍스트였던 것도 `https://`를 붙여 링크로 인식되게 수정). **교훈**: "정보는 이미 있는데 안 보인다"도 "정보가 아예 없다"와 똑같은 사용자 경험 실패 — 텍스트가 길어지면 레이아웃(인라인 vs 블록)도 같이 재검토할 것.
+  - **후속 5 (같은 날) — "WSL/Docker에서 실행하세요"를 실제 실행 순서로 구체화**: 사용자가 dig 항목의 "WSL/Docker에서 실행하세요(wsl sudo apt install -y dnsutils 후 wsl dig ...)"를 가리키며 "어떻게 실행해야 하는지 구체적으로" 요청 — 요약 지시문 한 줄로는 부족했음. `dig`/`dig axfr` 두 항목의 `example`을 4~2줄짜리 배열로 확장: ①WSL 자체가 없으면 설치(`wsl --install`, 최초 1회) ②WSL 안에 dig 패키지 설치(`wsl sudo apt install -y dnsutils`, 최초 1회) ③실제 조회(`wsl dig ...`, 이후 반복 사용) ④Docker로 설치 없이 1회성 실행하는 대안(`docker run --rm ubuntu bash -c "apt-get update -qq && apt-get install -y -qq dnsutils && dig ..."`, dig 전용 서드파티 이미지 대신 신뢰 가능한 공식 ubuntu 베이스 이미지+즉석 설치 방식을 선택). 각 줄에 번호와 "최초 1회"/"반복 사용" 구분을 주석으로 명시해 어디까지가 준비 단계고 어디부터 실제 사용인지 헷갈리지 않게 함.
+  - **후속 6 (같은 날) — Docker Desktop 사용자의 실제 WSL 함정 발견**: 사용자가 실제로 `wsl --install`을 실행했는데도 `whatweb` 설치 시 `sudo: not found`를 만남 — `wsl --list --verbose`로 확인해보니 Ubuntu가 아예 설치 안 돼 있고 Docker Desktop의 내부 전용 배포판 `docker-desktop`만 기본값으로 등록되어 있었음. **원인으로 추정**: `docker-desktop`이 이미 "배포판 하나"로 카운트되어 `wsl --install`(대상 미지정)이 "이미 있음"으로 판단해 Ubuntu를 안 깔아준 것으로 보임 — Docker Desktop을 이미 쓰고 있는 이 프로젝트의 전형적인 개발 환경에서 실제로 재현된, 문서에 없던 함정. 가이드의 `wsl --install`을 전부 `wsl --install -d Ubuntu`로 수정(대상 배포판을 명시하면 이 문제를 피함)하고, whatweb/theHarvester 등 다른 WSL 의존 항목에도 "sudo/apt를 못 찾으면 Ubuntu가 없는 것 — dig 항목의 wsl --install -d Ubuntu로 먼저 설치" 상호참조를 추가. **교훈**: Docker Desktop이 이미 설치된 Windows 개발 PC에서 WSL 관련 안내를 할 때는 항상 `-d Ubuntu`처럼 대상 배포판을 명시할 것 — Docker Desktop의 내부 WSL 배포판이 "이미 설치된 배포판" 취급되어 자동 설치 로직을 방해할 수 있음.
+- **폐쇄망(오프라인) 지원 + 로컬 LLM 연동** (2026-09-05, "폐쇄망에서도 작동하도록 + AI 가능하면 AI로 자동/수동 전환" 요청에 따라 이 프로젝트에서 이 패턴을 처음 도입한 앱): 기존 Mock/Live 2모드를 **cloud(Claude Cloud)/local(로컬 LLM)/offline(오프라인 규칙 기반)/mock(기존 데모 샘플, 학습용으로 명시적 선택 시에만)** 4모드로 확장
+  - **로컬 LLM**: `LOCAL_LLM_BASE_URL`(OpenAI 호환 `/v1/chat/completions`, 예: Ollama)이 설정되어 있으면 `local_llm_client.call_local_llm()`으로 동일한 Claude 시스템 프롬프트를 그대로 재사용해 호출 (`backend/services/local_llm_client.py`)
+  - **오프라인 규칙 기반 분석**(`backend/services/vuln_offline_engine.py`): Mock과 달리 **실제 입력을 정규식/키워드로 분석**한다 — 포트 스캔(위험 포트 11종 + vsftpd/OpenSSL Heartbleed 등 알려진 취약 버전 배너 매칭), 설정 파일(PermitRootLogin/약한 TLS 등 6종 안티패턴 + 시크릿), 코드(SQL Injection/XSS/eval-exec/pickle/약한 해시 정규식 + 시크릿), 메모리 덤프(프로세스 마스커레이딩/외부 연결/인코딩된 PowerShell). 하드코딩 시크릿 탐지는 App 19 `secret_scanner_service.scan_text()`를 그대로 재사용(중복 구현 안 함). AI보다 탐지 범위가 좁다는 한계를 `engine_note` 필드로 결과에 항상 명시
+  - **모드 자동 감지 + 수동 전환**: `backend/services/mode_manager.py`가 `ANTHROPIC_API_KEY`/`LOCAL_LLM_BASE_URL` 설정 여부와 실제 네트워크 도달 가능 여부(캐시 TTL 30초)를 함께 확인해 cloud→local→offline 순으로 자동 선택하고, `GET/POST /api/mode`(+`/override`)로 전역 수동 override 가능(재시작에도 유지, `backend/data/mode_overrides.json`). NavBar의 `ModeSelector` 컴포넌트가 이 상태를 표시·변경하는 전역 UI(모든 페이지 공용)
+  - **런타임 실패 시 자동 폴백**: 사전 도달성 체크를 통과했어도 실제 호출 시점에 실패하면(타임아웃, 로컬 LLM 재시작 등) 조용히 죽지 않고 오프라인 규칙 기반으로 자동 대체하며 `fallback_reason`을 결과에 남김
+  - **⚠️ 구현 중 발견한 정규식 버그 2건**: SQL Injection/XSS 탐지 정규식이 `[^"'\n]*`처럼 큰따옴표·작은따옴표를 동시에 제외하는 문자 클래스를 쓰다가, `f"SELECT ... name='{username}'"`처럼 문자열 내부에 반대쪽 따옴표가 섞인 매우 흔한 패턴에서 매칭이 조기 종료되는 실제 오탐(미탐)을 브라우저 테스트 중 발견 → 따옴표 종류별로 정규식을 분리(큰따옴표 전용/작은따옴표 전용 알터네이션)해 해결. **교훈**: 문자열 리터럴 내부 콘텐츠를 매칭하는 정규식에서 따옴표 두 종류를 하나의 부정 문자 클래스로 묶으면 안 됨 — 실제 코드 샘플로 직접 검증해야만 드러나는 종류의 버그였음
+  - **⚠️ NavBar 레이아웃 버그 발견·수정**: 새 `ModeSelector` 드롭다운이 브라우저에서 클릭해도 안 열리는 것처럼 보였는데, 실제로는 DOM에는 정상 렌더링되고 있었음(`read_page`/JS로 확인) — 원인은 NavBar 상단 행 전체에 걸려있던 `overflow-x-auto`가 CSS 스펙상 "한쪽 축이 auto면 반대쪽 visible도 auto로 강제됨" 규칙 때문에 `overflow-y`도 암묵적으로 auto가 되어, 그 안의 절대위치 드롭다운(모드 셀렉터·알림 종 둘 다 영향권)을 세로로 잘라버린 것. `overflow-x-auto`를 그룹 탭 버튼 구간에만 걸고 브랜드/모드셀렉터/알림종은 스크롤 컨테이너 밖으로 분리해 해결(`NavBar.jsx`). **교훈**: 자식에 드롭다운(절대위치 확장 패널)이 있는 요소를 `overflow-x-auto`(또는 `overflow-y-auto`) 컨테이너 안에 두면 반대쪽 축이 암묵적으로 클리핑될 수 있음 — 스크린샷에 안 보여도 DOM에는 있을 수 있으니 `read_page`나 JS `getBoundingClientRect()`로 실제 렌더링 여부를 먼저 확인할 것
+  - Claude in Chrome으로 실제 브라우저에서 모드 전환(자동→Mock→오프라인) 각각 실행해 결과가 실제로 달라지는 것(Mock=고정 샘플, 오프라인=붙여넣은 vsftpd 2.3.4/FTP/Telnet을 실제로 탐지)까지 end-to-end 확인 완료
 
 ### App 4: IoC 분석기 `/ioc`
 IP·도메인·파일 해시·이메일 → 알려진 악성 지표 여부 판별.
@@ -100,6 +123,7 @@ IP·도메인·파일 해시·이메일 → 알려진 악성 지표 여부 판�
 - 위협 인텔리전스: 위협 행위자 프로파일·MITRE ATT&CK·유사 캠페인·탐지 기회
 - MITRE ATT&CK 배지 클릭 시 attack.mitre.org 공식 문서 연결
 - 분석 후 AI 채팅으로 심층 질문 가능
+- **정보 수집 가이드 추가** (2026-09-05, "어디서 정보를 가져와야 하는지 예시까지 알려달라"는 사용자 지적으로 보완 — App3/24와 같은 패턴): 지금까지는 입력 예시(placeholder)만 있고 실제로 그 데이터를 어디서/어떻게 얻는지가 없었음. `GET /api/threat/guide`(`backend/services/threat_collection_guide.py`)로 4개 분석 유형별 실제 도구·명령어 제공 — 악성코드(VirusTotal/any.run 등 온라인 샌드박스 우선 권장 + strings/Procmon 로컬 분석, 실행 파일을 업무 PC에서 직접 실행하지 말라는 안전 고지), 포렌식(Get-WinEvent 이벤트로그, 레지스트리 Run 키 export, Prefetch, 브라우저 히스토리), 메모리(Volatility 3 명령어 — App3 input_type_sources와 동일 계열), 위협 인텔리전스(VirusTotal/OTX/abuse.ch IoC 조회, MITRE ATT&CK Navigator, 벤더 CTI 리포트). 프론트에 분석 유형 선택 바로 아래 접이식 `CollectionGuide` 컴포넌트로 노출, 명령어에는 복사 버튼 포함. `CollectionGuide.jsx`/`CollectionItemCard`는 App 24의 `DataCollectionGuide`/`DomainCollectionCard` 패턴을 범용 공용 컴포넌트로 승격시킨 것 — 향후 비슷한 가이드가 필요한 앱은 이 컴포넌트를 바로 재사용하면 됨.
 
 ### App 6: 웹 취약점 스캐너 `/webscan`
 URL 입력 → HTTP 요청으로 보안 헤더·SSL·노출 경로를 실시간 점검.
@@ -223,6 +247,12 @@ App 2(피싱 탐지기)와 짝을 이루는 "생성기" — 사내 보안 인식
 - Log4Shell(CVE-2021-44228, CVSS 10.0 CRITICAL)과 openssl 키워드 검색을 실제로 조회해 정확한 실제 데이터가 반환되는 것, 잘못된 형식·존재하지 않는 CVE의 에러 처리까지 curl로 검증 완료
 - `backend/routers/cve_lookup.py`, `backend/services/cve_lookup_service.py`
 - 백엔드는 curl로 실제 NVD API 대상 검증 완료, 프론트는 `vite build` 성공 + 사용자 브라우저 확인 필요
+- **폐쇄망(오프라인) 지원 — 로컬 캐시 + NVD 피드 가져오기** (2026-09-05): App 3과 같은 세션에서, "외부 실시간 API 의존 앱"의 대표 사례로 적용. Claude가 아니라 NVD 자체가 외부 의존성이라 로컬 LLM으로 대체할 수 없음 — 대신 `backend/services/cve_offline_store.py`(SQLite `cve_cache.db`)로 두 경로를 지원:
+  1. **write-through 캐시**: 인터넷이 되는 동안 조회에 성공할 때마다(단건 조회·키워드 검색 모두) 자동으로 로컬 캐시에 적재
+  2. **NVD 공식 피드 가져오기**: `POST /api/cve/import-feed`(파일 업로드)로, 인터넷이 되는 환경에서 미리 받아둔 NVD JSON 2.0 데이터 피드(nvd.nist.gov/vuln/data-feeds)를 승인된 절차로 폐쇄망에 반입해 일괄 적재 가능
+  - `mode_manager.get_external_api_mode()`로 NVD 도달 가능 여부를 자동 감지(online/offline), `POST /api/cve/mode`로 수동 override 가능 — App 3의 전역 AI 모드(cloud/local/offline/mock)와는 별개의 축(이 앱은 애초에 Claude를 안 씀)
+  - 오프라인일 때 캐시에 없는 CVE는 503과 함께 "인터넷이 되면 한 번 조회해두거나 피드를 가져오라"는 안내 메시지 반환. 프론트에 온라인/오프라인 배너 + 캐시 건수 + [피드 가져오기] 버튼 추가, 캐시에서 서빙된 결과에는 "로컬 캐시" 배지 표시
+  - 실제 CVE-2021-44228을 온라인 상태에서 조회해 캐시 적재 → 강제로 offline 전환 → 같은 CVE가 캐시에서 정상 서빙되는 것과 캐시에 없는 CVE는 503 안내가 뜨는 것, 그리고 합성 NVD 피드 파일을 `import-feed`로 업로드해 일괄 적재되는 것까지 curl+Claude in Chrome으로 end-to-end 검증 완료(테스트용으로 실제 CVE-2014-0160 번호에 가짜 설명을 덮어쓴 것을 발견해 즉시 캐시에서 삭제 — 실제 CVE 번호로 테스트할 때는 가짜 데이터를 남기지 않도록 주의)
 
 ### App 16: 방화벽 정책 감사기 `/firewall-audit`
 "방화벽 정책이 바른지 수정이 필요한지 검토하는 프로그램"을 만들어달라는 사용자 요청으로 신설. App 11(보안 정책 생성기)이 "새 정책을 생성"하는 것과 정반대 방향 — **이미 존재하는** 방화벽 규칙을 붙여넣으면 AI가 무엇이 잘못됐는지 감사(audit)한다.
@@ -307,6 +337,7 @@ App 16(방화벽 정책 감사기)·App 18(IAM 정책 감사기)와 완전히 �
 - **착수 전 실제 점검 (이 세션에서 실제로 수행)**: "어디에 공격이 있는지도 검토해달라"는 요청에 답하며 이 PC를 실제로 점검함 — Windows 방화벽은 3개 프로필 모두 켜져 있으나 연결 로깅(LogAllowed/LogBlocked)이 꺼져 있어 인바운드 이력 자체가 없었고, 최근 7일 로그온 실패(Event ID 4625) 0건(공격이 없었다기보다 감사 정책 미설정 가능성), RDP는 비활성화(양호), 일부 서비스(MySQL 3306, SMB 445, RPC 135, 국내 은행/공공 사이트용 보안 플러그인류 XTorEngine·I3GProc·smmgr·StSess 등)가 `0.0.0.0`/`::`(모든 인터페이스)에 바인딩되어 있음을 확인. 방화벽 로깅을 켜려 시도했으나 **관리자 권한이 필요해 이 세션에서는 실패**(`netsh advfirewall ... logging enable` → "The requested operation requires elevation") — 사용자가 관리자 권한 PowerShell에서 직접 켜야 함. 대신 로그온 실패 이벤트 조회(Get-WinEvent Security 4625)·Defender 탐지 조회(Get-MpThreatDetection)·리스닝 포트 조회는 관리자 권한 없이도 가능함을 확인해 주력 신호로 채택
 - 사용자가 "실제 시스템 신호"와 "App 1과 같은 데모/합성 로그" 둘 다 원해 하나의 앱 안에 탭으로 분리
 - **노출 현황 점검** (상시 노출, AI 미사용 — App 15/17/19/21과 같은 결정론적 조회 패턴): `GET /api/attack-monitor/exposure`가 방화벽 로깅 여부·RDP 활성화 여부·최근 24시간 로그온 실패 건수·모든 인터페이스에 열린 리스닝 포트 목록·Defender 실시간 보호 상태·최근 탐지 위협 건수를 매번 실제로 조회해 반환. 로깅이 꺼져 있으면 "관리자 권한으로 켜는 명령"을 결과에 함께 안내(복사 버튼 제공)
+  - **초보자용 설명 추가** (2026-09-05, "점검 대상이 뭔지, 결과가 무슨 의미인지 초보자도 알도록 설명 추가해달라"는 사용자 요청): 4개 스탯 카드(방화벽 로깅/RDP/24h 로그온 실패/노출 포트 수)가 지금까지 값만 보여주고 "이게 뭐고 이 결과가 좋은지 나쁜지"가 없었음 — `StatCard.jsx`에 선택적 `hint` prop을 추가(다른 두 사용처 App1/22는 안 넘기므로 영향 없음)하고, 각 카드에 현재 값(ON/OFF, 활성화/비활성화, 0 또는 양수)에 따라 달라지는 한두 문장 설명을 붙임 — 예: RDP 활성화 시 "무차별 대입 공격의 흔한 표적입니다, 쓰지 않는다면 끄세요", 로그온 실패 0건이면 "의심스러운 로그인 시도가 관측되지 않았습니다".
 - **탭 1: 실제 시스템 모니터링**: `WS /api/attack-monitor/ws?mode=real` — 20초마다 PowerShell로 로그온 실패 이벤트·Defender 탐지·(로깅 켜져 있다면) 방화벽 로그 tail·새로 열린 리스닝 포트(최초 연결 시 잡은 baseline과 diff)를 조회해 App 1과 동일한 `analyze_logs()` 파이프라인(Claude/Mock)에 그대로 태움 — 새 AI 프롬프트를 만들지 않고 기존 파이프라인을 재사용(App 17이 NVD를 재사용한 것과 같은 패턴)
 - **탭 2: 시뮬레이션(데모)**: `WS /api/attack-monitor/ws?mode=simulate` — App 1의 `live_monitor.generate_batch()`를 그대로 재사용(중복 구현하지 않음), 8초 주기, 이벤트 주입 가능
 - **대응 제안 (`response_playbook.py`, AI 미사용 결정론적 매핑)**: CRITICAL/HIGH로 분류된 각 이벤트에 카테고리 키워드 매칭으로 대응 제안(브루트포스→출발지 IP 인바운드 차단, 포트스캔→차단+App 16 연계, 악성코드→네트워크 격리+App 5 연계, 인젝션→App 6/3 연계, 데이터 유출→아웃바운드 차단, 권한상승→App 18 연계, 그 외 기본값→App 5 연계)을 부착. **안전 설계**: 소스 IP가 사설/루프백/미상이면 차단 명령을 아예 생성하지 않고(내부망을 실수로 차단하라고 제안하지 않기 위함), 생성되는 명령도 항상 "참고용 제안 — 자동 실행되지 않으며 확인 후 수동 실행" 문구와 복사 버튼만 제공 — 이 프로젝트 전체의 원칙(App 9 시뮬레이션 명령, App 6/17 승인 체크박스)과 동일하게 실제 방화벽 규칙 추가·프로세스 종료 등 되돌리기 어려운 동작은 백엔드가 절대 자동 수행하지 않음
@@ -315,6 +346,24 @@ App 16(방화벽 정책 감사기)·App 18(IAM 정책 감사기)와 완전히 �
 - `backend/services/attack_monitor_service.py`(PowerShell 서브프로세스로 실제 신호 수집 — `subprocess.run(["powershell.exe", ...])`, UTF-8 출력 강제로 인코딩 깨짐 방지, `run_in_executor`로 블로킹 호출 스레드 위임은 App 1 monitor.py와 동일 패턴)/`response_playbook.py`, `backend/routers/attack_monitor.py`
 - 백엔드는 `/exposure`(실제 이 PC 데이터 반환 확인)·WS `mode=simulate`(주입 이벤트 반영 확인)·WS `mode=real`(20초 대기해 실제 raw_log에 "No suspicious signals..." 같은 진짜 상태 반영 확인)·alerts 카운트 증가(CRITICAL 시)까지 Python `websockets` 클라이언트+curl로 검증 완료(테스트로 쌓인 히스토리는 세션 종료 전 정리함). 프론트 `vite build` 성공 — 이 세션은 Chrome 확장이 연결되지 않아 실제 브라우저 렌더링은 사용자 확인 필요
 - **방화벽 로깅 활성화 후속 검증 (2026-09-05, 같은 세션)**: 사용자가 관리자 권한으로 `netsh advfirewall set allprofiles logging ... enable`을 직접 실행한 뒤 "확인해달라"고 요청해 재점검함. 프로필 레벨 로깅은 정상 ON으로 확인됐으나, **로그 파일(`pfirewall.log`) 자체에 Administrators/SYSTEM만 읽을 수 있는 별도 ACL이 걸려 있어** 비-관리자 권한으로 실행 중인 백엔드에서는 "Access is denied"로 읽지 못하는 문제를 발견 — 로깅을 켜는 것과 로그를 읽는 것은 별개의 권한이라는 점. 시스템 ACL 변경은 "시스템/보안 설정 변경"에 해당해 직접 수행하지 않고, 옵션(그대로 두기/`icacls`로 읽기 권한 추가/백엔드를 관리자 권한으로 실행)을 사용자에게 제시 → 사용자가 `icacls ... /grant "$env:USERNAME:(R)"`를 직접 실행해 해결, 실제로 로그 15줄이 정상적으로 읽히는 것까지 재검증함. 이 과정에서 실제 로그 내용을 보니 대부분이 이 개발 PC 자신의 정상 ALLOW 트래픽(로컬 5180/8000 등)이라 노이즈가 커서, `collect_real_signals()`의 방화벽 로그 필터를 "전체 tail"에서 **DROP(차단)만** 골라내도록 수정(`-Tail 40`→`-Tail 300`으로 넉넉히 잡은 뒤 DROP 정규식 매칭 후 최근 20개만 사용) — ALLOW 노이즈에 실제 위협 신호가 묻히지 않도록 함
+- **원격 대상 모니터링 (WinRM)** (2026-09-05, "실시간 모니터링 대상을 바꾸려면 어떻게 해야 하지?" 질문에 AskUserQuestion으로 확인한 결과 "다른 PC/서버를 감시하고 싶다"를 선택 — 신규 원격 수집 기능 개발에 해당함을 사용자가 인지한 상태로 진행): 지금까지 "실제 시스템 모니터링" 탭·노출 현황 점검이 이 백엔드가 실행 중인 PC 자신만 대상으로 할 수 있던 것을, PowerShell Remoting(WinRM)으로 다른 Windows PC/서버까지 확장
+  - **대상 지정 UI**: 프론트에 `TargetSelector` 컴포넌트 신설(로컬/원격 토글, 호스트 입력, 인증 방식 선택 — 현재 세션 계정 그대로 vs 자격증명 직접 입력, "연결 테스트" 버튼, 사전 준비 명령 안내(`Enable-PSRemoting -Force` 대상 PC에서 실행, `Set-Item WSMan:\localhost\Client\TrustedHosts` 이 PC에서 워크그룹 환경일 때 실행) — 각 명령에 복사 버튼)
+  - **자격증명 평문 노출 방지**: 자격증명이 있는 호출만 임시 `.ps1` 파일(`_run_ps_via_tempfile()`)로 스크립트를 넘기고 즉시 삭제 — 기존 argv 기반 `_run_ps()`(프로세스 커맨드라인에 그대로 남아 같은 PC의 다른 프로세스에서 `Get-Process`로 조회 가능)를 자격증명 없는 기존 로컬 경로에는 그대로 유지하되, 비밀번호가 포함되는 원격 호출에서만 분리. 자격증명은 저장하지 않고 매 요청마다 프론트에서 그대로 전달만 함(UI에 명시 고지) — App 19 시크릿 스캐너의 "원본 미저장" 원칙과 같은 방향
+  - **PowerShell 특수문자 이스케이프**: 호스트/사용자명/비밀번호를 PS 스크립트에 안전하게 삽입하기 위해 작은따옴표 리터럴 방식(`'` → `''`)의 `_ps_single_quote()` 사용
+  - **⚠️ 구현 중 발견한 버그**: 원격 실행 스크립트를 here-string(`@'...'@`)으로 감싸 `Invoke-Command -ScriptBlock`에 넘기는데, 이걸 기존 방식대로 stdin(`-Command -`)으로 넘기면 Windows PowerShell 5.1에서 **아무 출력 없이 조용히 실패**(exit 0인데 stdout 빈 값)하는 것을 발견 — 단순 스크립트는 stdin으로 잘 되는데 here-string이 섞이면 실패. `-File`로 임시 파일에 써서 실행하면 정상 동작함을 확인해 원격 경로는 항상 `-File` 방식(`_run_ps_via_tempfile`)을 쓰도록 함
+  - **연결 사전 테스트**: `POST /api/attack-monitor/check-remote`가 본격 모니터링 시작 전 WinRM 연결 가능 여부를 먼저 확인 — WinRM 미설정(`Enable-PSRemoting` 안 됨)과 인증 실패(잘못된 자격증명)를 구분해 한국어로 원인+해결 명령 안내. `localhost`(WinRM 미설정)와 예약 테스트 IP `192.0.2.123`(도달 불가) 대상으로 각각 정상적으로 다른 에러 메시지가 나오는 것을 curl로 확인
+  - `GET /api/attack-monitor/exposure`(기존, 하위 호환 유지)는 계속 이 PC만 점검, 신규 `POST /api/attack-monitor/exposure`가 `target` 지정 시 원격 대상을 점검. WebSocket `/ws?mode=real`도 연결 직후 `{"type":"set_target","target":{...}}` 메시지로 대상 지정 가능(안 보내면 기존처럼 이 PC 자신 — 하위 호환), 이후에도 재전송해 대상 변경 가능
+  - 이벤트 카드에 `target_host` 배지를 표시해 어느 호스트에서 온 신호인지 구분
+  - `backend/services/attack_monitor_service.py`(`_run_ps_via_tempfile`/`_ps_single_quote`/`_wrap_for_target`/`_run_remote_aware`/`check_remote_connection` 신규, `get_exposure_snapshot`/`collect_real_signals`에 `target` 파라미터 추가), `backend/routers/attack_monitor.py`(`POST /exposure`, `POST /check-remote` 신규, WS 핸들러에 `set_target` 처리+1.5초 핸드셰이크 대기)
+  - 실제 원격 WinRM 대상(다른 물리 PC)까지는 이 세션 환경에서 준비되지 않아 end-to-end 검증은 못 했고, `check-remote`의 두 실패 경로(WinRM 미설정/도달 불가)와 자격증명에 특수문자(작은따옴표) 포함 시 이스케이프 정상 동작, `POST /exposure`를 빈 바디로 호출했을 때 기존 로컬 동작과 동일한 것까지 curl로 검증. 프론트 `vite build` 성공까지 확인 — **실제 원격 PC 대상 검증은 사용자가 WinRM 설정 후 직접 확인 필요**
+- **AWS 활동 모니터링 탭 추가** (2026-09-05, 같은 세션 후속 — "실시간 공격 모니터링에서 AWS도 모니터링 가능한지" 질문에 "방금 만든 LocalStack 샌드박스(무료), CloudTrail API 호출 이력만 보기, 확장 가능하면 더" 요청으로 착수): 기존 "실제 시스템 모니터링"(Windows)·"시뮬레이션" 2탭에 **"AWS 활동 모니터링"** 탭을 세 번째로 추가 — test-range의 LocalStack 샌드박스(App 16/18 테스트용으로 위에서 만든 것)에서 실제로 일어나는 IAM/보안그룹 변경을 실시간으로 탐지
+  - **⚠️ 이름과 다른 실제 구현 — CloudTrail이 아니라 LocalStack 자체 로그를 씀**: 사용자가 "CloudTrail API 호출 이력"을 명시적으로 요청했으나, 실제로 `aws cloudtrail lookup-events`/`describe-trails`를 이 프로젝트가 고정한 무료 LocalStack 4.4.0에 호출해보니 **"The API for service 'cloudtrail' is either not included in your current license plan or has not yet been emulated by LocalStack"** 오류로 전혀 지원되지 않음을 실제로 확인함 — 착수 전 WebSearch로 "LocalStack CloudTrail 지원됨"이라고 조사했던 것과 실제가 달랐음(WebSearch 결과가 최신 유료 티어 기준이었을 가능성). 대신 LocalStack 컨테이너 자체를 `LS_LOG=trace`로 띄우면 모든 API 요청의 실제 파라미터(IAM 정책 문서 전문, 보안그룹 CIDR/포트 등)까지 컨테이너 자신의 로그(`docker logs`)에 그대로 남기는 것을 실험으로 발견해, CloudTrail 대신 이 로그를 신호원으로 재사용 — **UI/코드 전체에 "이건 CloudTrail이 아니라 LocalStack 자체 로그"라는 점을 명시**해 사용자를 오도하지 않도록 함(`aws_activity_monitor.py`의 `ENGINE_NOTE`, 프론트 배너, 모듈 docstring). **교훈**: 이 프로젝트 지식 컷오프 이후 바뀐 외부 SaaS/도구의 기능 지원 여부는 WebSearch만으로 단정하지 말고, 가능하면 실제로 호출해 확인할 것 — 이번에도 LocalStack 라이선스 정책(위 test-range 섹션)에 이어 두 번째로 겪은 "실물로 검증해야 확실한" 사례
+  - **탐지 항목** (`log_offline_engine.py`에 App 23 기존 Windows 패턴과 나란히 추가): ① `aws_cloudtrail[CreatePolicy|PutUserPolicy|PutRolePolicy|AttachUserPolicy|...]` + `"Action":"*"`/`"Principal":"*"` 와일드카드 조합 → CRITICAL "AWS IAM Privilege Escalation" ② `aws_cloudtrail[AuthorizeSecurityGroupIngress]` + `0.0.0.0/0` + 민감 포트(SSH/MySQL/Redis 등) 조합 → CRITICAL/HIGH "AWS Security Group Exposure". 둘 다 App 16 오프라인 엔진(바로 위 버그 수정 참고)과 유사한 정규식 접근이나, 원본이 JSON이 아니라 LocalStack 로그 한 줄(Python dict repr)이라 별도로 구현
+  - **대응 제안 연계**: `response_playbook.py`에 "aws_exposure" 카테고리 신규(→ App 16 링크), 기존 "privilege" 카테고리의 `audit_admins` 명령(`Get-LocalGroupMember`)이 AWS 이벤트에는 안 맞아 텍스트에 "aws"가 포함되면 그 Windows 전용 명령을 붙이지 않도록 분기 추가(→ App 18 링크만 안내)
+  - **연결 확인 + UI**: `POST /api/attack-monitor/check-aws`(별도 설정 없이 `test-range-localstack` 컨테이너가 떠 있는지만 확인), WS `/ws?mode=aws`(15초 주기, `docker logs --since`로 폴링) 신규. 프론트에 세 번째 탭 + `AwsConnectionCheck` 컴포넌트(연결 테스트 버튼) 추가 — 자격증명 입력 없이 바로 동작(대상이 항상 고정된 로컬 샌드박스라 원격 대상 기능과 달리 설정 불필요)
+  - **알림 연동**: `notify.APP_LABELS`에 `attack_monitor_aws`("실시간 공격 모니터링 (AWS 샌드박스)") 추가 — 시뮬레이션(가짜 데이터)과 달리 샌드박스 안에서 실제로 일어난 변경을 반영하는 진짜 신호이므로 real 모드와 동일하게 CRITICAL 시 알림 발생(히스토리는 `attack_monitor_aws`로 분리 저장, App 22 대시보드에도 자동 편입)
+  - **실제 end-to-end 검증**: WS로 연결한 채 실제로 새 보안그룹 규칙(Redis 6379 → 0.0.0.0/0)을 살아있는 LocalStack 샌드박스에 추가 → 다음 폴링 주기에 CRITICAL "AWS Security Group Exposure"로 정확히 탐지 → 알림(`attack_monitor_aws`)까지 실제로 발생(n8n dispatch 200 확인)하는 것을 Python `websockets` 클라이언트로 확인. 프론트 `vite build` 성공 — 이 세션도 Chrome 확장 미연결로 실제 브라우저 렌더링은 사용자 확인 필요
+  - `backend/services/aws_activity_monitor.py`(신규), `backend/services/log_offline_engine.py`/`backend/services/response_playbook.py`/`backend/services/notify.py`(패턴·카테고리·라벨 추가), `backend/routers/attack_monitor.py`(`check-aws`, `mode=aws`), `test-range/docker-compose.yml`(localstack에 `LS_LOG=trace` 추가), `frontend/src/pages/AttackMonitor.jsx`(세 번째 탭)
 
 ### App 24: 금융보안원 클라우드 CSP 평가 `/fsi-csp-audit`
 "로그 분석 결과를 n8n/Slack/Notion과 연결하고, 클라우드 금융보안원 CSP 평가 내용도 점검하는 프로그램을 새 메뉴로 추가해달라"는 사용자 요청 중 세 번째 항목. 이 프로젝트에 없던 완전히 새로운 규제 도메인(금융권 클라우드 컴플라이언스)이라 사용자 지시대로 기존 4개 메뉴 그룹과 분리된 **새 상단 메뉴 그룹("금융 컴플라이언스")**으로 구성.
@@ -328,6 +377,11 @@ App 16(방화벽 정책 감사기)·App 18(IAM 정책 감사기)와 완전히 �
 - 탐지형 앱으로 분류해 알림 시스템 대상에 포함(종합 위험도 CRITICAL 시 알림) — 16번째 탐지형 앱
 - `backend/routers/fsi_csp_audit.py`, `backend/services/fsi_csp_audit_service.py`(Claude 시스템 프롬프트+`_enrich()`)/`mock_fsi_csp_audit.py`/`fsi_csp_audit_guide.py` — App 16 firewall_audit 4파일 구성을 그대로 복제
 - 백엔드는 두 평가 유형 모두 curl로 analyze 실제 호출해 HIGH/CRITICAL 판정과 `domain`·`issue_type_label` 정상 출력, 리포트 생성, 히스토리, CRITICAL 알림 반영까지 확인 완료. 프론트 `vite build` 성공 + 새 상단 메뉴 그룹("금융 컴플라이언스") 라우팅까지 curl로 200 확인 — 이 세션은 Chrome 확장이 연결되지 않아 실제 브라우저 렌더링은 사용자 확인 필요
+- **분야별 정보 수집 가이드 추가** (2026-09-05, "CSP 평가를 위해 어느 정보를 어디서 수집하는지 모르겠다"는 사용자 지적으로 보완): 기존에는 평가 유형별로 `input_hint` 한 문장(예: "IAM 정책, 네트워크 설정 등")만 있어 App16/18처럼 "어디 가서 무슨 명령을 치면 되는지"가 없었음 — `fsi_csp_audit_guide.py`에 `DATA_COLLECTION` 신설:
+  - **클라우드 환경 보안관리 점검(자체 점검, 5개 분야)**: 각 분야가 사실상 App16(네트워크)·App18(계정및권한)과 대상이 겹치므로 동일한 AWS/Azure/GCP CLI 명령을 재사용하고 `cross_link`로 "더 상세히 보려면 /firewall-audit·/iam-audit를 쓰라"고 상호 연결. 가상자원관리/암호키관리/로깅및모니터링관리 3개 분야는 이 앱에서 처음으로 명령어 제공(`aws kms list-keys`, `aws cloudtrail describe-trails` 등)
+  - **CSP 안전성평가(공급자 평가, 11개 분야)**: 이건 "내 인프라"가 아니라 "제3자(CSP)"를 평가하는 것이라 CLI 명령이 아니라 "어느 문서/페이지를 확인·요청하는지"가 핵심 — CSP 공식 Trust/Compliance 센터, SOC 2 Type II 리포트, ISO 27001 인증서, 서브프로세서 공개 페이지, 계약서/SLA 조항, Status Page(장애 이력) 등 실제로 어디서 구할 수 있는지 11개 분야 전부에 구체적으로 명시
+  - `GET /api/fsi-csp-audit/guide` 응답에 `data_collection` 필드로 추가, 프론트에 분야별 접이식 카드(`DataCollectionGuide`/`DomainCollectionCard`, `FsiCspAudit.jsx`)로 노출 — 평가 유형 선택 시 대상 분야 목록 바로 아래, 붙여넣기 입력창 위에 배치
+  - **⚠️ 후속 사용자 피드백으로 발견한 UX 문제**: 배포 직후 사용자가 명령어만 보고 "이 명령어를 (여기서) 치라는 것인지" 헷갈려 함 — App16/18/20의 `how_to_export` 필드는 "결과를 복사해 붙여넣으세요"까지 명시하는데, 새로 만든 `DATA_COLLECTION`은 `where`/`what_to_check`/`commands`만 있고 "명령 결과를 이 앱에 어떻게 쓰는지"가 빠져있었음. `COMMAND_USAGE_NOTE`(도메인마다 반복하지 않고 cloud_env_management 패널 상단에 한 번만 노출되는 공용 안내문 — "이 앱이 대신 실행 안 함, 클라우드 계정 접근 가능한 곳에서 직접 실행 후 결과를 복사해 아래 입력창에 붙여넣으라")를 추가해 해결(`command_usage_note` 필드, `FsiCspAudit.jsx`의 `DataCollectionGuide`가 `usageNote` prop으로 표시). **교훈**: 새 가이드 구조를 만들 때는 "정보가 어디 있는지"뿐 아니라 "그 정보를 이 앱에 어떻게 입력하는지"까지 필드로 명시할 것 — 기존 App16 패턴(`how_to_export`)이 이미 이 문제를 해결한 형태였는데 새로 설계하면서 놓쳤던 것.
 
 ### 테스트 레인지 (`test-range/`)
 App 6/16/17을 실제 대상으로 테스트해볼 수 있는 로컬 전용 Docker Compose 스택 — "취약한 사이트/네트워크/서버/방화벽을 구성할 방법이 있는지 검토해달라"는 요청으로 신설. App 9(Pwn Lab)이 이미 Docker를 요구하므로 새 의존성은 아님. 전부 검증된 공식 이미지(또는 그 위의 커스텀 Dockerfile)만 사용.
@@ -338,16 +392,28 @@ App 6/16/17을 실제 대상으로 테스트해볼 수 있는 로컬 전용 Dock
 - **⚠️ Windows + Docker Desktop 환경에서는 컨테이너의 브리지 IP(172.x)를 Windows 호스트(백엔드가 네이티브로 실행되는 곳)에서 직접 스캔할 수 없음**(Docker Desktop이 WSL2 VM 안에서 컨테이너를 돌리기 때문) — 그래서 모든 서비스를 호스트에 포트 게시하고, App 17 네트워크 스캔 대상은 컨테이너 IP가 아니라 **`127.0.0.1`**을 쓰도록 설계·문서화함
 - 4개 컨테이너 전부 실제로 `docker compose up --build`로 기동해 검증 완료: Juice Shop/Tomcat HTTP 200 확인, Redis PING 확인, bad-firewall의 실제 iptables 규칙을 App 16 API에 그대로 넣어 CRITICAL 판정 확인, 127.0.0.1 대상 App 17 네트워크 스캔으로 Redis의 실제 CVE(CVE-2019-10192/10193) 매칭까지 end-to-end 확인
 - `test-range/docker-compose.yml`, `test-range/bad-firewall/`(Dockerfile+적용 스크립트), `test-range/README.md`(구성 요소별 연결 방법, 위 Windows 주의사항, 안전 수칙)
+- **LocalStack 기반 AWS 샌드박스 추가** (2026-09-05, "도커에 AWS 환경 구축해서 프로그램 테스트 할 수 있는지" 질문에 이어 "비용 없이 진행" 요청으로 착수): App 16(AWS 보안그룹)·App 18(IAM 감사기)을 실제 AWS 계정 없이(요금 없이) 테스트하기 위해 `localstack`(로컬 AWS 에뮬레이터) + `aws-sandbox`(공식 `amazon/aws-cli` 이미지 기반, 기동 시 의도적으로 취약한 IAM 정책/역할/사용자+보안그룹을 실제 aws CLI로 생성) 두 컨테이너 추가.
+  - **⚠️ LocalStack 라이선스 이슈 발견**: 2026-03-23부터 `localstack/localstack:latest`는 단일 통합 이미지로 바뀌어 `LOCALSTACK_AUTH_TOKEN`(무료 계정 가입 필요) 없이는 "License activation failed"로 즉시 종료됨(실제로 겪음) — 계정 가입 없이 순수 로컬로만 쓰기 위해 그 이전 마지막 무료(커뮤니티) 버전인 **`localstack/localstack:4.4.0`으로 고정**. 이후 새 버전이 나와도 무료로 계속 쓰려면 이 버전을 유지해야 함(보안 패치는 못 받음).
+  - **⚠️ 실제 검증 중 App 16 오프라인 엔진의 진짜 버그 발견·수정**: 이 샌드박스로 실제 만든 AWS 보안그룹(SSH/MySQL 0.0.0.0/0 전역공개)을 `aws ec2 describe-security-groups`로 조회해 App 16에 붙여넣었더니, 오프라인 모드(`firewall_audit_offline_engine.py`)가 두 규칙 모두 놓침 — 원인은 "과도 허용" 판정이 CIDR과 포트가 **같은 줄**에 있어야만 매칭되는데, AWS/Azure/GCP는 필드를 한 줄씩 pretty-print해서 `"FromPort": 22`와 `"CidrIp": "0.0.0.0/0"`이 다른 줄에 있었기 때문. 처음엔 인접 줄 윈도우(±N줄)로 완화했으나 보안그룹 규칙 두 개가 10여 줄 간격으로 붙어있어 서로 다른 규칙의 포트와 잘못 엮이는 새 버그가 생겨, **입력이 유효한 JSON이면 실제 파싱해서 같은 dict(규칙 객체) 안에서만 짝짓는 방식**으로 재작성(`_json_overly_permissive_checks()`, 재귀적으로 하위 노드부터 확인해 이미 하위에서 flag됐으면 상위에서 중복 flag 안 함). 이 과정에서 Azure NSG의 `"access": "Deny"`(의도된 차단 규칙)까지 오탐으로 잡히는 걸 추가로 발견해 `_DENY_ACTION_RE`로 access/action이 deny/reject/drop/block이면 제외하도록 함(GCP는 `denied` 키가 있고 `allowed`가 없으면 동일하게 제외). JSON이 아닌 입력(iptables/CLI 표/라우터 config)은 기존 같은 줄 매칭 그대로 유지(회귀 없음). **교훈**: 이 프로젝트 자체에 이미 있던 `frontend/public/samples/firewall-audit/aws-security-group.json` 큐레이션 샘플도 같은 이유로 이 버그의 영향을 받고 있었음 — 실제 라이브 데이터로 검증해보지 않았다면 계속 몰랐을 결함.
+  - 실제로 LocalStack에 만든 IAM 데이터(App 18)와 보안그룹 데이터(App 16)를 실제 aws CLI로 조회해 그 결과를 각 앱의 실제 `/analyze` 엔드포인트에 curl로 넣어 CRITICAL 판정(과도한 권한+위험한 신뢰관계, 포트 22/3306 전역공개)까지 end-to-end 검증 완료. `aws iam get-account-authorization-details`는 `--filter` 없이 부르면 LocalStack도 AWS 관리형 정책 수천 개를 그대로 반환해 결과가 지나치게 커지는 것도 확인해 README에 `--filter User Role LocalManagedPolicy` 사용을 명시.
+  - `test-range/aws-sandbox/`(Dockerfile+seed.sh), `docker-compose.yml`에 `localstack`/`aws-sandbox` 서비스 추가, `test-range/README.md`에 조회 명령 섹션 추가.
 
 ---
 
 ## 공통 기능
 
-- **Mock / Live 모드**: `.env`에 `ANTHROPIC_API_KEY` 없으면 자동 Mock 모드
+- **AI 실행 모드 (cloud/local/offline/mock)** (2026-09-05, 폐쇄망 지원 롤아웃): 기존 Mock/Live 2모드를 4모드로 확장 — `cloud`(Claude API)/`local`(사내 로컬 LLM)/`offline`(네트워크 없이 동작하는 규칙 기반 실제 분석)/`mock`(기존 방식의 고정 샘플, 학습용으로 명시적 선택시에만). `backend/services/mode_manager.py`가 `ANTHROPIC_API_KEY`·`LOCAL_LLM_BASE_URL` 설정 여부와 실제 네트워크 도달 가능 여부를 함께 봐서 cloud→local→offline 순으로 자동 감지하고, NavBar의 `ModeSelector`(`GET/POST /api/mode`, `/override`)로 전 앱 공통 수동 전환도 가능(재시작에도 유지). Claude를 쓰는 16개 앱(대시보드·실시간모니터링/피싱/취약점/IoC/인시던트/위협분석/인젝션탐지/정책생성기/모델감사/피싱모의훈련생성기/방화벽·IAM·컨테이너 감사기/금융보안원 CSP평가) 전부 이 패턴으로 전환 완료 — 각 앱은 `mode_manager.get_ai_mode()`로 분기해 offline일 때 `<app>_offline_engine.py`(정규식/키워드 기반 실제 입력 분석 — 탐지형은 vuln_offline_engine.py, 생성형은 policy_offline_engine.py처럼 템플릿+키워드 커스터마이즈 패턴)로 위임하고, cloud/local 호출이 런타임에 실패하면 자동으로 offline로 폴백(`fallback_reason` 기록). Claude를 원래 안 쓰던 8개 앱(웹스캐너/Pwn Lab/Web CTF/모의해킹랩/인프라스캐너/시크릿스캐너/DNS보안/통합대시보드)은 대상 아님. App 15(CVE 조회)처럼 Claude가 아니라 외부 실시간 API에 의존하는 앱은 `mode_manager.get_external_api_mode()`라는 별도 online/offline 축을 쓰며, 로컬 캐시(write-through)+공식 데이터 피드 가져오기로 폐쇄망을 지원(App 3/15 섹션 참고). 상세 설계·발견한 버그는 App 3 섹션의 "폐쇄망(오프라인) 지원 + 로컬 LLM 연동" 참고 — 나머지 앱들도 동일 패턴이라 개별 섹션에 중복 기술하지 않음.
+- **파일 업로드(Word/PDF/Excel/txt/csv) + 명령어 복사 버튼 — 전체 앱 적용** (2026-09-05): "모든 붙여넣기 화면에 파일 업로드 추가, 정보 수집 명령어에 복사 기능 추가"라는 사용자 요청으로 16개 페이지 전부에 적용.
+  - **백엔드**: `POST /api/extract-text`(신규, `backend/routers/extract.py` + `backend/services/file_extract.py`) — txt/csv 등 텍스트 파일은 그대로 디코딩하고, `.docx`는 python-docx(문단+표), `.pdf`는 pypdf(페이지별 텍스트, 암호 PDF는 빈 암호로 우선 시도), `.xlsx/.xls`는 openpyxl(시트별 행을 CSV처럼 직렬화)로 실제 파싱한다. 최대 100,000자로 잘라 반환(`truncated` 플래그). 원본 파일은 어디에도 저장하지 않음(App19 시크릿 스캐너의 "원본 미저장" 원칙과 동일). `requirements.txt`에 `python-docx`/`pypdf`/`openpyxl` 추가.
+  - **프론트 공용 컴포넌트**: `FileUploadButton.jsx`(파일 선택 → `/api/extract-text` 호출 → `onExtracted(text, filename)` 콜백으로 결과 전달, 로딩 상태 표시)와 `CopyButton.jsx`(App23 AttackMonitor의 기존 복사 버튼을 공용화) 신설.
+  - **파일 업로드가 없던 11개 앱에 신규 추가**: App2/3/4/5/7/8/11/12/14/17(의존성 탭)/24 — 각 앱의 analyze/generate/scan 함수를 `(overrideValue) => { const body = overrideValue ?? state; ... }` 형태로 바꿔, 업로드 즉시 텍스트를 채우고 **자동으로 분석/생성까지 실행**되도록 함(사용자 요청: "파일 업로드 하면 분석하도록"). 기존 버튼의 `onClick={analyze}`도 `onClick={() => analyze()}`로 함께 수정(안 그러면 클릭 이벤트 객체가 override 인자로 잘못 전달됨 — 실제로 이 버그를 짚어내고 전부 수정함).
+  - **이미 파일 업로드가 있던 5개 앱 확장**: App1(대시보드)/16(방화벽)/18(IAM)/19(시크릿 스캐너)/20(컨테이너) — 기존에는 브라우저 `FileReader.readAsText()`로 텍스트 파일만 읽었는데(바이너리를 업로드하면 깨진 문자로 채워짐), 전부 `/api/extract-text` 호출로 교체해 Word/PDF/Excel도 지원. App1은 서버가 직접 파일을 받는 구조라 `routers/analyze.py`의 `/api/analyze/upload`가 raw utf-8 디코딩 대신 `file_extract.extract_text()`를 쓰도록 백엔드만 수정(프론트는 accept 속성만 확장).
+  - **명령어 복사 버튼**: 정보 수집 명령어를 보여주는 6곳(App3 `VulnScenarioGuide.jsx`의 recon 명령, App11 `SecurityPolicyGenerator.jsx`의 environment_recon, App16/18/20의 플랫폼별 명령, App24의 분야별 `DATA_COLLECTION` 명령)에 전부 `CopyButton` 추가.
+  - **검증**: 실제 Word(.docx, 문단+표 포함)/PDF(reportlab으로 생성)/Excel(.xlsx, 다중 셀) 테스트 파일을 만들어 추출 → App3(취약점 스캐너)·App2(피싱 탐지기)의 실제 분석 엔드포인트까지 이어지는 전체 파이프라인을 curl로 end-to-end 검증(Word 문서에 담긴 nmap 결과에서 vsftpd 백도어를 실제로 탐지, 피싱 이메일 텍스트를 SUSPICIOUS로 정확히 판정). `npm run build` 성공, 16개 페이지의 override-파라미터 패턴 일관성을 grep으로 재확인.
 - **사용 가이드**: 모든 페이지에 접이식 GuidePanel 포함
-- **네비게이션 바**: MOCK/LIVE 배지 + 전체 메뉴
+- **네비게이션 바**: 전체 메뉴 + AI 실행 모드 배지(클릭해서 전환)
 - **히스토리 SQLite 영속화**: App 1(대시보드·실시간 모니터링 포함)/2/3/4/5/6/7/8/11/12/14/15/16/17/18/19/20/21/23(실제 모드만, `attack_monitor`)/24의 분석 이력·상담 세션이 `backend/data/history.db`(SQLite, gitignore 대상)에 저장되어 서버 재시작에도 유지됨. 앱마다 저장 형태(단순 이력 리스트 vs 채팅 세션)가 달라도 `backend/services/db.py`의 범용 `app` 구분 단일 테이블(JSON 블롭)로 통일 처리 — `add_entry`/`get_history`/`get_entry`/`update_entry`/`clear_history` 5개 함수로 기존 `history: list[dict]`/`sessions: dict[int, dict]` 패턴을 그대로 대체함. **CTF/모의해킹 연습용 앱(App 9 Pwn/Reverse, App 10 Web CTF 아레나, App 13 모의 해킹 랩)은 서버 재시작 시 초기화되는 것이 의도된 동작이고, App 22(통합 리스크 대시보드)는 자체 결과가 없는 순수 집계 페이지, App 23의 시뮬레이션(데모) 탭 결과(`attack_monitor_demo`)는 별도 앱 이름으로는 저장되지만 실제 공격 이력이 아니라는 성격상 알림·App 22 집계 대상에서는 제외**됨
-- **알림 시스템**: 탐지형 앱 16개(대시보드·실시간모니터링/피싱/취약점/IoC/웹스캐너/인젝션탐지/모델감사/방화벽 정책 감사기/인프라 취약점 스캐너 의존성·네트워크/클라우드 IAM 정책 감사기/시크릿 스캐너/컨테이너·Dockerfile 감사기/DNS·이메일 보안 점검/실시간 공격 모니터링 & 대응 센터 실제 모드/금융보안원 클라우드 CSP 평가)가 각 앱 기준 최고 심각도(CRITICAL/MALICIOUS/INJECTION)로 판정하면 자동으로 Slack/이메일 알림을 시도함. `SLACK_WEBHOOK_URL` 또는 `SMTP_*`(`.env.example` 참고) 미설정 시 자동 Mock 모드로 동작 — 실제 전송 없이 알림 로그만 기록(다른 앱들의 Mock/Live 패턴과 동일). 알림 로그는 NavBar 우측 종(🔔) 아이콘 드롭다운에서 확인·삭제 가능(`GET/DELETE /api/alerts`, 20초 폴링). 상담형 앱(인시던트/위협분석)과 생성형 앱(정책생성기, 피싱 모의훈련 생성기)은 "위협 판정"이 아니라 대상에서 제외. CVE 조회(App 15)는 Claude AI 자체를 쓰지 않는 순수 조회 도구라 마찬가지로 제외, App 22(통합 리스크 대시보드)도 판정을 내리지 않는 집계 페이지라 제외. `backend/services/notify.py`, `backend/routers/alerts.py`. **n8n Push 연동** (2026-09-05): `N8N_WEBHOOK_URL` 환경변수를 설정하면 CRITICAL 알림 시 Slack/이메일과 별도로 구조화된 JSON(`{app, app_label, severity, summary, entry_id, created_at}`)을 n8n의 Webhook 트리거로도 전송 — 사람이 읽는 Slack/이메일 알림과 달리 n8n 쪽에서 그대로 조건 분기·필드 매핑해 Jira 티켓 생성 등 임의의 후속 자동화로 이어붙일 수 있음. Slack/SMTP 중 아무것도 없어도 `N8N_WEBHOOK_URL`만 있으면 Mock 모드에서 벗어남(`IS_MOCK`이 세 채널 중 하나라도 설정되면 false). 받는 쪽 예시 워크플로우는 `n8n-workflows/push-alert-webhook-receiver.json`(Webhook → 메시지 포맷 → Slack, 실제로는 Slack 자리에 원하는 자동화를 붙이면 됨) — `docs/n8n-integration.md` "8. n8n Push 연동" 참고. ⚠️ 알림 발송(urllib/smtplib)은 블로킹 호출이라 async 라우트에서 직접 기다리면 안 됨 — 실시간 모니터링 WebSocket에서 이미 겪은 함정과 같은 유형이라 `alert_if_critical()`이 내부적으로 `run_in_executor`로 스레드 위임함. 원래 7개 앱에서 Mock 데이터 조합으로 실제 CRITICAL을 트리거해 alerts 카운트 증가·비-CRITICAL 시 미증가·서버 재시작 후 유지까지 curl로 검증 완료(App 16/17/18/19/20/21은 각 앱 섹션에서 별도 검증)
+- **알림 시스템**: 탐지형 앱 17개(대시보드·실시간모니터링/피싱/취약점/IoC/웹스캐너/인젝션탐지/모델감사/방화벽 정책 감사기/인프라 취약점 스캐너 의존성·네트워크/클라우드 IAM 정책 감사기/시크릿 스캐너/컨테이너·Dockerfile 감사기/DNS·이메일 보안 점검/실시간 공격 모니터링 & 대응 센터 실제 모드·AWS 샌드박스 모드/금융보안원 클라우드 CSP 평가)가 각 앱 기준 최고 심각도(CRITICAL/MALICIOUS/INJECTION)로 판정하면 자동으로 Slack/이메일 알림을 시도함. `SLACK_WEBHOOK_URL` 또는 `SMTP_*`(`.env.example` 참고) 미설정 시 자동 Mock 모드로 동작 — 실제 전송 없이 알림 로그만 기록(다른 앱들의 Mock/Live 패턴과 동일). 알림 로그는 NavBar 우측 종(🔔) 아이콘 드롭다운에서 확인·삭제 가능(`GET/DELETE /api/alerts`, 20초 폴링). 상담형 앱(인시던트/위협분석)과 생성형 앱(정책생성기, 피싱 모의훈련 생성기)은 "위협 판정"이 아니라 대상에서 제외. CVE 조회(App 15)는 Claude AI 자체를 쓰지 않는 순수 조회 도구라 마찬가지로 제외, App 22(통합 리스크 대시보드)도 판정을 내리지 않는 집계 페이지라 제외. `backend/services/notify.py`, `backend/routers/alerts.py`. **n8n Push 연동** (2026-09-05): `N8N_WEBHOOK_URL` 환경변수를 설정하면 CRITICAL 알림 시 Slack/이메일과 별도로 구조화된 JSON(`{app, app_label, severity, summary, entry_id, created_at}`)을 n8n의 Webhook 트리거로도 전송 — 사람이 읽는 Slack/이메일 알림과 달리 n8n 쪽에서 그대로 조건 분기·필드 매핑해 Jira 티켓 생성 등 임의의 후속 자동화로 이어붙일 수 있음. Slack/SMTP 중 아무것도 없어도 `N8N_WEBHOOK_URL`만 있으면 Mock 모드에서 벗어남(`IS_MOCK`이 세 채널 중 하나라도 설정되면 false). 받는 쪽 예시 워크플로우는 `n8n-workflows/push-alert-webhook-receiver.json`(Webhook → 메시지 포맷 → Slack, 실제로는 Slack 자리에 원하는 자동화를 붙이면 됨) — `docs/n8n-integration.md` "8. n8n Push 연동" 참고. ⚠️ 알림 발송(urllib/smtplib)은 블로킹 호출이라 async 라우트에서 직접 기다리면 안 됨 — 실시간 모니터링 WebSocket에서 이미 겪은 함정과 같은 유형이라 `alert_if_critical()`이 내부적으로 `run_in_executor`로 스레드 위임함. 원래 7개 앱에서 Mock 데이터 조합으로 실제 CRITICAL을 트리거해 alerts 카운트 증가·비-CRITICAL 시 미증가·서버 재시작 후 유지까지 curl로 검증 완료(App 16/17/18/19/20/21은 각 앱 섹션에서 별도 검증)
 - **n8n 자동화 연동**: 모든 앱이 이미 REST API(`/api/*`)로 노출돼 있어 n8n의 HTTP Request 노드가 코드 수정 없이 그대로 호출 가능. `docs/n8n-integration.md`에 연동 방법 + 자동화용 엔드포인트 요약, `n8n-workflows/`에 바로 Import 가능한 예제 워크플로우 5개(알림 폴링→Slack, CVE 일일 감시→Slack, IoC 일괄분석 Webhook, App 23 리포트→Slack, App 23→Notion 누적) 제공. 이와 함께 백엔드를 로컬 밖으로 노출하는 경우를 대비해 선택적 API 키 인증(`API_KEY` 환경변수, 미설정 시 기존과 동일하게 인증 없음)을 `backend/services/auth.py` + `main.py`(`/api/*` 라우터 전체에 `Depends`)로 추가 — `/api/mode`는 헬스체크 목적으로 예외. `API_KEY` 미설정/오설정/정설정 3가지 케이스와 IoC 분석·alerts 응답 필드가 예제 워크플로우 가정과 일치하는지 curl로 검증 완료. CVE 검색 예제는 이 세션 네트워크 제한으로 NVD 실호출까지는 못 했으나 `cve_lookup_service.search_cves()` 응답 스키마 확인으로 대체함. ⚠️ `API_KEY`를 켜면 프론트엔드 요청도 헤더가 없어 401을 받게 되므로(가이드에 고지), n8n 전용으로 켜거나 프론트 프록시에 헤더 주입을 추가해야 함(미착수)
 - **n8n Slack 알림 채널 마이그레이션** (2026-09-04, 사용자의 실제 로컬 n8n 인스턴스 `localhost:5678` 대상 작업): 기존에 예제 워크플로우들이 사용자의 다른 용도 채널 `자동-매매`로 Slack 알림을 보내고 있어, 전용 채널 `#ai-security-suite`(신규 생성)로 이전함.
   - `alerts-polling-to-slack` → n8n에 기존에 Import돼 있던 워크플로우의 Slack 노드 채널만 교체
@@ -394,7 +460,8 @@ App 6/16/17을 실제 대상으로 테스트해볼 수 있는 로컬 전용 Dock
 
 ```
 Backend:  Python 3.11+ / FastAPI / Uvicorn / httpx
-AI:       Anthropic Claude API (claude-sonnet-4-6)
+AI:       Anthropic Claude API (claude-sonnet-4-6) / 로컬 LLM(OpenAI 호환, 선택)
+파일 파싱: python-docx / pypdf / openpyxl (Word/PDF/Excel 업로드 텍스트 추출)
 Frontend: React 18 / Vite / TailwindCSS / react-router-dom
 ```
 
@@ -438,44 +505,52 @@ test_AI_security/
 │   │   ├── dns_security.py    ← App 21 (+ /guide, /report/{id}) — Claude API 미사용
 │   │   ├── dashboard_overview.py ← App 22 (/overview 단일 엔드포인트, Claude/외부 API 모두 미사용)
 │   │   ├── attack_monitor.py  ← App 23 (/exposure, /ws?mode=real|simulate, /history, /report/{id})
-│   │   └── fsi_csp_audit.py   ← App 24 (+ /guide, /report/{id})
+│   │   ├── fsi_csp_audit.py   ← App 24 (+ /guide, /report/{id})
+│   │   └── extract.py         ← 공용 파일 업로드→텍스트 추출 (POST /api/extract-text, Word/PDF/Excel/텍스트)
 │   └── services/
-│       ├── claude_service.py
+│       ├── claude_service.py  ← App 1 (+ log_offline_engine.py 폐쇄망 규칙 기반 로그 분석)
 │       ├── mock_data.py
+│       ├── mode_manager.py    ← 전역 AI 실행 모드(cloud/local/offline/mock) 자동감지+수동override (폐쇄망 지원, Claude 사용 16개 앱 전체 적용)
+│       ├── local_llm_client.py ← 로컬 LLM(Ollama 등 OpenAI 호환) 호출 클라이언트
+│       ├── file_extract.py    ← 공용 파일 텍스트 추출 (python-docx/pypdf/openpyxl, 원본 미저장)
 │       ├── db.py              ← 히스토리 SQLite 영속화 (범용, App 1/2/3/4/5/6/7/8/11/12/14/15/16/17/18/19/20/21 공용)
 │       ├── auth.py            ← 선택적 API 키 인증 (n8n 등 외부 연동용, API_KEY 미설정 시 비활성)
 │       ├── notify.py          ← Critical 탐지 시 Slack/이메일 알림
 │       ├── live_monitor.py    ← App 1 실시간 모니터링용 합성 로그 생성기
-│       ├── phishing_service.py / mock_phishing.py
-│       ├── vulnerability_service.py / mock_vulnerability.py / vuln_scenarios.py / recon_guide.py
-│       ├── ioc_service.py / mock_ioc.py
-│       ├── incident_service.py / mock_incident.py
+│       ├── phishing_service.py / mock_phishing.py / phishing_offline_engine.py
+│       ├── vulnerability_service.py / mock_vulnerability.py / vuln_scenarios.py / recon_guide.py / vuln_offline_engine.py
+│       ├── ioc_service.py / mock_ioc.py / ioc_offline_engine.py
+│       ├── incident_service.py / mock_incident.py / incident_offline_engine.py
 │       ├── webscan_service.py / mock_webscan.py
-│       ├── threat_analysis_service.py / mock_threat_analysis.py
-│       ├── prompt_injection_service.py / mock_prompt_injection.py
+│       ├── threat_analysis_service.py / mock_threat_analysis.py / threat_offline_engine.py / threat_collection_guide.py
+│       ├── prompt_injection_service.py / mock_prompt_injection.py / injection_offline_engine.py
 │       ├── pwn_lab.py
 │       ├── web_arena.py
-│       ├── policy_service.py / mock_policy.py / policy_guide.py
-│       ├── model_audit_service.py / mock_model_audit.py / owasp_llm_reference.py
+│       ├── policy_service.py / mock_policy.py / policy_guide.py / policy_offline_engine.py
+│       ├── model_audit_service.py / mock_model_audit.py / owasp_llm_reference.py / model_audit_offline_engine.py
 │       ├── pentest_lab.py
-│       ├── phishing_sim_service.py / mock_phishing_sim.py
-│       ├── cve_lookup_service.py
-│       ├── firewall_audit_service.py / mock_firewall_audit.py / firewall_audit_guide.py
+│       ├── phishing_sim_service.py / mock_phishing_sim.py / phishing_sim_offline_engine.py
+│       ├── cve_lookup_service.py / cve_offline_store.py(폐쇄망 로컬 캐시 + NVD 피드 가져오기)
+│       ├── firewall_audit_service.py / mock_firewall_audit.py / firewall_audit_guide.py / firewall_audit_offline_engine.py
 │       ├── dependency_scan_service.py / network_scan_service.py
-│       ├── iam_audit_service.py / mock_iam_audit.py / iam_audit_guide.py
+│       ├── iam_audit_service.py / mock_iam_audit.py / iam_audit_guide.py / iam_audit_offline_engine.py
 │       ├── secret_scanner_service.py
-│       ├── container_audit_service.py / mock_container_audit.py / container_audit_guide.py
+│       ├── container_audit_service.py / mock_container_audit.py / container_audit_guide.py / container_audit_offline_engine.py
 │       ├── dns_security_service.py
 │       ├── dashboard_service.py
 │       ├── attack_monitor_service.py  ← App 23 (PowerShell로 실제 Windows 신호 수집)
 │       ├── response_playbook.py       ← App 23 (탐지 카테고리 → 대응 제안 결정론적 매핑)
-│       └── fsi_csp_audit_service.py / mock_fsi_csp_audit.py / fsi_csp_audit_guide.py  ← App 24
+│       └── fsi_csp_audit_service.py / mock_fsi_csp_audit.py / fsi_csp_audit_guide.py / fsi_csp_audit_offline_engine.py  ← App 24
 └── frontend/
     ├── package.json
     └── src/
         ├── App.jsx
         ├── components/
         │   ├── NavBar.jsx
+        │   ├── ModeSelector.jsx  ← 전역 AI 모드(cloud/local/offline/mock) 표시+수동전환 UI, NavBar에 상시 노출
+        │   ├── FileUploadButton.jsx ← 공용 파일 업로드 버튼 (Word/PDF/Excel/txt/csv → /api/extract-text)
+        │   ├── CopyButton.jsx    ← 공용 클립보드 복사 버튼 (정보 수집 명령어 등에 사용)
+        │   ├── CollectionGuide.jsx ← 공용 "정보 수집 가이드"(어디서/어떻게/명령어) 패널, App 24 패턴을 범용화
         │   ├── GuidePanel.jsx
         │   ├── SeverityBadge.jsx
         │   ├── StatCard.jsx
@@ -536,6 +611,8 @@ npm run dev
 |---|---|
 | `/vuln`, `/web-arena`, `/policy`, `/model-audit`, `/pentest-lab`, `/phishing-sim`, `/firewall-audit`, `/iam-audit`, `/secret-scan`, `/container-audit`, `/risk-dashboard` | 없음 — 서버 두 개만 켜면 바로 테스트 가능 |
 | `/attack-monitor`의 "실제 시스템 모니터링" 탭·노출 현황 점검 | Windows + PowerShell 필수(PowerShell 5.1 기준으로 검증). 로그온 실패/Defender 탐지/리스닝 포트 조회는 관리자 권한 없이도 동작하나, 방화벽 연결 로깅(더 정확한 인바운드 이력)을 켜려면 관리자 권한 PowerShell에서 `netsh advfirewall set allprofiles logging droppedconnections enable`(+ `allowedconnections enable`) 실행 필요(노출 현황 점검 결과에 안내됨). "시뮬레이션(데모)" 탭은 이 요구사항 없이 App 1처럼 바로 사용 가능 |
+| `/attack-monitor`에서 원격 PC/서버를 대상으로 지정 | 대상 PC에서 `Enable-PSRemoting -Force` 실행 필요(WinRM 활성화). 워크그룹(비-도메인) 환경이면 이 PC에서도 `Set-Item WSMan:\localhost\Client\TrustedHosts -Value '<대상host>' -Force` 필요 — 두 명령 모두 앱의 대상 선택 패널에 복사 버튼과 함께 안내됨. 자격증명은 저장되지 않고 매 요청마다 전달만 함 |
+| `/attack-monitor`의 "AWS 활동 모니터링" 탭 | test-range의 LocalStack 샌드박스가 떠 있어야 함(`cd test-range && docker compose up -d localstack aws-sandbox`) — 별도 자격증명/설정 불필요, 앱 안의 [연결 테스트]로 확인 가능. `docker` 명령이 백엔드 호스트에서 실행 가능해야 함(Docker Desktop) |
 | `/pwn-lab`의 Pwn/Reverse 6개 챌린지(실제 컴파일·gdb 실행) | Docker Desktop 켜기 또는 WSL Ubuntu 설치 (페이지 0단계에 Docker/WSL 두 가지 방법 안내됨) |
 | `/pwn-lab`의 Misc 3개 챌린지 | 없음 — 컴파일 불필요 |
 | `/web-arena` 공유 스코어보드를 팀원과 같이 쓰기 | `npm run dev -- --host` + 방화벽에서 5180/8000 포트 개방 후 `http://<호스트 IP>:5180` 공유 |
@@ -543,11 +620,20 @@ npm run dev
 | `/infra-scan`의 네트워크 스캔 대상 | 사설 IP(10/8, 172.16/12, 192.168/16) 또는 로컬호스트만 가능 — 공인 IP는 서버에서 차단됨 |
 | n8n 연동 (`n8n-workflows/`) | 없음 — 서버 두 개만 켜면 바로 Import해서 테스트 가능. 자세한 내용은 `docs/n8n-integration.md` |
 | `test-range/`의 실제 취약 대상으로 App 6/16/17 테스트 | Docker Desktop 켜기 후 `cd test-range && docker compose up -d --build` (자세한 내용은 `test-range/README.md`) |
+| `test-range/`의 LocalStack AWS 샌드박스로 App 16(보안그룹)/18(IAM) 테스트 | 위와 동일하게 Docker Desktop만 있으면 됨(실제 AWS 계정·비용 불필요). 조회에 aws CLI를 쓰려면 호스트에 설치(더미 자격증명이면 충분) 또는 `docker exec -it test-range-aws-sandbox aws ...`로 컨테이너 안에서 바로 조회 — `test-range/README.md` 참고 |
+| `/vuln`(App 3)을 인터넷 없이(폐쇄망) 실제 AI 분석까지 쓰고 싶을 때 | 사내에 Ollama 등 OpenAI 호환 로컬 LLM 서버를 두고 `.env`에 `LOCAL_LLM_BASE_URL`/`LOCAL_LLM_MODEL` 설정 — 없어도 오프라인 규칙 기반 분석(`vuln_offline_engine.py`)으로 자동 전환되어 완전히 인터넷 없이 동작함(NavBar 모드 배지로 확인) |
+| `/cve-lookup`(App 15)을 폐쇄망에서 쓰고 싶을 때 | 인터넷이 되는 동안 조회했던 CVE는 자동으로 로컬 캐시에 남아 폐쇄망에서도 조회 가능. 더 많은 데이터가 필요하면 인터넷 되는 환경에서 NVD 공식 데이터 피드(nvd.nist.gov/vuln/data-feeds)를 받아 승인된 절차로 반입 후 페이지의 [피드 가져오기]로 업로드 |
 
 ## 환경 변수 (.env)
 
 ```
 ANTHROPIC_API_KEY=your_key_here
+
+# 로컬 LLM (선택, 폐쇄망용) — Ollama/vLLM/LM Studio 등 OpenAI 호환 서버. 예)
+# LOCAL_LLM_BASE_URL=http://localhost:11434/v1, LOCAL_LLM_MODEL=llama3.1
+LOCAL_LLM_BASE_URL=
+LOCAL_LLM_MODEL=
+LOCAL_LLM_API_KEY=
 
 # 알림 시스템 (선택, .env.example 참고)
 SLACK_WEBHOOK_URL=
@@ -574,11 +660,20 @@ API 키 없으면 Mock 모드로 자동 동작. 알림 관련 변수도 하나�
 
 ## 대기 중인 작업
 
-- **NVD_API_KEY 발급 대기** (2026-09-05): 사용자가 [nvd.nist.gov/developers/request-an-api-key](https://nvd.nist.gov/developers/request-an-api-key)에서 신청 완료, 이메일로 키가 오면 처리 필요. **코드 변경은 필요 없음** — App 15/17이 이미 `NVD_API_KEY` 환경변수를 지원하도록 구현돼 있어 설정만 하면 됨:
-  1. 키를 `backend/.env`에 추가: `NVD_API_KEY=발급받은_키` (이 프로젝트는 `backend/.env`에 이미 `N8N_WEBHOOK_URL`이 들어있으니 그 파일에 한 줄만 추가하면 됨 — `.gitignore`로 커밋 대상에서 이미 제외됨)
-  2. 백엔드 재시작 (환경변수는 프로세스 시작 시 한 번만 읽으므로 `--reload`로는 반영 안 됨 — `uvicorn` 프로세스를 완전히 죽였다가 다시 실행)
-  3. `GET /api/cve/status`로 `"hasApiKey": true`인지 확인 (또는 `/cve-lookup` 페이지에서 확인)
-  4. 키 적용 전후로 체감 차이: 요청 한도가 30초당 5건 → 50건으로 늘어남 — `/cve-lookup`의 키워드 검색이나 `/infra-scan` 의존성 스캔(패키지 여러 개)에서 딜레이가 크게 줄어드는 것으로 확인 가능
+- App 23 원격 대상 모니터링(WinRM)의 실제 원격 PC 대상 end-to-end 검증 — 이 세션 환경에 WinRM이 설정된 두 번째 PC가 없어 코드 레벨(연결 실패 두 경로+특수문자 자격증명 이스케이프)까지만 검증함. 사용자가 실제 대상 PC에서 `Enable-PSRemoting -Force` 실행 후 앱에서 "연결 테스트"로 확인 필요. 상세는 App 23 섹션의 "원격 대상 모니터링 (WinRM)" 참고
+
+(그 외에는 2026-09-05 폐쇄망/AI 실행 모드 롤아웃이 대상 16개 앱 전부 완료됨. 상세는 위 "공통 기능"의 "AI 실행 모드" 항목과 App 3/15 섹션 참고. 커밋은 아직 안 함 — 사용자 확인 필요)
+
+### 완료됨: 폐쇄망(오프라인) 지원 — 전체 16개 앱 롤아웃 (2026-09-05)
+App 3/15에 먼저 적용해 검증한 cloud/local/offline/mock 패턴을 나머지 Claude 사용 앱 14개(App 1/2/4/5/7/8/11/12/14/16/18/20/23/24)에 전부 적용 완료. 병렬 서브에이전트 6그룹으로 진행하다 세션 사용량 제한(429)으로 5그룹이 검증 도중 중단됐고, 디스크에 남은 부분완성 코드를 직접 점검해 마무리함:
+- iam_audit.py 라우터의 `await` 누락, container_audit_service.py·fsi_csp_audit_service.py가 아예 미착수 상태였던 것을 발견해 firewall_audit_service.py와 동일한 패턴으로 마저 변환
+- claude_service.py만 다른 서비스들과 다르게 `data["ai_mode"]`라는 키를 썼던 것을 `data["mode"]`로 통일(프론트 `ModeBanner`가 전 앱에서 `result.mode` 하나만 보면 되도록)
+- phishing_sim_offline_engine.py의 조직명 추출 정규식이 "우리 회사는 테크노바 주식회사"에서 실제 상호명(테크노바)보다 먼저 오는 흔한 자기지칭 표현("우리"+"회사")을 잘못 캡처하는 버그를 발견해 제네릭 단어 블록리스트로 수정
+- 8개 프론트 페이지(Dashboard/AttackMonitor/IncidentResponse/ThreatAnalysis/SecurityPolicyGenerator/PhishingSimGenerator/FirewallAudit/IamAudit/ContainerAudit/FsiCspAudit)에 `ModeBanner` 배지 추가가 누락돼 있어 직접 추가. AttackMonitor.jsx/Dashboard.jsx가 예전 `/api/mode` 응답 형태(`{mock: bool}`)를 그대로 참조하고 있던 것도 새 형태(`{effective_mode}`)에 맞게 수정(AttackMonitor의 "Mock 모드 주의" 배너가 조용히 항상 꺼져있게 되는 실제 회귀였음)
+- 16개 앱 전부 `mode_manager.set_ai_override('offline')` 상태로 실제 입력을 넣어 직접 함수 호출 + 실제 HTTP 엔드포인트 양쪽으로 end-to-end 검증, `npm run build` 성공까지 확인. 상세 설계는 App 3 섹션의 "폐쇄망(오프라인) 지원 + 로컬 LLM 연동" 참고 — 나머지 앱들도 (App5/7의 채팅 게이팅, App11/14의 템플릿+키워드 커스터마이즈 방식 등 일부 변형 제외) 동일 패턴.
+
+### 완료됨: NVD_API_KEY 적용 (2026-09-05)
+`backend/.env`에 `NVD_API_KEY` 추가 후 사용자가 백엔드를 직접 재시작, `GET /api/cve/status` → `{"has_api_key":true,...}` 확인 완료. App 15(`/cve-lookup`)·App 17(`/infra-scan`) 요청 한도가 30초당 5건 → 50건으로 상향됨.
 
 ## 이어서 작업하는 방법
 

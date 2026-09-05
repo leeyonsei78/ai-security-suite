@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { GraduationCap, Trophy, Fingerprint, Crosshair, ArrowLeft, CheckCircle2, Circle, Square, SquareCheck, Lightbulb, Target, ListChecks, Compass, BookMarked, Wrench, Route, Flag, AlertTriangle, ArrowUpRight, ChevronDown, ChevronUp, Radar, Scale, Download } from 'lucide-react'
+import { GraduationCap, Trophy, Fingerprint, Crosshair, ArrowLeft, CheckCircle2, Circle, Square, SquareCheck, Lightbulb, Target, ListChecks, Compass, BookMarked, Wrench, Route, Flag, AlertTriangle, ArrowUpRight, ChevronDown, ChevronUp, Radar, Scale, Download, Terminal } from 'lucide-react'
+import CopyButton from './CopyButton'
 
 export const AUDIENCE_CONFIG = {
   beginner: { label: '처음 해보는 사람', icon: GraduationCap, color: 'text-blue-400', bg: 'bg-blue-500/10 border-blue-500/30' },
@@ -165,6 +166,15 @@ export function CtfPrepGuide({ guide }) {
   )
 }
 
+function Linkify({ text }) {
+  const parts = text.split(/(https?:\/\/[^\s)]+)/g)
+  return parts.map((part, i) =>
+    /^https?:\/\//.test(part)
+      ? <a key={i} href={part} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline break-all">{part}</a>
+      : <span key={i}>{part}</span>
+  )
+}
+
 function downloadText(filename, content) {
   const blob = new Blob([content], { type: 'text/plain' })
   const url = URL.createObjectURL(blob)
@@ -212,6 +222,15 @@ export function ReconGuide({ guide }) {
             <p className="text-xs text-slate-300 leading-relaxed">{guide.legal_note}</p>
           </div>
 
+          {guide.usage_note && (
+            <div className="bg-blue-500/10 border border-blue-500/25 rounded-lg p-3">
+              <p className="text-xs font-semibold text-blue-300 mb-1 flex items-center gap-1">
+                <Terminal size={12} /> 이 명령어는 어디에 입력하나요?
+              </p>
+              <p className="text-xs text-slate-300 leading-relaxed">{guide.usage_note}</p>
+            </div>
+          )}
+
           <div className="space-y-2.5">
             {guide.categories.map((cat, i) => (
               <div key={i} className="bg-black/20 rounded-lg p-3">
@@ -219,12 +238,34 @@ export function ReconGuide({ guide }) {
                 <p className="text-[11px] text-slate-400 mb-2">
                   <span className="text-slate-500">수집할 정보: </span>{cat.collect.join(', ')}
                 </p>
-                <div className="space-y-1">
+                <div className="space-y-2">
                   {cat.how.map((h, j) => (
-                    <div key={j} className="text-[11px] flex flex-wrap gap-x-2 gap-y-0.5">
-                      <span className="font-semibold text-slate-300 shrink-0">{h.tool}</span>
-                      <code className="text-emerald-300 font-mono">{h.command}</code>
-                      {h.note && <span className="text-slate-500">— {h.note}</span>}
+                    <div key={j} className="text-[11px] space-y-1 bg-black/10 rounded-lg p-2">
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                        <span className="font-semibold text-slate-300 shrink-0">{h.tool}</span>
+                        <code className="text-emerald-300 font-mono">{h.command}</code>
+                        <CopyButton text={h.command} />
+                        {h.download && (
+                          <button
+                            onClick={downloadScript}
+                            className="flex items-center gap-1 text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 px-1.5 py-0.5 rounded"
+                          >
+                            <Download size={10} /> 지금 다운로드
+                          </button>
+                        )}
+                      </div>
+                      {(Array.isArray(h.example) ? h.example : h.example ? [h.example] : []).map((ex, k) => (
+                        <div key={k} className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                          <span className="text-slate-500 shrink-0">↳ 예시:</span>
+                          <code className="text-amber-300 font-mono">{ex}</code>
+                          <CopyButton text={ex} />
+                        </div>
+                      ))}
+                      {h.note && (
+                        <p className="text-slate-400 leading-relaxed border-l-2 border-slate-700 pl-2">
+                          <Linkify text={h.note} />
+                        </p>
+                      )}
                     </div>
                   ))}
                 </div>

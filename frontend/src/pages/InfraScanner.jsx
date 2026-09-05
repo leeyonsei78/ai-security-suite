@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import GuidePanel from '../components/GuidePanel'
 import SeverityBadge from '../components/SeverityBadge'
+import FileUploadButton from '../components/FileUploadButton'
 
 const DEP_STEPS = [
   "매니페스트 형식을 선택합니다 (Python requirements.txt / Node.js package.json).",
@@ -61,12 +62,13 @@ function DependencyTab({ guide }) {
 
   const placeholder = guide?.dependency?.manifest_types?.find(m => m.id === manifestType)?.example ?? ''
 
-  const scan = async () => {
-    if (!content.trim()) return
+  const scan = async (contentOverride) => {
+    const body = contentOverride ?? content
+    if (!body.trim()) return
     setLoading(true)
     setResult(null)
     try {
-      const res = await axios.post('/api/infra-scan/dependency/analyze', { manifest_type: manifestType, content })
+      const res = await axios.post('/api/infra-scan/dependency/analyze', { manifest_type: manifestType, content: body })
       setResult(res.data)
       setHistory(h => [res.data, ...h].slice(0, 10))
     } catch (err) {
@@ -111,7 +113,10 @@ function DependencyTab({ guide }) {
         </div>
 
         <div>
-          <p className="text-xs font-semibold text-slate-400 mb-2">매니페스트 내용</p>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs font-semibold text-slate-400">매니페스트 내용</p>
+            <FileUploadButton onExtracted={(text) => { setContent(text); scan(text) }} />
+          </div>
           <textarea
             value={content}
             onChange={e => setContent(e.target.value)}
@@ -122,7 +127,7 @@ function DependencyTab({ guide }) {
         </div>
 
         <button
-          onClick={scan}
+          onClick={() => scan()}
           disabled={loading || !content.trim()}
           className="w-full py-3 bg-violet-600 hover:bg-violet-700 disabled:bg-slate-700 disabled:text-slate-500 rounded-xl font-semibold transition-colors"
         >

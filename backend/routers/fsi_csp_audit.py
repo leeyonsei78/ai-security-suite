@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 from services.fsi_csp_audit_service import analyze, generate_markdown_report
-from services.fsi_csp_audit_guide import ASSESSMENT_TYPES, DISCLAIMER, REFERENCE_LINKS
+from services.fsi_csp_audit_guide import ASSESSMENT_TYPES, DISCLAIMER, REFERENCE_LINKS, DATA_COLLECTION, COMMAND_USAGE_NOTE
 from services import db, notify
 
 router = APIRouter(prefix="/api/fsi-csp-audit", tags=["fsi-csp-audit"])
@@ -20,7 +20,13 @@ class AnalyzeRequest(BaseModel):
 
 @router.get("/guide")
 async def get_guide():
-    return {"assessment_types": ASSESSMENT_TYPES, "disclaimer": DISCLAIMER, "reference_links": REFERENCE_LINKS}
+    return {
+        "assessment_types": ASSESSMENT_TYPES,
+        "disclaimer": DISCLAIMER,
+        "reference_links": REFERENCE_LINKS,
+        "data_collection": DATA_COLLECTION,
+        "command_usage_note": COMMAND_USAGE_NOTE,
+    }
 
 
 @router.post("/analyze")
@@ -32,7 +38,7 @@ async def analyze_endpoint(request: AnalyzeRequest):
     if request.assessment_type not in VALID_ASSESSMENT_TYPES:
         raise HTTPException(status_code=400, detail=f"Invalid assessment_type, must be one of {sorted(VALID_ASSESSMENT_TYPES)}")
 
-    result = analyze(request.assessment_type, request.content, request.context)
+    result = await analyze(request.assessment_type, request.content, request.context)
     entry = {
         "assessment_type": request.assessment_type,
         "preview": request.content.strip()[:100].replace("\n", " "),

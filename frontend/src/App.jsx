@@ -1,6 +1,4 @@
-import { useState, useEffect } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
-import axios from 'axios'
 import NavBar from './components/NavBar'
 import Dashboard from './pages/Dashboard'
 import PhishingDetector from './pages/PhishingDetector'
@@ -28,15 +26,9 @@ import AttackMonitor from './pages/AttackMonitor'
 import FsiCspAudit from './pages/FsiCspAudit'
 
 export default function App() {
-  const [isMock, setIsMock] = useState(null)
-
-  useEffect(() => {
-    axios.get('/api/mode').then(r => setIsMock(r.data.mock)).catch(() => setIsMock(true))
-  }, [])
-
   return (
     <BrowserRouter>
-      <NavBar isMock={isMock} />
+      <NavBar />
       <Routes>
         <Route path="/" element={<Dashboard />} />
         <Route path="/phishing" element={<PhishingDetector />} />

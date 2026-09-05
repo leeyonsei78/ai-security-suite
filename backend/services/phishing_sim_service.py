@@ -2,11 +2,12 @@ import os
 import json
 from dotenv import load_dotenv
 from services.mock_phishing_sim import generate_mock_phishing_sim
+from services.phishing_sim_offline_engine import generate_offline
+from services import mode_manager, local_llm_client
 
 load_dotenv()
 
 _api_key = os.getenv("ANTHROPIC_API_KEY", "")
-IS_MOCK = not _api_key or _api_key == "your_anthropic_api_key_here"
 
 SCENARIO_LABELS = {
     "it_password_reset": "IT 부서 비밀번호 만료 안내",
@@ -62,22 +63,25 @@ Respond ONLY with valid JSON in this exact structure:
 Respond in Korean for all natural-language fields (subject, body, cta_text, red flag explanations, rationale)."""
 
 
-def _real_generate(scenario_type: str, difficulty: str, context: str) -> dict:
-    import anthropic
-    client = anthropic.Anthropic(api_key=_api_key)
+def _real_generate(scenario_type: str, difficulty: str, context: str, backend: str = "cloud") -> dict:
     scenario_label = SCENARIO_LABELS.get(scenario_type, scenario_type)
     difficulty_label = DIFFICULTY_LABELS.get(difficulty, difficulty)
     context_line = f"조직 컨텍스트: {context}" if context.strip() else "조직 컨텍스트: 명시되지 않음 (가상의 ACME Corp 기준으로 생성)"
-    message = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=2048,
-        system=SYSTEM_PROMPT,
-        messages=[{
-            "role": "user",
-            "content": f"시나리오: {scenario_label}\n난이도: {difficulty_label}\n{context_line}",
-        }],
-    )
-    text = message.content[0].text
+    user_prompt = f"시나리오: {scenario_label}\n난이도: {difficulty_label}\n{context_line}"
+
+    if backend == "local":
+        text = local_llm_client.call_local_llm(SYSTEM_PROMPT, user_prompt, max_tokens=2048)
+    else:
+        import anthropic
+        client = anthropic.Anthropic(api_key=_api_key)
+        message = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=2048,
+            system=SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": user_prompt}],
+        )
+        text = message.content[0].text
+
     start = text.find("{")
     end = text.rfind("}") + 1
     if start != -1 and end > start:
@@ -88,11 +92,22 @@ def _real_generate(scenario_type: str, difficulty: str, context: str) -> dict:
     return {"error": "Parse failed", "raw": text}
 
 
-def generate_phishing_sim(scenario_type: str, difficulty: str, context: str) -> dict:
-    if IS_MOCK:
+async def generate_phishing_sim(scenario_type: str, difficulty: str, context: str) -> dict:
+    mode = await mode_manager.get_ai_mode()
+
+    if mode == "mock":
         data = generate_mock_phishing_sim(scenario_type, difficulty, context)
+    elif mode in ("local", "cloud"):
+        try:
+            data = _real_generate(scenario_type, difficulty, context, backend=mode)
+        except Exception as e:
+            data = generate_offline(scenario_type, difficulty, context)
+            data["fallback_reason"] = f"{'로컬 LLM' if mode == 'local' else 'Claude Cloud'} 호출 실패로 오프라인 템플릿 기반으로 대체됨: {e}"
+            mode = "offline"
     else:
-        data = _real_generate(scenario_type, difficulty, context)
+        data = generate_offline(scenario_type, difficulty, context)
+
+    data["mode"] = mode
     data["usage_disclaimer"] = USAGE_DISCLAIMER
     return data
 

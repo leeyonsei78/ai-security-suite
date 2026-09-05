@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import GuidePanel from '../components/GuidePanel'
 import SeverityBadge from '../components/SeverityBadge'
+import { DEFAULT_ACCEPT as UPLOAD_ACCEPT } from '../components/FileUploadButton'
 
 const SCAN_STEPS = [
   '스캔할 코드/설정 텍스트를 붙여넣거나, 파일을 업로드합니다.',
@@ -28,27 +29,34 @@ export default function SecretScanner() {
   const [result, setResult] = useState(null)
   const [history, setHistory] = useState([])
   const [guide, setGuide] = useState(null)
+  const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef(null)
 
   useEffect(() => {
     axios.get('/api/secret-scan/guide').then(r => setGuide(r.data)).catch(() => {})
   }, [])
 
-  const handleFileUpload = (e) => {
+  const handleFileUpload = async (e) => {
     const file = e.target.files?.[0]
     e.target.value = ''
     if (!file) return
     if (file.size > MAX_UPLOAD_BYTES) {
-      alert(`파일이 너무 큽니다 (${(file.size / 1024 / 1024).toFixed(1)}MB). 최대 2MB까지 지원합니다.`)
+      alert(`파일이 너무 큽니다 (${(file.size / 1024 / 1024).toFixed(1)}MB).`)
       return
     }
-    const reader = new FileReader()
-    reader.onload = () => {
-      setContent(String(reader.result ?? ''))
+    setUploading(true)
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      const res = await axios.post('/api/extract-text', form, { headers: { 'Content-Type': 'multipart/form-data' } })
+      setContent(res.data.text)
       setFilename(file.name)
+      scan(res.data.text, file.name)
+    } catch (err) {
+      alert('파일을 읽지 못했습니다: ' + (err.response?.data?.detail ?? err.message))
+    } finally {
+      setUploading(false)
     }
-    reader.onerror = () => alert('파일을 읽는 중 오류가 발생했습니다. 텍스트 형식의 파일인지 확인해주세요.')
-    reader.readAsText(file)
   }
 
   const clearUploadedFile = () => {
@@ -56,12 +64,13 @@ export default function SecretScanner() {
     setContent('')
   }
 
-  const scan = async () => {
-    if (!content.trim()) return
+  const scan = async (contentOverride, filenameOverride) => {
+    const body = contentOverride ?? content
+    if (!body.trim()) return
     setLoading(true)
     setResult(null)
     try {
-      const res = await axios.post('/api/secret-scan/scan', { content, filename })
+      const res = await axios.post('/api/secret-scan/scan', { content: body, filename: filenameOverride ?? filename })
       setResult(res.data)
       setHistory(h => [res.data, ...h].slice(0, 10))
     } catch (err) {
@@ -130,11 +139,12 @@ export default function SecretScanner() {
                   )}
                   <button
                     onClick={() => fileInputRef.current?.click()}
-                    className="flex items-center gap-1 text-[11px] bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg px-2.5 py-1"
+                    disabled={uploading}
+                    className="flex items-center gap-1 text-[11px] bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg px-2.5 py-1 disabled:opacity-60"
                   >
-                    <Upload size={11} /> 파일 업로드
+                    <Upload size={11} /> {uploading ? '읽는 중...' : '파일 업로드'}
                   </button>
-                  <input ref={fileInputRef} type="file" onChange={handleFileUpload} className="hidden" />
+                  <input ref={fileInputRef} type="file" accept={UPLOAD_ACCEPT} onChange={handleFileUpload} className="hidden" />
                 </div>
               </div>
               <textarea
@@ -144,11 +154,11 @@ export default function SecretScanner() {
                 rows={14}
                 className="w-full bg-slate-800 border border-slate-600 rounded-xl p-4 text-sm font-mono resize-none focus:outline-none focus:border-rose-500 placeholder-slate-600"
               />
-              <p className="text-[10px] text-slate-600 mt-1">붙여넣은 내용은 외부로 전송되지 않고 이 서버 안에서만 검사됩니다. 매치된 값은 즉시 마스킹되어 원본은 저장되지 않습니다.</p>
+              <p className="text-[10px] text-slate-600 mt-1">붙여넣거나 업로드한 내용은 외부로 전송되지 않고 이 서버 안에서만 검사됩니다(Word/PDF/Excel도 서버가 텍스트만 추출, 원본 미저장). 매치된 값은 즉시 마스킹되어 원본은 저장되지 않습니다.</p>
             </div>
 
             <button
-              onClick={scan}
+              onClick={() => scan()}
               disabled={loading || !content.trim()}
               className="w-full py-3 bg-rose-600 hover:bg-rose-700 disabled:bg-slate-700 disabled:text-slate-500 rounded-xl font-semibold transition-colors"
             >

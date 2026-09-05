@@ -32,7 +32,7 @@ async def generate(request: GenerateRequest):
     if request.environment_type not in VALID_ENV_TYPES:
         raise HTTPException(status_code=400, detail=f"Invalid environment_type, must be one of {sorted(VALID_ENV_TYPES)}")
 
-    result = generate_policy(request.environment_type, request.compliance, request.description)
+    result = await generate_policy(request.environment_type, request.compliance, request.description)
     entry = {
         "environment_type": request.environment_type,
         "compliance": request.compliance,

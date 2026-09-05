@@ -2,9 +2,37 @@ import { useState, useRef, useEffect } from 'react'
 import axios from 'axios'
 import {
   Siren, ChevronDown, ChevronUp, CheckSquare, Square,
-  Send, Bot, User, Clock, Users, AlertTriangle,
+  Send, Bot, User, Clock, Users, AlertTriangle, Cloud, Server, WifiOff, FlaskConical,
 } from 'lucide-react'
 import GuidePanel from '../components/GuidePanel'
+import FileUploadButton from '../components/FileUploadButton'
+
+const MODE_BADGE = {
+  cloud:   { icon: Cloud,        label: 'Claude Cloud로 분석됨', color: 'text-green-400',  bg: 'bg-green-500/10 border-green-500/30' },
+  local:   { icon: Server,       label: '로컬 LLM으로 분석됨',    color: 'text-blue-400',   bg: 'bg-blue-500/10 border-blue-500/30' },
+  offline: { icon: WifiOff,      label: '오프라인 규칙 기반으로 분석됨(폐쇄망)', color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/30' },
+  mock:    { icon: FlaskConical, label: 'Mock 데모 데이터 (학습용, 실제 분석 아님)', color: 'text-slate-400', bg: 'bg-slate-500/10 border-slate-500/30' },
+}
+
+function ModeBanner({ result }) {
+  if (!result?.mode) return null
+  const cfg = MODE_BADGE[result.mode] ?? MODE_BADGE.offline
+  const Icon = cfg.icon
+  return (
+    <div className={`border rounded-xl p-3 flex items-start gap-2 ${cfg.bg}`}>
+      <Icon size={14} className={`${cfg.color} shrink-0 mt-0.5`} />
+      <div>
+        <p className={`text-xs font-semibold ${cfg.color}`}>{cfg.label}</p>
+        {result.fallback_reason && (
+          <p className="text-xs text-slate-400 mt-1">{result.fallback_reason}</p>
+        )}
+        {result.engine_note && (
+          <p className="text-xs text-slate-400 mt-1">{result.engine_note}</p>
+        )}
+      </div>
+    </div>
+  )
+}
 
 const INCIDENT_TYPES = [
   { id: 'ransomware',      label: '랜섬웨어',       emoji: '🔒', desc: '파일 암호화·몸값 요구' },
@@ -115,8 +143,9 @@ export default function IncidentResponse() {
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [chatMsgs])
 
-  const generate = async () => {
-    if (!description.trim()) return
+  const generate = async (descriptionOverride) => {
+    const body = descriptionOverride ?? description
+    if (!body.trim()) return
     setLoading(true)
     setPlan(null)
     setChecks({})
@@ -124,7 +153,7 @@ export default function IncidentResponse() {
     setSessionId(null)
     try {
       const res = await axios.post('/api/incident/create', {
-        incident_type: incidentType, severity, description,
+        incident_type: incidentType, severity, description: body,
       })
       setPlan(res.data)
       setSessionId(res.data.session_id)
@@ -220,7 +249,10 @@ export default function IncidentResponse() {
 
             {/* Description */}
             <div>
-              <p className="text-sm font-semibold text-slate-300 mb-2">상황 설명</p>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm font-semibold text-slate-300">상황 설명</p>
+                <FileUploadButton onExtracted={(text) => { setDescription(text); generate(text) }} />
+              </div>
               <textarea
                 value={description}
                 onChange={e => setDescription(e.target.value)}
@@ -231,7 +263,7 @@ export default function IncidentResponse() {
             </div>
 
             <button
-              onClick={generate}
+              onClick={() => generate()}
               disabled={loading || !description.trim()}
               className="w-full py-3 bg-red-700 hover:bg-red-600 disabled:bg-slate-700 disabled:text-slate-500 rounded-xl font-semibold transition-colors flex items-center justify-center gap-2"
             >
@@ -258,6 +290,7 @@ export default function IncidentResponse() {
 
             {plan && (
               <>
+                <ModeBanner result={plan} />
                 {/* Summary card */}
                 <div className="bg-slate-800 border border-slate-700 rounded-xl p-5 space-y-3">
                   <div className="flex items-start gap-3">

@@ -20,7 +20,7 @@ async def analyze(request: AnalyzeRequest):
     if len(request.content) > 20000:
         raise HTTPException(status_code=400, detail="Content too long (max 20,000 chars)")
 
-    result = analyze_phishing(request.content)
+    result = await analyze_phishing(request.content)
     entry = {
         "input_type": request.input_type,
         "preview": request.content[:120].replace("\n", " "),

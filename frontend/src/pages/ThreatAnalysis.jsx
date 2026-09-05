@@ -3,9 +3,38 @@ import axios from 'axios'
 import {
   FlaskConical, Bug, HardDrive, Cpu, Network,
   ChevronDown, ChevronUp, Send, Bot, User,
-  AlertTriangle, Shield, Eye, Clock, Copy, CheckCheck,
+  AlertTriangle, Shield, Eye, Clock, Copy, CheckCheck, Cloud, Server, WifiOff,
 } from 'lucide-react'
 import GuidePanel from '../components/GuidePanel'
+import FileUploadButton from '../components/FileUploadButton'
+import CollectionGuide from '../components/CollectionGuide'
+
+const MODE_BADGE = {
+  cloud:   { icon: Cloud,        label: 'Claude Cloud로 분석됨', color: 'text-green-400',  bg: 'bg-green-500/10 border-green-500/30' },
+  local:   { icon: Server,       label: '로컬 LLM으로 분석됨',    color: 'text-blue-400',   bg: 'bg-blue-500/10 border-blue-500/30' },
+  offline: { icon: WifiOff,      label: '오프라인 규칙 기반으로 분석됨(폐쇄망)', color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/30' },
+  mock:    { icon: FlaskConical, label: 'Mock 데모 데이터 (학습용, 실제 분석 아님)', color: 'text-slate-400', bg: 'bg-slate-500/10 border-slate-500/30' },
+}
+
+function ModeBanner({ result }) {
+  if (!result?.mode) return null
+  const cfg = MODE_BADGE[result.mode] ?? MODE_BADGE.offline
+  const Icon = cfg.icon
+  return (
+    <div className={`border rounded-xl p-3 flex items-start gap-2 ${cfg.bg}`}>
+      <Icon size={14} className={`${cfg.color} shrink-0 mt-0.5`} />
+      <div>
+        <p className={`text-xs font-semibold ${cfg.color}`}>{cfg.label}</p>
+        {result.fallback_reason && (
+          <p className="text-xs text-slate-400 mt-1">{result.fallback_reason}</p>
+        )}
+        {result.engine_note && (
+          <p className="text-xs text-slate-400 mt-1">{result.engine_note}</p>
+        )}
+      </div>
+    </div>
+  )
+}
 
 const ANALYSIS_TYPES = [
   {
@@ -95,6 +124,10 @@ const TYPE_COLORS = {
   orange: { active: 'border-orange-500 bg-orange-500/10 text-orange-300', btn: 'bg-orange-700 hover:bg-orange-600', dot: 'bg-orange-500' },
   purple: { active: 'border-purple-500 bg-purple-500/10 text-purple-300', btn: 'bg-purple-700 hover:bg-purple-600', dot: 'bg-purple-500' },
   violet: { active: 'border-violet-500 bg-violet-500/10 text-violet-300', btn: 'bg-violet-700 hover:bg-violet-600', dot: 'bg-violet-500' },
+}
+
+const ACCENT_BY_COLOR = {
+  red: 'text-red-300', orange: 'text-orange-300', purple: 'text-purple-300', violet: 'text-violet-300',
 }
 
 const TACTIC_COLORS = {
@@ -410,6 +443,7 @@ function ResultPanel({ result }) {
   }
   return (
     <div className="space-y-4">
+      <ModeBanner result={result} />
       {/* Summary */}
       <div className="bg-slate-800 border border-slate-700 rounded-xl p-5 space-y-3">
         <div className="flex items-center gap-3 flex-wrap">
@@ -459,15 +493,21 @@ export default function ThreatAnalysis() {
   const [chatMsgs, setChatMsgs]         = useState([])
   const [chatInput, setChatInput]       = useState('')
   const [chatLoading, setChatLoading]   = useState(false)
+  const [collectionGuide, setCollectionGuide] = useState(null)
   const chatEndRef = useRef(null)
+
+  useEffect(() => {
+    axios.get('/api/threat/guide').then(r => setCollectionGuide(r.data.collection_guide)).catch(() => {})
+  }, [])
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [chatMsgs])
 
   const currentType = ANALYSIS_TYPES.find(t => t.id === analysisType)
   const tc = TYPE_COLORS[currentType?.color] ?? TYPE_COLORS.red
 
-  const runAnalysis = async () => {
-    if (!inputData.trim()) return
+  const runAnalysis = async (inputOverride) => {
+    const body = inputOverride ?? inputData
+    if (!body.trim()) return
     setLoading(true)
     setResult(null)
     setChatMsgs([])
@@ -475,7 +515,7 @@ export default function ThreatAnalysis() {
     try {
       const res = await axios.post('/api/threat/analyze', {
         analysis_type: analysisType,
-        input_data: inputData,
+        input_data: body,
         context,
       })
       setResult(res.data)
@@ -544,6 +584,12 @@ export default function ThreatAnalysis() {
               </div>
             </div>
 
+            <CollectionGuide
+              items={collectionGuide?.[analysisType]?.items}
+              usageNote={collectionGuide?.[analysisType]?.usage_note}
+              accentColor={ACCENT_BY_COLOR[currentType?.color] ?? 'text-cyan-300'}
+            />
+
             {/* Context */}
             <div>
               <p className="text-sm font-semibold text-slate-300 mb-1.5">
@@ -559,7 +605,10 @@ export default function ThreatAnalysis() {
 
             {/* Sample data */}
             <div>
-              <p className="text-sm font-semibold text-slate-300 mb-1.5">분석 데이터</p>
+              <div className="flex items-center justify-between mb-1.5">
+                <p className="text-sm font-semibold text-slate-300">분석 데이터</p>
+                <FileUploadButton onExtracted={(text) => { setInputData(text); runAnalysis(text) }} />
+              </div>
               <textarea
                 value={inputData}
                 onChange={e => setInputData(e.target.value)}
@@ -570,7 +619,7 @@ export default function ThreatAnalysis() {
             </div>
 
             <button
-              onClick={runAnalysis}
+              onClick={() => runAnalysis()}
               disabled={loading || !inputData.trim()}
               className={`w-full py-3 rounded-xl font-semibold transition-colors flex items-center justify-center gap-2 disabled:bg-slate-700 disabled:text-slate-500 ${tc.btn}`}
             >

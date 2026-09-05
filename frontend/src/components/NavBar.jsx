@@ -6,6 +6,7 @@ import {
   ScrollText, BrainCircuit, ShieldCheck, Bell, Trash2, Send, Database, ShieldQuestion, Radar,
   KeyRound, ScanSearch, Container, MailCheck, Gauge, ChevronDown, Zap, Landmark,
 } from 'lucide-react'
+import ModeSelector from './ModeSelector'
 
 const groups = [
   {
@@ -153,7 +154,7 @@ function AlertBell() {
   )
 }
 
-export default function NavBar({ isMock }) {
+export default function NavBar() {
   const location = useLocation()
   const [openGroup, setOpenGroup] = useState(() => findGroupKeyByPath(location.pathname))
 
@@ -170,34 +171,36 @@ export default function NavBar({ isMock }) {
 
   return (
     <nav className="bg-slate-900 border-b border-slate-700">
-      <div className="px-6 flex items-center gap-1 overflow-x-auto">
+      <div className="px-6 flex items-center gap-1">
         <div className="flex items-center gap-2 pr-6 py-3 border-r border-slate-700 mr-2 shrink-0 whitespace-nowrap">
           <Shield className="text-blue-400" size={20} />
           <span className="font-bold text-sm">AI Security Suite</span>
-          {isMock !== null && (
-            <span className={`text-xs font-bold px-1.5 py-0.5 rounded ml-1 ${isMock ? 'bg-amber-500/20 text-amber-400' : 'bg-green-500/20 text-green-400'}`}>
-              {isMock ? 'MOCK' : 'LIVE'}
-            </span>
-          )}
+          <ModeSelector />
         </div>
-        {groups.map(({ key, label, icon: Icon }) => {
-          const isOpen = openGroup === key
-          const isActiveGroup = activeGroupKey === key
-          return (
-            <button
-              key={key}
-              onClick={() => toggleGroup(key)}
-              className={`flex items-center gap-1.5 px-4 py-3 text-sm transition-colors border-b-2 shrink-0 whitespace-nowrap ${
-                isOpen || isActiveGroup
-                  ? 'border-blue-400 text-blue-400'
-                  : 'border-transparent text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Icon size={15} />{label}
-              <ChevronDown size={13} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-            </button>
-          )
-        })}
+        {/* overflow-x-auto는 이 그룹 탭 구간에만 건다 — 브랜드/모드 셀렉터/알림 종처럼 아래로
+            펼쳐지는 드롭다운을 가진 요소를 같은 스크롤 컨테이너 안에 두면, overflow-x가 auto인
+            축과 짝을 맞추려 overflow-y도 auto로 강제되어 절대 위치 드롭다운이 세로로 잘려
+            보이지 않게 된다(스크린샷에는 안 보이지만 DOM에는 존재하는 상태가 됨). */}
+        <div className="flex items-center gap-1 overflow-x-auto flex-1 min-w-0">
+          {groups.map(({ key, label, icon: Icon }) => {
+            const isOpen = openGroup === key
+            const isActiveGroup = activeGroupKey === key
+            return (
+              <button
+                key={key}
+                onClick={() => toggleGroup(key)}
+                className={`flex items-center gap-1.5 px-4 py-3 text-sm transition-colors border-b-2 shrink-0 whitespace-nowrap ${
+                  isOpen || isActiveGroup
+                    ? 'border-blue-400 text-blue-400'
+                    : 'border-transparent text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Icon size={15} />{label}
+                <ChevronDown size={13} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+              </button>
+            )
+          })}
+        </div>
         <AlertBell />
       </div>
 

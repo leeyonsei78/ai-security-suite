@@ -19,7 +19,7 @@ async def analyze(request: AnalyzeRequest):
     if len(request.content) > 10000:
         raise HTTPException(status_code=400, detail="Too many IoCs")
 
-    results = analyze_ioc(request.content)
+    results = await analyze_ioc(request.content)
     if not results:
         raise HTTPException(status_code=400, detail="No valid IoCs found")
 

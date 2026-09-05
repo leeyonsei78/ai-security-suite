@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import axios from 'axios'
-import { MessageSquare, FileText, MessagesSquare, AlertTriangle, CheckCircle, ShieldAlert, XCircle, Trash2, Syringe } from 'lucide-react'
+import { MessageSquare, FileText, MessagesSquare, AlertTriangle, CheckCircle, ShieldAlert, XCircle, Trash2, Syringe, Cloud, Server, WifiOff, FlaskConical } from 'lucide-react'
 import GuidePanel from '../components/GuidePanel'
+import FileUploadButton from '../components/FileUploadButton'
 
 const INJECTION_STEPS = [
   '상단 탭에서 분석할 콘텐츠 유형을 선택합니다: 사용자 프롬프트 / 외부 문서(간접 인젝션) / 대화 로그',
@@ -18,6 +19,33 @@ const INJECTION_TIPS = [
   'SAFE(0~29): 유의미한 인젝션·탈옥 신호 없음',
   '"외부 문서" 탭은 RAG·웹 요약 등 AI가 데이터로만 읽어야 할 콘텐츠 속 은닉 지시(간접 인젝션)를 점검할 때 사용하세요.',
 ]
+
+const MODE_BADGE = {
+  cloud:   { icon: Cloud,        label: 'Claude Cloud로 분석됨', color: 'text-green-400',  bg: 'bg-green-500/10 border-green-500/30' },
+  local:   { icon: Server,       label: '로컬 LLM으로 분석됨',    color: 'text-blue-400',   bg: 'bg-blue-500/10 border-blue-500/30' },
+  offline: { icon: WifiOff,      label: '오프라인 규칙 기반으로 분석됨(폐쇄망)', color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/30' },
+  mock:    { icon: FlaskConical, label: 'Mock 데모 데이터 (학습용, 실제 분석 아님)', color: 'text-slate-400', bg: 'bg-slate-500/10 border-slate-500/30' },
+}
+
+function ModeBanner({ result }) {
+  if (!result?.mode) return null
+  const cfg = MODE_BADGE[result.mode] ?? MODE_BADGE.offline
+  const Icon = cfg.icon
+  return (
+    <div className={`border rounded-xl p-3 flex items-start gap-2 ${cfg.bg}`}>
+      <Icon size={14} className={`${cfg.color} shrink-0 mt-0.5`} />
+      <div>
+        <p className={`text-xs font-semibold ${cfg.color}`}>{cfg.label}</p>
+        {result.fallback_reason && (
+          <p className="text-xs text-slate-400 mt-1">{result.fallback_reason}</p>
+        )}
+        {result.engine_note && (
+          <p className="text-xs text-slate-400 mt-1">{result.engine_note}</p>
+        )}
+      </div>
+    </div>
+  )
+}
 
 const VERDICT_CONFIG = {
   INJECTION:  { color: 'text-red-400', bg: 'bg-red-500/10 border-red-500/30', icon: XCircle, label: '인젝션 공격' },
@@ -48,12 +76,13 @@ export default function PromptInjectionDetector() {
   const [result, setResult] = useState(null)
   const [history, setHistory] = useState([])
 
-  const analyze = async () => {
-    if (!content.trim()) return
+  const analyze = async (contentOverride) => {
+    const body = contentOverride ?? content
+    if (!body.trim()) return
     setLoading(true)
     setResult(null)
     try {
-      const res = await axios.post('/api/injection/analyze', { content, input_type: inputType })
+      const res = await axios.post('/api/injection/analyze', { content: body, input_type: inputType })
       setResult(res.data)
       setHistory(h => [res.data, ...h].slice(0, 10))
     } catch (err) {
@@ -83,7 +112,7 @@ export default function PromptInjectionDetector() {
           {/* Input Panel */}
           <div className="md:col-span-3 space-y-4">
             {/* Type selector */}
-            <div className="flex gap-2 flex-wrap">
+            <div className="flex gap-2 flex-wrap items-center">
               {INPUT_TYPES.map(({ id, icon: Icon, label }) => (
                 <button
                   key={id}
@@ -95,6 +124,7 @@ export default function PromptInjectionDetector() {
                   <Icon size={14} />{label}
                 </button>
               ))}
+              <FileUploadButton className="ml-auto" onExtracted={(text) => { setContent(text); analyze(text) }} />
             </div>
 
             {/* Textarea */}
@@ -107,7 +137,7 @@ export default function PromptInjectionDetector() {
             />
 
             <button
-              onClick={analyze}
+              onClick={() => analyze()}
               disabled={loading || !content.trim()}
               className="w-full py-3 bg-pink-600 hover:bg-pink-700 disabled:bg-slate-700 disabled:text-slate-500 rounded-xl font-semibold transition-colors"
             >
@@ -129,6 +159,7 @@ export default function PromptInjectionDetector() {
                 <p className="text-sm text-slate-400">AI가 분석 중...</p>
               </div>
             )}
+            {result && <ModeBanner result={result} />}
             {result && cfg && (
               <div className={`border rounded-xl p-5 space-y-4 ${cfg.bg}`}>
                 {/* Verdict */}

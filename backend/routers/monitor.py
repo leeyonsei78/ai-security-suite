@@ -24,7 +24,6 @@ async def monitor_ws(websocket: WebSocket):
             pass
 
     receiver_task = asyncio.create_task(receive_loop())
-    loop = asyncio.get_event_loop()
 
     try:
         await websocket.send_json({"type": "connected", "interval_seconds": INTERVAL_SECONDS})
@@ -34,11 +33,11 @@ async def monitor_ws(websocket: WebSocket):
             pending_injections.clear()
             batch_text = generate_batch(injected)
 
-            # analyze_logs() calls the (blocking) Anthropic SDK in Live mode. Running it directly here
-            # would stall this websocket's event loop for the duration of the API call — the same class
-            # of bug the Web CTF Arena's SSRF route hit with a blocking urllib call in an async def route.
-            # Offload to a thread so the loop stays free to keep receiving injected lines meanwhile.
-            result = await loop.run_in_executor(None, analyze_logs, batch_text)
+            # analyze_logs()가 cloud/local 모드일 때 내부적으로(loop.run_in_executor로) 블로킹
+            # 호출을 스레드에 위임하므로, 여기서는 그냥 await만 하면 이 WebSocket의 수신 루프가
+            # 막히지 않는다 — 예전에는 이 라우터가 직접 run_in_executor로 감쌌었지만, 이제
+            # analyze_logs() 자신이 모드별로 블로킹 여부를 판단해 캡슐화한다.
+            result = await analyze_logs(batch_text)
             result["filename"] = "live_monitor"
             result["raw_log"] = batch_text
             # 대시보드(App 1)의 수동 분석과 같은 history에 합류시켜 "개요"/"이벤트" 탭에도 반영되게 한다.

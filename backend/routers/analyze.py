@@ -1,6 +1,7 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from pydantic import BaseModel
 from services.claude_service import analyze_logs
+from services.file_extract import extract_text, ExtractError
 from services import db, notify
 
 router = APIRouter(prefix="/api", tags=["analyze"])
@@ -14,16 +15,13 @@ class TextAnalysisRequest(BaseModel):
 
 @router.post("/analyze/upload")
 async def analyze_log_file(file: UploadFile = File(...)):
-    if not file.filename.endswith((".log", ".txt", ".csv", ".json")):
-        raise HTTPException(status_code=400, detail="Unsupported file type")
+    raw = await file.read()
+    try:
+        log_text = extract_text(file.filename or "", raw)["text"]
+    except ExtractError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
-    content = await file.read()
-    log_text = content.decode("utf-8", errors="replace")
-
-    if len(log_text) > 50000:
-        log_text = log_text[:50000]
-
-    result = analyze_logs(log_text)
+    result = await analyze_logs(log_text)
     result["filename"] = file.filename
     result["id"] = db.add_entry(APP_NAME, result)
     await notify.alert_if_critical(
@@ -37,7 +35,7 @@ async def analyze_log_text(request: TextAnalysisRequest):
     if not request.content.strip():
         raise HTTPException(status_code=400, detail="Empty content")
 
-    result = analyze_logs(request.content)
+    result = await analyze_logs(request.content)
     result["filename"] = "manual_input"
     result["id"] = db.add_entry(APP_NAME, result)
     await notify.alert_if_critical(

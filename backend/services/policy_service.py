@@ -2,11 +2,12 @@ import os
 import json
 from dotenv import load_dotenv
 from services.mock_policy import generate_mock_policy
+from services.policy_offline_engine import generate_offline
+from services import mode_manager, local_llm_client
 
 load_dotenv()
 
 _api_key = os.getenv("ANTHROPIC_API_KEY", "")
-IS_MOCK = not _api_key or _api_key == "your_anthropic_api_key_here"
 
 _ENV_LABELS = {
     "web_server": "인터넷에 공개된 웹 서버(리버스 프록시+WAS)",
@@ -47,21 +48,24 @@ Only include compliance_mapping entries for frameworks explicitly requested by t
 Respond in Korean for all natural-language fields."""
 
 
-def _real_generate(environment_type: str, compliance: list[str], description: str) -> dict:
-    import anthropic
-    client = anthropic.Anthropic(api_key=_api_key)
+def _real_generate(environment_type: str, compliance: list[str], description: str, backend: str = "cloud") -> dict:
     label = _ENV_LABELS.get(environment_type, environment_type)
     compliance_line = f"적용 대상 컴플라이언스: {', '.join(compliance)}" if compliance else "적용 대상 컴플라이언스: 명시되지 않음 (일반적인 보안 모범사례 기준으로 작성)"
-    message = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=3072,
-        system=SYSTEM_PROMPT,
-        messages=[{
-            "role": "user",
-            "content": f"환경 유형: {label}\n{compliance_line}\n\n환경 설명:\n{description}",
-        }],
-    )
-    text = message.content[0].text
+    user_prompt = f"환경 유형: {label}\n{compliance_line}\n\n환경 설명:\n{description}"
+
+    if backend == "local":
+        text = local_llm_client.call_local_llm(SYSTEM_PROMPT, user_prompt, max_tokens=3072)
+    else:
+        import anthropic
+        client = anthropic.Anthropic(api_key=_api_key)
+        message = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=3072,
+            system=SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": user_prompt}],
+        )
+        text = message.content[0].text
+
     start = text.find("{")
     end = text.rfind("}") + 1
     if start != -1 and end > start:
@@ -130,10 +134,23 @@ def _enrich(data: dict) -> dict:
     return data
 
 
-def generate_policy(environment_type: str, compliance: list[str], description: str) -> dict:
-    if IS_MOCK:
-        return _enrich(generate_mock_policy(environment_type, compliance, description))
-    return _enrich(_real_generate(environment_type, compliance, description))
+async def generate_policy(environment_type: str, compliance: list[str], description: str) -> dict:
+    mode = await mode_manager.get_ai_mode()
+
+    if mode == "mock":
+        data = generate_mock_policy(environment_type, compliance, description)
+    elif mode in ("local", "cloud"):
+        try:
+            data = _real_generate(environment_type, compliance, description, backend=mode)
+        except Exception as e:
+            data = generate_offline(environment_type, compliance, description)
+            data["fallback_reason"] = f"{'로컬 LLM' if mode == 'local' else 'Claude Cloud'} 호출 실패로 오프라인 템플릿 기반으로 대체됨: {e}"
+            mode = "offline"
+    else:
+        data = generate_offline(environment_type, compliance, description)
+
+    data["mode"] = mode
+    return _enrich(data)
 
 
 def generate_markdown_report(entry: dict) -> str:

@@ -30,6 +30,7 @@ def _is_blockable_external_ip(ip: str | None) -> bool:
 
 
 _KEYWORD_RULES = [
+    (("security group exposure", "보안그룹"), "aws_exposure"),
     (("brute", "무차별", "logon", "credential", "password spray"), "brute_force"),
     (("scan", "스캔", "recon", "정찰", "reconnaissance"), "scan"),
     (("malware", "trojan", "ransomware", "랜섬", "바이러스", "backdoor", "백도어", "worm"), "malware"),
@@ -86,6 +87,15 @@ _PLAYBOOK = {
         "related_label": "클라우드 IAM 정책 감사기",
         "command_kind": "audit_admins",
     },
+    "aws_exposure": {
+        "action_label": "보안그룹 규칙 즉시 수정",
+        "rationale": "보안그룹이 인터넷 전체(0.0.0.0/0)에 민감 포트를 열어두도록 변경됐습니다. "
+                     "방화벽 정책 감사기(App 16)에서 해당 규칙을 점검하고, 출발지를 꼭 필요한 "
+                     "IP 대역으로 제한하도록 즉시 수정하세요.",
+        "related_link": "/firewall-audit",
+        "related_label": "방화벽 정책 감사기",
+        "command_kind": None,
+    },
 }
 
 _DEFAULT = {
@@ -115,7 +125,10 @@ def get_response_action(category: str, description: str, source_ip: str | None) 
             f'-Direction Outbound -Action Block -RemoteAddress {source_ip}'
         )
     elif rule["command_kind"] == "audit_admins":
-        command = "Get-LocalGroupMember -Group Administrators"
+        # AWS(CloudTrail/LocalStack) 쪽 권한 상승 이벤트는 로컬 Windows 계정 구조와 무관하므로
+        # 이 PowerShell 명령을 붙이지 않는다 — App 18(IAM 감사기)로 직접 점검하도록 안내만 한다.
+        if "aws" not in text:
+            command = "Get-LocalGroupMember -Group Administrators"
 
     return {
         "action_label": rule["action_label"],

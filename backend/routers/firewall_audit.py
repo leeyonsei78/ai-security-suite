@@ -32,7 +32,7 @@ async def analyze(request: AnalyzeRequest):
     if request.source_type not in VALID_SOURCE_TYPES:
         raise HTTPException(status_code=400, detail=f"Invalid source_type, must be one of {sorted(VALID_SOURCE_TYPES)}")
 
-    result = analyze_firewall(request.source_type, request.content, request.context)
+    result = await analyze_firewall(request.source_type, request.content, request.context)
     entry = {
         "source_type": request.source_type,
         "preview": request.content.strip()[:100].replace("\n", " "),

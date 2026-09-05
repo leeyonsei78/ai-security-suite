@@ -24,7 +24,7 @@ async def create(request: PlanRequest):
     if not request.description.strip():
         raise HTTPException(status_code=400, detail="Description required")
 
-    plan = create_plan(request.incident_type, request.severity, request.description)
+    plan = await create_plan(request.incident_type, request.severity, request.description)
     session_data = {
         "incident_type": request.incident_type,
         "severity": request.severity,
@@ -44,7 +44,7 @@ async def chat(request: ChatRequest):
     if not request.message.strip():
         raise HTTPException(status_code=400, detail="Empty message")
 
-    reply = chat_response(
+    reply = await chat_response(
         session["incident_type"], session["severity"],
         session["description"], session["chat_history"], request.message,
     )

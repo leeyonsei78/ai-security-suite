@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 from services.threat_analysis_service import analyze, chat
+from services.threat_collection_guide import COLLECTION_GUIDE
 from services import db
 
 router = APIRouter(prefix="/api/threat", tags=["threat_analysis"])
@@ -20,6 +21,11 @@ class ChatRequest(BaseModel):
     message: str
 
 
+@router.get("/guide")
+async def get_guide():
+    return {"collection_guide": COLLECTION_GUIDE}
+
+
 @router.post("/analyze")
 async def run_analyze(req: AnalyzeRequest):
     if not req.input_data.strip():
@@ -28,7 +34,7 @@ async def run_analyze(req: AnalyzeRequest):
     if req.analysis_type not in valid_types:
         raise HTTPException(status_code=400, detail=f"analysis_type must be one of {valid_types}")
 
-    result = analyze(req.analysis_type, req.input_data, req.context or "")
+    result = await analyze(req.analysis_type, req.input_data, req.context or "")
     session_data = {
         "analysis_type": req.analysis_type,
         "input_data": req.input_data,
@@ -47,7 +53,7 @@ async def run_chat(req: ChatRequest):
     if not req.message.strip():
         raise HTTPException(status_code=400, detail="Empty message")
 
-    reply = chat(
+    reply = await chat(
         session["analysis_type"],
         session["summary"],
         session["chat_history"],

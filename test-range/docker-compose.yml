@@ -36,6 +36,39 @@ services:
     # 포트를 게시하지 않음 — 스캔 대상이 아니라 docker exec로 들어가 iptables를
     # 직접 조회해보는 CLI 실습용 컨테이너.
 
+  localstack:
+    # 공식 LocalStack 이미지 — 로컬에서 AWS API를 흉내내는 에뮬레이터라 실제 AWS 요금이
+    # 전혀 발생하지 않는다. App 16(보안그룹)·App 18(IAM 감사기) 테스트용 AWS 리소스를
+    # 여기에 만든다.
+    # ⚠️ 2026-03-23부터 :latest 태그는 단일 통합 이미지로 바뀌어 LOCALSTACK_AUTH_TOKEN
+    # (무료 계정 가입 필요)이 없으면 "License activation failed"로 즉시 종료된다 — 계정
+    # 가입 없이 순수 로컬로만 쓰기 위해 그 이전 마지막 무료(커뮤니티) 버전인 4.4.0으로 고정.
+    image: localstack/localstack:4.4.0
+    container_name: test-range-localstack
+    environment:
+      - SERVICES=iam,ec2,sts
+      # App 23(실시간 공격 모니터링)의 "AWS 활동 모니터링" 탭용 — 이 무료 버전은 CloudTrail
+      # 자체를 지원하지 않아(lookup-events 호출 시 "not included in your current license
+      # plan" 오류로 실제 확인함), 대신 LS_LOG=trace로 컨테이너 자체 요청 로그에 정책
+      # 문서·보안그룹 CIDR/포트 등 실제 요청 내용까지 남기게 해 그 로그를 신호원으로 쓴다.
+      - LS_LOG=trace
+    ports:
+      - "4566:4566"
+    networks: [test-range-net]
+
+  aws-sandbox:
+    # localstack이 뜨면 의도적으로 취약한 IAM 정책/역할/사용자 + 보안그룹을 실제 aws CLI로
+    # 생성해두고 sleep infinity로 대기한다(bad-firewall과 동일한 "적용 후 대기" 패턴).
+    build: ./aws-sandbox
+    container_name: test-range-aws-sandbox
+    depends_on: [localstack]
+    networks: [test-range-net]
+    environment:
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_DEFAULT_REGION=us-east-1
+      - LOCALSTACK_ENDPOINT=http://localstack:4566
+
 networks:
   test-range-net:
     driver: bridge

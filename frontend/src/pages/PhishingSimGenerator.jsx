@@ -2,8 +2,40 @@ import { useState, useEffect } from 'react'
 import axios from 'axios'
 import {
   Send, ShieldAlert, Mail, Download, Trash2, Eye, EyeOff, AlertTriangle, Gauge,
+  Cloud, Server, WifiOff, FlaskConical,
 } from 'lucide-react'
 import GuidePanel from '../components/GuidePanel'
+import FileUploadButton from '../components/FileUploadButton'
+
+const MODE_BADGE = {
+  cloud:   { icon: Cloud,        label: 'Claude Cloud로 생성됨', color: 'text-green-400',  bg: 'bg-green-500/10 border-green-500/30' },
+  local:   { icon: Server,       label: '로컬 LLM으로 생성됨',    color: 'text-blue-400',   bg: 'bg-blue-500/10 border-blue-500/30' },
+  offline: { icon: WifiOff,      label: '오프라인 템플릿 기반으로 생성됨(폐쇄망)', color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/30' },
+  mock:    { icon: FlaskConical, label: 'Mock 데모 데이터 (학습용, 실제 생성 아님)', color: 'text-slate-400', bg: 'bg-slate-500/10 border-slate-500/30' },
+}
+
+function ModeBanner({ result }) {
+  if (!result?.mode) return null
+  const cfg = MODE_BADGE[result.mode] ?? MODE_BADGE.offline
+  const Icon = cfg.icon
+  return (
+    <div className={`border rounded-xl p-3 flex items-start gap-2 ${cfg.bg}`}>
+      <Icon size={14} className={`${cfg.color} shrink-0 mt-0.5`} />
+      <div>
+        <p className={`text-xs font-semibold ${cfg.color}`}>{cfg.label}</p>
+        {result.fallback_reason && (
+          <p className="text-xs text-slate-400 mt-1">{result.fallback_reason}</p>
+        )}
+        {result.engine_note && (
+          <p className="text-xs text-slate-400 mt-1">{result.engine_note}</p>
+        )}
+        {result.context_note && (
+          <p className="text-xs text-slate-400 mt-1">{result.context_note}</p>
+        )}
+      </div>
+    </div>
+  )
+}
 
 const SIM_STEPS = [
   '시나리오 유형을 선택합니다 (IT 비밀번호 만료 / 택배 배송 / 급여명세서 / 경영진 사칭 / 클라우드 공유 / 보안팀 사칭).',
@@ -52,11 +84,12 @@ export default function PhishingSimGenerator() {
     }).catch(() => {})
   }, [])
 
-  const generate = async () => {
+  const generate = async (contextOverride) => {
+    const body = contextOverride ?? context
     setLoading(true)
     setResult(null)
     try {
-      const res = await axios.post('/api/phishing-sim/generate', { scenario_type: scenarioType, difficulty, context })
+      const res = await axios.post('/api/phishing-sim/generate', { scenario_type: scenarioType, difficulty, context: body })
       setResult(res.data)
       setShowAnswers(true)
       setHistory(h => [res.data, ...h].slice(0, 10))
@@ -141,7 +174,10 @@ export default function PhishingSimGenerator() {
             </div>
 
             <div>
-              <p className="text-xs font-semibold text-slate-400 mb-2">조직 컨텍스트 (선택)</p>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-semibold text-slate-400">조직 컨텍스트 (선택)</p>
+                <FileUploadButton onExtracted={(text) => { setContext(text); generate(text) }} />
+              </div>
               <textarea
                 value={context}
                 onChange={e => setContext(e.target.value)}
@@ -152,7 +188,7 @@ export default function PhishingSimGenerator() {
             </div>
 
             <button
-              onClick={generate}
+              onClick={() => generate()}
               disabled={loading}
               className="w-full py-3 bg-rose-600 hover:bg-rose-700 disabled:bg-slate-700 disabled:text-slate-500 rounded-xl font-semibold transition-colors"
             >
@@ -177,6 +213,7 @@ export default function PhishingSimGenerator() {
 
             {result && (
               <div className="space-y-4">
+                <ModeBanner result={result} />
                 {/* Email preview */}
                 <div className="bg-white text-slate-900 rounded-xl overflow-hidden shadow-lg">
                   <div className="bg-slate-100 px-4 py-3 border-b border-slate-300 space-y-1">

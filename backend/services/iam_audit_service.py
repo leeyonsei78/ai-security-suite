@@ -2,11 +2,12 @@ import os
 import json
 from dotenv import load_dotenv
 from services.mock_iam_audit import generate_mock_audit
+from services.iam_audit_offline_engine import analyze_offline
+from services import mode_manager, local_llm_client
 
 load_dotenv()
 
 _api_key = os.getenv("ANTHROPIC_API_KEY", "")
-IS_MOCK = not _api_key or _api_key == "your_anthropic_api_key_here"
 
 SOURCE_LABELS = {
     "aws_iam": "AWS IAM",
@@ -58,21 +59,24 @@ Respond ONLY with valid JSON in this exact structure:
 Only flag real issues actually present in the given input — do not invent problems. If the IAM configuration looks reasonably sound (least privilege, MFA enforced, credentials rotated), return few findings and a low overall_risk. Respond in Korean for all natural-language fields."""
 
 
-def _real_analyze(source_type: str, content: str, context: str) -> dict:
-    import anthropic
-    client = anthropic.Anthropic(api_key=_api_key)
+def _real_analyze(source_type: str, content: str, context: str, backend: str = "cloud") -> dict:
     label = SOURCE_LABELS.get(source_type, source_type)
     context_line = f"\n환경 컨텍스트: {context}" if context.strip() else ""
-    message = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=4096,
-        system=SYSTEM_PROMPT,
-        messages=[{
-            "role": "user",
-            "content": f"IAM 플랫폼: {label}{context_line}\n\nIAM 정책/사용자 정보:\n{content}",
-        }],
-    )
-    text = message.content[0].text
+    user_prompt = f"IAM 플랫폼: {label}{context_line}\n\nIAM 정책/사용자 정보:\n{content}"
+
+    if backend == "local":
+        text = local_llm_client.call_local_llm(SYSTEM_PROMPT, user_prompt, max_tokens=4096)
+    else:
+        import anthropic
+        client = anthropic.Anthropic(api_key=_api_key)
+        message = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=4096,
+            system=SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": user_prompt}],
+        )
+        text = message.content[0].text
+
     start = text.find("{")
     end = text.rfind("}") + 1
     if start != -1 and end > start:
@@ -103,10 +107,23 @@ def _enrich(data: dict) -> dict:
     return data
 
 
-def analyze_iam(source_type: str, content: str, context: str) -> dict:
-    if IS_MOCK:
-        return _enrich(generate_mock_audit(source_type, content, context))
-    return _enrich(_real_analyze(source_type, content, context))
+async def analyze_iam(source_type: str, content: str, context: str) -> dict:
+    mode = await mode_manager.get_ai_mode()
+
+    if mode == "mock":
+        data = generate_mock_audit(source_type, content, context)
+    elif mode in ("local", "cloud"):
+        try:
+            data = _real_analyze(source_type, content, context, backend=mode)
+        except Exception as e:
+            data = analyze_offline(source_type, content, context)
+            data["fallback_reason"] = f"{'로컬 LLM' if mode == 'local' else 'Claude Cloud'} 호출 실패로 오프라인 규칙 기반 분석으로 대체됨: {e}"
+            mode = "offline"
+    else:
+        data = analyze_offline(source_type, content, context)
+
+    data["mode"] = mode
+    return _enrich(data)
 
 
 def generate_markdown_report(entry: dict) -> str:

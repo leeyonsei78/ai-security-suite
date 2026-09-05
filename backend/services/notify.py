@@ -56,6 +56,7 @@ APP_LABELS = {
     "container_audit": "컨테이너/Dockerfile 감사기",
     "dns_security": "DNS/이메일 보안 점검",
     "attack_monitor": "실시간 공격 모니터링 & 대응 센터",
+    "attack_monitor_aws": "실시간 공격 모니터링 (AWS 샌드박스)",
     "fsi_csp_audit": "금융보안원 클라우드 CSP 평가",
 }
 

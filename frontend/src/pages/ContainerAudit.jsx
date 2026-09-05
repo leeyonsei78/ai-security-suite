@@ -3,9 +3,39 @@ import axios from 'axios'
 import {
   Container, FileCode, Layers, Trash2, Download,
   AlertTriangle, ListOrdered, BadgeCheck, Upload, FileText, X,
+  Cloud, Server, WifiOff, FlaskConical,
 } from 'lucide-react'
 import GuidePanel from '../components/GuidePanel'
 import SeverityBadge from '../components/SeverityBadge'
+import CopyButton from '../components/CopyButton'
+import { DEFAULT_ACCEPT as UPLOAD_ACCEPT } from '../components/FileUploadButton'
+
+const MODE_BADGE = {
+  cloud:   { icon: Cloud,        label: 'Claude Cloud로 분석됨', color: 'text-green-400',  bg: 'bg-green-500/10 border-green-500/30' },
+  local:   { icon: Server,       label: '로컬 LLM으로 분석됨',    color: 'text-blue-400',   bg: 'bg-blue-500/10 border-blue-500/30' },
+  offline: { icon: WifiOff,      label: '오프라인 규칙 기반으로 분석됨(폐쇄망)', color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/30' },
+  mock:    { icon: FlaskConical, label: 'Mock 데모 데이터 (학습용, 실제 분석 아님)', color: 'text-slate-400', bg: 'bg-slate-500/10 border-slate-500/30' },
+}
+
+function ModeBanner({ result }) {
+  if (!result?.mode) return null
+  const cfg = MODE_BADGE[result.mode] ?? MODE_BADGE.offline
+  const Icon = cfg.icon
+  return (
+    <div className={`border rounded-xl p-3 flex items-start gap-2 ${cfg.bg}`}>
+      <Icon size={14} className={`${cfg.color} shrink-0 mt-0.5`} />
+      <div>
+        <p className={`text-xs font-semibold ${cfg.color}`}>{cfg.label}</p>
+        {result.fallback_reason && (
+          <p className="text-xs text-slate-400 mt-1">{result.fallback_reason}</p>
+        )}
+        {result.engine_note && (
+          <p className="text-xs text-slate-400 mt-1">{result.engine_note}</p>
+        )}
+      </div>
+    </div>
+  )
+}
 
 const AUDIT_STEPS = [
   '감사할 파일 유형을 선택합니다 (Dockerfile / docker-compose.yml).',
@@ -43,6 +73,7 @@ export default function ContainerAudit() {
   const [history, setHistory] = useState([])
   const [guide, setGuide] = useState(null)
   const [uploadedFileName, setUploadedFileName] = useState('')
+  const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef(null)
 
   useEffect(() => {
@@ -51,21 +82,27 @@ export default function ContainerAudit() {
 
   const currentSource = guide?.source_types?.find(s => s.id === sourceType)
 
-  const handleFileUpload = (e) => {
+  const handleFileUpload = async (e) => {
     const file = e.target.files?.[0]
     e.target.value = ''
     if (!file) return
     if (file.size > MAX_UPLOAD_BYTES) {
-      alert(`파일이 너무 큽니다 (${(file.size / 1024 / 1024).toFixed(1)}MB). 텍스트 파일은 보통 2MB를 넘지 않습니다.`)
+      alert(`파일이 너무 큽니다 (${(file.size / 1024 / 1024).toFixed(1)}MB).`)
       return
     }
-    const reader = new FileReader()
-    reader.onload = () => {
-      setContent(String(reader.result ?? ''))
+    setUploading(true)
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      const res = await axios.post('/api/extract-text', form, { headers: { 'Content-Type': 'multipart/form-data' } })
+      setContent(res.data.text)
       setUploadedFileName(file.name)
+      analyze(res.data.text)
+    } catch (err) {
+      alert('파일을 읽지 못했습니다: ' + (err.response?.data?.detail ?? err.message))
+    } finally {
+      setUploading(false)
     }
-    reader.onerror = () => alert('파일을 읽는 중 오류가 발생했습니다. 텍스트 형식의 파일인지 확인해주세요.')
-    reader.readAsText(file)
   }
 
   const clearUploadedFile = () => {
@@ -73,12 +110,13 @@ export default function ContainerAudit() {
     setContent('')
   }
 
-  const analyze = async () => {
-    if (!content.trim()) return
+  const analyze = async (contentOverride) => {
+    const body = contentOverride ?? content
+    if (!body.trim()) return
     setLoading(true)
     setResult(null)
     try {
-      const res = await axios.post('/api/container-audit/analyze', { source_type: sourceType, content, context })
+      const res = await axios.post('/api/container-audit/analyze', { source_type: sourceType, content: body, context })
       setResult(res.data)
       setHistory(h => [res.data, ...h].slice(0, 10))
     } catch (err) {
@@ -141,7 +179,10 @@ export default function ContainerAudit() {
 
             {currentSource && (
               <div className="bg-slate-950/60 border border-slate-700 rounded-xl p-3 space-y-2">
-                <p className="text-xs font-medium text-sky-300">가져오는 방법: {currentSource.label}</p>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-medium text-sky-300">가져오는 방법: {currentSource.label}</p>
+                  <CopyButton text={currentSource.commands.join('\n')} />
+                </div>
                 <p className="text-[11px] text-slate-500">{currentSource.how_to_export}</p>
                 <pre className="bg-slate-900 border border-slate-700 rounded-lg p-2 overflow-x-auto">
                   <code className="text-[11px] text-sky-300 font-mono whitespace-pre">
@@ -174,11 +215,12 @@ export default function ContainerAudit() {
                   )}
                   <button
                     onClick={() => fileInputRef.current?.click()}
-                    className="flex items-center gap-1 text-[11px] bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg px-2.5 py-1"
+                    disabled={uploading}
+                    className="flex items-center gap-1 text-[11px] bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg px-2.5 py-1 disabled:opacity-60"
                   >
-                    <Upload size={11} /> 파일 업로드
+                    <Upload size={11} /> {uploading ? '읽는 중...' : '파일 업로드'}
                   </button>
-                  <input ref={fileInputRef} type="file" accept=".txt,.yml,.yaml,text/plain" onChange={handleFileUpload} className="hidden" />
+                  <input ref={fileInputRef} type="file" accept={UPLOAD_ACCEPT} onChange={handleFileUpload} className="hidden" />
                 </div>
               </div>
               <textarea
@@ -202,7 +244,7 @@ export default function ContainerAudit() {
             </div>
 
             <button
-              onClick={analyze}
+              onClick={() => analyze()}
               disabled={loading || !content.trim()}
               className="w-full py-3 bg-sky-600 hover:bg-sky-700 disabled:bg-slate-700 disabled:text-slate-500 rounded-xl font-semibold transition-colors"
             >
@@ -231,6 +273,7 @@ export default function ContainerAudit() {
 
             {result && (
               <div className="space-y-4">
+                <ModeBanner result={result} />
                 <div className="bg-slate-800 border border-slate-700 rounded-xl p-4">
                   <div className="flex items-start justify-between gap-3 mb-2">
                     <div className="flex items-center gap-2">

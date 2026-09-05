@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import axios from 'axios'
-import { Search, Trash2, Copy, CheckCircle, XCircle, AlertTriangle, HelpCircle, Globe, Hash, Mail, Wifi } from 'lucide-react'
+import { Search, Trash2, Copy, CheckCircle, XCircle, AlertTriangle, HelpCircle, Globe, Hash, Mail, Wifi, Cloud, Server, WifiOff, FlaskConical } from 'lucide-react'
 import GuidePanel from '../components/GuidePanel'
+import FileUploadButton from '../components/FileUploadButton'
 
 const VERDICT_CONFIG = {
   MALICIOUS:  { color: 'text-red-400',    bg: 'bg-red-500/10 border-red-500/30',    icon: XCircle,       label: '악성' },
@@ -19,6 +20,29 @@ const TYPE_CONFIG = {
 }
 
 const CONF_COLOR = (c) => c >= 80 ? 'text-red-400' : c >= 50 ? 'text-yellow-400' : 'text-slate-400'
+
+const MODE_BADGE = {
+  cloud:   { icon: Cloud,        label: 'Claude Cloud로 분석됨', color: 'text-green-400',  bg: 'bg-green-500/10 border-green-500/30' },
+  local:   { icon: Server,       label: '로컬 LLM으로 분석됨',    color: 'text-blue-400',   bg: 'bg-blue-500/10 border-blue-500/30' },
+  offline: { icon: WifiOff,      label: '오프라인 규칙 기반으로 분석됨(폐쇄망)', color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/30' },
+  mock:    { icon: FlaskConical, label: 'Mock 데모 데이터 (학습용, 실제 분석 아님)', color: 'text-slate-400', bg: 'bg-slate-500/10 border-slate-500/30' },
+}
+
+function ModeBanner({ mode, fallbackReason, engineNote }) {
+  if (!mode) return null
+  const cfg = MODE_BADGE[mode] ?? MODE_BADGE.offline
+  const Icon = cfg.icon
+  return (
+    <div className={`border rounded-xl p-3 flex items-start gap-2 ${cfg.bg}`}>
+      <Icon size={14} className={`${cfg.color} shrink-0 mt-0.5`} />
+      <div>
+        <p className={`text-xs font-semibold ${cfg.color}`}>{cfg.label}</p>
+        {fallbackReason && <p className="text-xs text-slate-400 mt-1">{fallbackReason}</p>}
+        {engineNote && <p className="text-xs text-slate-400 mt-1">{engineNote}</p>}
+      </div>
+    </div>
+  )
+}
 
 const IOC_STEPS = [
   '텍스트 박스에 분석할 IoC를 한 줄에 하나씩 입력합니다. (IP, 도메인, 해시, 이메일 혼합 가능)',
@@ -128,13 +152,14 @@ export default function IoCAnalyzer() {
   const [selected, setSelected]   = useState(null)
   const [copied, setCopied]       = useState(false)
 
-  const analyze = async () => {
-    if (!content.trim()) return
+  const analyze = async (contentOverride) => {
+    const body = contentOverride ?? content
+    if (!body.trim()) return
     setLoading(true)
     setResults([])
     setSelected(null)
     try {
-      const res = await axios.post('/api/ioc/analyze', { content })
+      const res = await axios.post('/api/ioc/analyze', { content: body })
       setResults(res.data.results)
       if (res.data.results.length > 0) setSelected(0)
     } catch (err) {
@@ -182,9 +207,12 @@ export default function IoCAnalyzer() {
         <div className="grid lg:grid-cols-5 gap-6">
           {/* Input */}
           <div className="lg:col-span-2 space-y-3">
-            <div className="flex justify-between items-center">
+            <div className="flex justify-between items-center gap-2">
               <p className="text-sm font-medium text-slate-300">IoC 목록 입력 <span className="text-slate-500 font-normal">(한 줄에 하나)</span></p>
-              <button onClick={loadSample} className="text-xs text-cyan-400 hover:text-cyan-300">예시 불러오기</button>
+              <div className="flex items-center gap-2 shrink-0">
+                <button onClick={loadSample} className="text-xs text-cyan-400 hover:text-cyan-300">예시 불러오기</button>
+                <FileUploadButton onExtracted={(text) => { setContent(text); analyze(text) }} />
+              </div>
             </div>
 
             <textarea
@@ -196,7 +224,7 @@ export default function IoCAnalyzer() {
             />
 
             <button
-              onClick={analyze}
+              onClick={() => analyze()}
               disabled={loading || !content.trim()}
               className="w-full py-3 bg-cyan-700 hover:bg-cyan-600 disabled:bg-slate-700 disabled:text-slate-500 rounded-xl font-semibold transition-colors flex items-center justify-center gap-2"
             >
@@ -234,6 +262,11 @@ export default function IoCAnalyzer() {
 
             {results.length > 0 && (
               <>
+                <ModeBanner
+                  mode={results[0]?.mode}
+                  fallbackReason={results[0]?.fallback_reason}
+                  engineNote={results[0]?.engine_note}
+                />
                 <div className="flex justify-between items-center">
                   <p className="text-sm font-semibold text-slate-300">분석 결과 ({results.length}개)</p>
                   <button

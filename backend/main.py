@@ -1,6 +1,8 @@
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 from services.auth import require_api_key
+from services import mode_manager
 from routers.analyze import router as analyze_router
 from routers.phishing import router as phishing_router
 from routers.vulnerability import router as vuln_router
@@ -27,7 +29,7 @@ from routers.dns_security import router as dns_security_router
 from routers.dashboard_overview import router as dashboard_overview_router
 from routers.attack_monitor import router as attack_monitor_router
 from routers.fsi_csp_audit import router as fsi_csp_audit_router
-from services.claude_service import IS_MOCK
+from routers.extract import router as extract_router
 
 app = FastAPI(title="AI Security Suite", version="1.0.0")
 
@@ -73,6 +75,7 @@ app.include_router(dns_security_router, dependencies=_authed)
 app.include_router(dashboard_overview_router, dependencies=_authed)
 app.include_router(attack_monitor_router, dependencies=_authed)
 app.include_router(fsi_csp_audit_router, dependencies=_authed)
+app.include_router(extract_router, dependencies=_authed)
 
 
 @app.get("/")
@@ -80,6 +83,23 @@ def root():
     return {"status": "ok", "app": "AI Security Suite"}
 
 
+class ModeOverrideRequest(BaseModel):
+    mode: str | None = None  # "cloud" | "local" | "offline" | "mock" | null(자동 감지로 복귀)
+
+
 @app.get("/api/mode")
-def get_mode():
-    return {"mock": IS_MOCK, "mode": "mock" if IS_MOCK else "live"}
+async def get_mode():
+    """전역 AI 실행 모드 상태 — App 3처럼 mode_manager를 도입한 앱들이 공용으로 참조한다.
+    아직 mode_manager로 전환하지 않은 나머지 앱들은 여전히 각자의 claude_service.IS_MOCK을
+    쓰므로(이번 롤아웃은 App 3/15부터 시작), 이 엔드포인트는 "전역 AI 모드 셀렉터"(NavBar)
+    전용이며 개별 앱의 실제 동작을 보장하지 않는다 — 문서화된 단계적 확장 계획 참고."""
+    return await mode_manager.get_ai_status()
+
+
+@app.post("/api/mode/override")
+async def set_mode_override(request: ModeOverrideRequest):
+    try:
+        mode_manager.set_ai_override(request.mode)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return await mode_manager.get_ai_status()

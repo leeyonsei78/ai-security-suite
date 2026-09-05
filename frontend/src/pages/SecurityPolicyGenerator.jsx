@@ -3,8 +3,41 @@ import axios from 'axios'
 import {
   ScrollText, Server, Cloud, Network, Boxes, Database, ListOrdered,
   ClipboardCheck, ShieldCheck, AlertTriangle, Trash2, Download, BadgeCheck, Terminal,
+  WifiOff, FlaskConical,
 } from 'lucide-react'
 import GuidePanel from '../components/GuidePanel'
+import FileUploadButton from '../components/FileUploadButton'
+import CopyButton from '../components/CopyButton'
+
+const MODE_BADGE = {
+  cloud:   { icon: Cloud,        label: 'Claude Cloud로 생성됨', color: 'text-green-400',  bg: 'bg-green-500/10 border-green-500/30' },
+  local:   { icon: Server,       label: '로컬 LLM으로 생성됨',    color: 'text-blue-400',   bg: 'bg-blue-500/10 border-blue-500/30' },
+  offline: { icon: WifiOff,      label: '오프라인 템플릿 기반으로 생성됨(폐쇄망)', color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/30' },
+  mock:    { icon: FlaskConical, label: 'Mock 데모 데이터 (학습용, 실제 생성 아님)', color: 'text-slate-400', bg: 'bg-slate-500/10 border-slate-500/30' },
+}
+
+function ModeBanner({ result }) {
+  if (!result?.mode) return null
+  const cfg = MODE_BADGE[result.mode] ?? MODE_BADGE.offline
+  const Icon = cfg.icon
+  return (
+    <div className={`border rounded-xl p-3 flex items-start gap-2 ${cfg.bg}`}>
+      <Icon size={14} className={`${cfg.color} shrink-0 mt-0.5`} />
+      <div>
+        <p className={`text-xs font-semibold ${cfg.color}`}>{cfg.label}</p>
+        {result.fallback_reason && (
+          <p className="text-xs text-slate-400 mt-1">{result.fallback_reason}</p>
+        )}
+        {result.engine_note && (
+          <p className="text-xs text-slate-400 mt-1">{result.engine_note}</p>
+        )}
+        {result.keyword_notes?.map((n, i) => (
+          <p key={i} className="text-xs text-slate-400 mt-1">{n}</p>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 const POLICY_STEPS = [
   "'환경 유형'에서 정책을 생성할 대상을 선택합니다 (웹 서버 / 클라우드 / 사내 네트워크 / 컨테이너 / 데이터베이스).",
@@ -55,12 +88,13 @@ export default function SecurityPolicyGenerator() {
 
   const toggleCompliance = (c) => setCompliance(cs => cs.includes(c) ? cs.filter(x => x !== c) : [...cs, c])
 
-  const generate = async () => {
-    if (!description.trim()) return
+  const generate = async (descriptionOverride) => {
+    const body = descriptionOverride ?? description
+    if (!body.trim()) return
     setLoading(true)
     setResult(null)
     try {
-      const res = await axios.post('/api/policy/generate', { environment_type: envType, compliance, description })
+      const res = await axios.post('/api/policy/generate', { environment_type: envType, compliance, description: body })
       setResult(res.data)
       setHistory(h => [res.data, ...h].slice(0, 10))
     } catch (err) {
@@ -201,8 +235,13 @@ export default function SecurityPolicyGenerator() {
                     )}
                     {guide.environment_recon[envType].checks.map((check, i) => (
                       <div key={i}>
-                        <p className="text-xs font-semibold text-slate-300">{check.category}</p>
-                        <p className="text-[11px] text-slate-500 mb-1">확인 위치: {check.where}</p>
+                        <div className="flex items-center justify-between mb-1">
+                          <div>
+                            <p className="text-xs font-semibold text-slate-300">{check.category}</p>
+                            <p className="text-[11px] text-slate-500">확인 위치: {check.where}</p>
+                          </div>
+                          <CopyButton text={check.commands.join('\n')} />
+                        </div>
                         <pre className="bg-slate-900 border border-slate-700 rounded-lg p-2 overflow-x-auto">
                           <code className="text-[11px] text-cyan-300 font-mono whitespace-pre">
                             {check.commands.join('\n')}
@@ -233,7 +272,10 @@ export default function SecurityPolicyGenerator() {
             </div>
 
             <div>
-              <p className="text-xs font-semibold text-slate-400 mb-2">환경 설명</p>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-semibold text-slate-400">환경 설명</p>
+                <FileUploadButton onExtracted={(text) => { setDescription(text); generate(text) }} />
+              </div>
               <textarea
                 value={description}
                 onChange={e => setDescription(e.target.value)}
@@ -244,7 +286,7 @@ export default function SecurityPolicyGenerator() {
             </div>
 
             <button
-              onClick={generate}
+              onClick={() => generate()}
               disabled={loading || !description.trim()}
               className="w-full py-3 bg-teal-600 hover:bg-teal-700 disabled:bg-slate-700 disabled:text-slate-500 rounded-xl font-semibold transition-colors"
             >
@@ -269,6 +311,7 @@ export default function SecurityPolicyGenerator() {
 
             {result && (
               <div className="space-y-4">
+                <ModeBanner result={result} />
                 <div className="bg-slate-800 border border-slate-700 rounded-xl p-4">
                   <div className="flex items-start justify-between gap-3">
                     <p className="text-sm text-slate-300">{result.summary}</p>

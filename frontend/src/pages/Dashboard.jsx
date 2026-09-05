@@ -1,10 +1,38 @@
 import { useState, useEffect, useRef } from 'react'
 import axios from 'axios'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
-import { Shield, AlertTriangle, Upload, Trash2, RefreshCw, Radio, Send, Play, Square } from 'lucide-react'
+import { Shield, AlertTriangle, Upload, Trash2, RefreshCw, Radio, Send, Play, Square, Cloud, Server, WifiOff, FlaskConical } from 'lucide-react'
 import StatCard from '../components/StatCard'
 import SeverityBadge from '../components/SeverityBadge'
 import GuidePanel from '../components/GuidePanel'
+import { DEFAULT_ACCEPT as UPLOAD_ACCEPT } from '../components/FileUploadButton'
+
+const MODE_BADGE = {
+  cloud:   { icon: Cloud,        label: 'Claude Cloud로 분석됨', color: 'text-green-400',  bg: 'bg-green-500/10 border-green-500/30' },
+  local:   { icon: Server,       label: '로컬 LLM으로 분석됨',    color: 'text-blue-400',   bg: 'bg-blue-500/10 border-blue-500/30' },
+  offline: { icon: WifiOff,      label: '오프라인 규칙 기반으로 분석됨(폐쇄망)', color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/30' },
+  mock:    { icon: FlaskConical, label: 'Mock 데모 데이터 (학습용, 실제 분석 아님)', color: 'text-slate-400', bg: 'bg-slate-500/10 border-slate-500/30' },
+}
+
+function ModeBanner({ result }) {
+  if (!result?.mode) return null
+  const cfg = MODE_BADGE[result.mode] ?? MODE_BADGE.offline
+  const Icon = cfg.icon
+  return (
+    <div className={`border rounded-xl p-3 flex items-start gap-2 ${cfg.bg}`}>
+      <Icon size={14} className={`${cfg.color} shrink-0 mt-0.5`} />
+      <div>
+        <p className={`text-xs font-semibold ${cfg.color}`}>{cfg.label}</p>
+        {result.fallback_reason && (
+          <p className="text-xs text-slate-400 mt-1">{result.fallback_reason}</p>
+        )}
+        {result.engine_note && (
+          <p className="text-xs text-slate-400 mt-1">{result.engine_note}</p>
+        )}
+      </div>
+    </div>
+  )
+}
 
 const DASHBOARD_STEPS = [
   '상단 탭에서 "분석" 탭을 선택합니다.',
@@ -84,7 +112,7 @@ export default function Dashboard() {
   const fetchMode = async () => {
     try {
       const res = await axios.get('/api/mode')
-      setIsMock(res.data.mock)
+      setIsMock(res.data.effective_mode === 'mock')
     } catch {
       setIsMock(true)
     }
@@ -285,9 +313,9 @@ export default function Dashboard() {
             <div className="bg-slate-800 rounded-xl p-6 border border-slate-700">
               <h2 className="font-semibold mb-4 flex items-center gap-2"><Upload size={18} /> 로그 파일 업로드</h2>
               <label className="block border-2 border-dashed border-slate-600 rounded-xl p-8 text-center cursor-pointer hover:border-blue-500 transition-colors">
-                <input type="file" accept=".log,.txt,.csv,.json" className="hidden" onChange={handleFileUpload} />
-                <p className="text-slate-400">.log / .txt / .csv / .json</p>
-                <p className="text-xs text-slate-500 mt-1">클릭하여 파일 선택</p>
+                <input type="file" accept={UPLOAD_ACCEPT} className="hidden" onChange={handleFileUpload} />
+                <p className="text-slate-400">.log / .txt / .csv / .json / .docx / .pdf / .xlsx</p>
+                <p className="text-xs text-slate-500 mt-1">클릭하여 파일 선택 (업로드 즉시 자동 분석)</p>
               </label>
             </div>
 
@@ -364,6 +392,11 @@ export default function Dashboard() {
                   <div className="flex items-center gap-2 mb-2">
                     <SeverityBadge severity={ev.threat_level} />
                     <span className="text-xs text-slate-500">{ev.events?.length ?? 0}개 이벤트</span>
+                    {ev.mode && (
+                      <span className={`text-[10px] font-semibold ${(MODE_BADGE[ev.mode] ?? MODE_BADGE.offline).color}`}>
+                        {(MODE_BADGE[ev.mode] ?? MODE_BADGE.offline).label}
+                      </span>
+                    )}
                     <span className="ml-auto text-xs text-slate-500">{new Date().toLocaleTimeString('ko-KR')}</span>
                   </div>
                   <p className="text-sm text-slate-300">{ev.summary}</p>
@@ -390,6 +423,7 @@ export default function Dashboard() {
               <p className="text-slate-500 text-center py-12">분석 결과를 선택하거나 로그를 분석하세요.</p>
             ) : (
               <>
+                <ModeBanner result={selectedAnalysis} />
                 <div className="bg-slate-800 rounded-xl p-5 border border-slate-700">
                   <div className="flex justify-between items-start">
                     <div>

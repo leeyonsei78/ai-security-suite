@@ -37,7 +37,7 @@ async def generate(request: GenerateRequest):
     if len(request.context) > 2000:
         raise HTTPException(status_code=400, detail="Context too long (max 2,000 chars)")
 
-    result = generate_phishing_sim(request.scenario_type, request.difficulty, request.context)
+    result = await generate_phishing_sim(request.scenario_type, request.difficulty, request.context)
     entry = {**result}
     entry["id"] = db.add_entry(APP_NAME, entry)
     return entry

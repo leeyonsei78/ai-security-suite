@@ -3,8 +3,10 @@ import axios from 'axios'
 import {
   BrainCircuit, MessageSquareCode, Settings2, Wrench, AlertTriangle,
   Trash2, Download, BookOpen, ChevronDown, ChevronUp, ShieldAlert, KeyRound,
+  Cloud, Server, WifiOff, FlaskConical,
 } from 'lucide-react'
 import GuidePanel from '../components/GuidePanel'
+import FileUploadButton from '../components/FileUploadButton'
 
 const AUDIT_STEPS = [
   "상단 탭에서 감사할 대상 유형을 선택합니다: 시스템 프롬프트 / API·앱 설정 / 도구(Function calling) 정의.",
@@ -32,6 +34,33 @@ const PLACEHOLDERS = {
   tools: `[\n  {\n    "name": "execute_shell",\n    "description": "run a command",\n    "parameters": {"command": "string"}\n  },\n  {\n    "name": "read_file",\n    "description": "read a file",\n    "parameters": {"path": "string"}\n  }\n]`,
 }
 
+const MODE_BADGE = {
+  cloud:   { icon: Cloud,        label: 'Claude Cloud로 분석됨', color: 'text-green-400',  bg: 'bg-green-500/10 border-green-500/30' },
+  local:   { icon: Server,       label: '로컬 LLM으로 분석됨',    color: 'text-blue-400',   bg: 'bg-blue-500/10 border-blue-500/30' },
+  offline: { icon: WifiOff,      label: '오프라인 규칙 기반으로 분석됨(폐쇄망)', color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/30' },
+  mock:    { icon: FlaskConical, label: 'Mock 데모 데이터 (학습용, 실제 분석 아님)', color: 'text-slate-400', bg: 'bg-slate-500/10 border-slate-500/30' },
+}
+
+function ModeBanner({ result }) {
+  if (!result?.mode) return null
+  const cfg = MODE_BADGE[result.mode] ?? MODE_BADGE.offline
+  const Icon = cfg.icon
+  return (
+    <div className={`border rounded-xl p-3 flex items-start gap-2 ${cfg.bg}`}>
+      <Icon size={14} className={`${cfg.color} shrink-0 mt-0.5`} />
+      <div>
+        <p className={`text-xs font-semibold ${cfg.color}`}>{cfg.label}</p>
+        {result.fallback_reason && (
+          <p className="text-xs text-slate-400 mt-1">{result.fallback_reason}</p>
+        )}
+        {result.engine_note && (
+          <p className="text-xs text-slate-400 mt-1">{result.engine_note}</p>
+        )}
+      </div>
+    </div>
+  )
+}
+
 const SEVERITY_CONFIG = {
   CRITICAL: { color: 'text-red-400', bg: 'bg-red-500/10 border-red-500/30', badge: 'bg-red-500/20 text-red-400' },
   HIGH: { color: 'text-orange-400', bg: 'bg-orange-500/10 border-orange-500/30', badge: 'bg-orange-500/20 text-orange-400' },
@@ -55,12 +84,13 @@ export default function ModelAudit() {
     axios.get('/api/model-audit/reference').then(r => setReference(r.data)).catch(() => {})
   }, [])
 
-  const analyze = async () => {
-    if (!content.trim()) return
+  const analyze = async (contentOverride) => {
+    const body = contentOverride ?? content
+    if (!body.trim()) return
     setLoading(true)
     setResult(null)
     try {
-      const res = await axios.post('/api/model-audit/analyze', { content, input_type: inputType })
+      const res = await axios.post('/api/model-audit/analyze', { content: body, input_type: inputType })
       setResult(res.data)
       setHistory(h => [res.data, ...h].slice(0, 10))
     } catch (err) {
@@ -128,7 +158,7 @@ export default function ModelAudit() {
         <div className="grid md:grid-cols-5 gap-6">
           {/* Input Panel */}
           <div className="md:col-span-3 space-y-4">
-            <div className="flex gap-2 flex-wrap">
+            <div className="flex gap-2 flex-wrap items-center">
               {INPUT_TYPES.map(({ id, icon: Icon, label }) => (
                 <button
                   key={id}
@@ -140,6 +170,7 @@ export default function ModelAudit() {
                   <Icon size={14} />{label}
                 </button>
               ))}
+              <FileUploadButton className="ml-auto" onExtracted={(text) => { setContent(text); analyze(text) }} />
             </div>
 
             <textarea
@@ -151,7 +182,7 @@ export default function ModelAudit() {
             />
 
             <button
-              onClick={analyze}
+              onClick={() => analyze()}
               disabled={loading || !content.trim()}
               className="w-full py-3 bg-violet-600 hover:bg-violet-700 disabled:bg-slate-700 disabled:text-slate-500 rounded-xl font-semibold transition-colors"
             >
@@ -176,6 +207,7 @@ export default function ModelAudit() {
 
             {result && (
               <div className="space-y-4">
+                <ModeBanner result={result} />
                 <div className="bg-slate-800 border border-slate-700 rounded-xl p-4">
                   <div className="flex items-center gap-3 mb-2">
                     <div className={`text-3xl font-bold ${SCORE_COLOR(result.risk_score)}`}>{result.risk_score}</div>

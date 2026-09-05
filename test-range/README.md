@@ -22,6 +22,8 @@ docker compose ps              # 상태 확인
 | `test-range-old-tomcat` | Apache Tomcat 8.5.19 (오래된 버전 고정) | `http://localhost:8080`, App 17 네트워크 스캔 대상: `127.0.0.1` |
 | `test-range-old-redis` | Redis 4.0 (인증 없이 노출, `protected-mode no`) | App 17 네트워크 스캔 대상: `127.0.0.1` (포트 6379) |
 | `test-range-bad-firewall` | 의도적으로 취약하게 구성한 iptables 규칙 — 포트 게시 없음, CLI 실습 전용 | `docker exec -it test-range-bad-firewall bash` 후 `iptables -L -n -v --line-numbers` |
+| `test-range-localstack` | LocalStack(로컬 AWS 에뮬레이터, 4.4.0 고정) — 실제 AWS 요금 없이 IAM/EC2 API를 흉내낸다 | `http://localhost:4566` (aws CLI `--endpoint-url`로 접속) |
+| `test-range-aws-sandbox` | LocalStack에 의도적으로 취약한 IAM 정책/역할/사용자 + 보안그룹을 실제 aws CLI로 생성해두는 컨테이너 | `docker exec -it test-range-aws-sandbox bash` — 아래 App 16/18 절 참고 |
 
 ## 각 앱과 연결하는 방법
 
@@ -67,6 +69,43 @@ num   pkts bytes target     prot opt in     out     source               destina
 찾아내는지 확인하는 용도입니다. (⚠️ 이 프로젝트가 Mock 모드로 실행 중이라면 App 16은
 붙여넣은 내용을 실제로 읽지 않고 소스 타입별로 미리 정해둔 예시 결과를 반환합니다 —
 `ANTHROPIC_API_KEY`를 설정한 Live 모드에서만 실제로 이 텍스트를 분석합니다.)
+
+### App 16(AWS 보안그룹)·App 18(클라우드 IAM 정책 감사기, AWS)
+
+`localstack`이 뜨면 `aws-sandbox` 컨테이너가 자동으로 의도적으로 취약한 IAM 정책/역할/
+사용자(과도한 권한 `Action:"*"` + 신뢰 관계 `Principal:"*"`) + 보안그룹(SSH/MySQL 전역
+공개)을 실제 aws CLI로 생성해둡니다. **비용은 전혀 발생하지 않습니다** — LocalStack은
+로컬에서 AWS API를 그대로 흉내내는 에뮬레이터입니다.
+
+```bash
+docker logs test-range-aws-sandbox   # 생성된 리소스의 실제 그룹 ID 등 확인
+```
+
+호스트에 aws CLI가 설치돼 있다면(더미 자격증명이면 충분: `AWS_ACCESS_KEY_ID=test`,
+`AWS_SECRET_ACCESS_KEY=test`, 리전은 아무 값이나) 아래처럼 `--endpoint-url`만 추가해서
+조회하면 됩니다. 설치가 없다면 `docker exec -it test-range-aws-sandbox aws ...`로 컨테이너
+안에서 그대로 조회할 수 있습니다(내부에서는 `--endpoint-url=http://localstack:4566` 사용).
+
+```bash
+# App 18(IAM) — 실제 AWS 계정을 조회할 때와 동일한 명령, --endpoint-url만 다름
+aws --endpoint-url=http://localhost:4566 iam get-account-authorization-details \
+  --filter User Role LocalManagedPolicy
+```
+
+> ⚠️ `--filter` 없이 호출하면 LocalStack이 AWS 관리형 정책 수천 개를 통째로 반환해
+> 결과가 지나치게 커집니다(실제 AWS 계정에서도 마찬가지입니다) — 커스텀(Local) 정책만
+> 보려면 항상 `--filter User Role LocalManagedPolicy`를 붙이세요.
+
+```bash
+# App 16(보안그룹) — GroupId는 위 docker logs 출력에서 확인
+aws --endpoint-url=http://localhost:4566 ec2 describe-security-groups --group-ids <sg-id>
+```
+
+위 명령의 실제 출력을 각각 App 18의 입력창(플랫폼: AWS IAM)과 App 16의 입력창(플랫폼:
+AWS 보안그룹)에 그대로 붙여넣으면 됩니다. 심어둔 문제: IAM은 과도한 권한(Admin 정책)
++ 위험한 신뢰 관계(누구나 역할을 맡을 수 있음), 보안그룹은 SSH(22)·MySQL(3306) 포트가
+0.0.0.0/0에 전역 공개된 과도 허용(overly_permissive) — 둘 다 실제로 탐지되는지 확인하는
+용도입니다.
 
 ## 안전 수칙
 

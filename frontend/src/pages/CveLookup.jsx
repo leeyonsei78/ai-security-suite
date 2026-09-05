@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import axios from 'axios'
 import {
   Database, Search, ExternalLink, Calendar, Tag, AlertCircle, Loader2, History, Trash2,
+  Wifi, WifiOff, Upload,
 } from 'lucide-react'
 import GuidePanel from '../components/GuidePanel'
 
@@ -16,6 +17,8 @@ const CVE_TIPS = [
   '이 앱은 Claude AI를 쓰지 않습니다 — Anthropic API 키 유무와 무관하게 항상 실제 NVD 공식 API를 조회합니다.',
   'API 키 없이는 NVD 요청 한도가 30초당 5건으로 제한됩니다. 너무 자주 조회하면 잠시 대기해야 할 수 있습니다.',
   '검색 결과는 최신순이 아니라 NVD 관련도 기준으로 정렬됩니다.',
+  '인터넷이 안 되는 폐쇄망에서는 자동으로 "오프라인" 모드로 전환되어, 예전에 조회했거나 미리 가져오기(import)한 CVE만 로컬 캐시에서 조회할 수 있습니다.',
+  '폐쇄망 반입용 데이터는 인터넷이 되는 환경에서 nvd.nist.gov/vuln/data-feeds 의 공식 JSON 2.0 피드를 받아, 승인된 절차로 옮긴 뒤 아래 [피드 가져오기]로 업로드하세요.',
 ]
 
 const SEV_STYLE = {
@@ -31,7 +34,14 @@ function CveDetail({ cve }) {
   return (
     <div className="bg-slate-800 border border-slate-700 rounded-xl p-5 space-y-4">
       <div className="flex items-start justify-between gap-3 flex-wrap">
-        <h3 className="text-lg font-bold font-mono text-slate-100">{cve.id}</h3>
+        <h3 className="text-lg font-bold font-mono text-slate-100 flex items-center gap-2">
+          {cve.id}
+          {cve._offline_cache && (
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 flex items-center gap-1">
+              <WifiOff size={10} /> 로컬 캐시
+            </span>
+          )}
+        </h3>
         <div className="flex items-center gap-2">
           {cve.cvss ? (
             <span className={`text-xs font-bold px-2.5 py-1 rounded border ${sevStyle}`} title={cve.cvss.vector}>
@@ -98,13 +108,41 @@ export default function CveLookup() {
   const [searchResults, setSearchResults] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [hasApiKey, setHasApiKey] = useState(false)
+  const [status, setStatus] = useState(null)
   const [history, setHistory] = useState([])
+  const [importing, setImporting] = useState(false)
+  const [importMsg, setImportMsg] = useState('')
+
+  const refreshStatus = () => {
+    axios.get('/api/cve/status').then(r => setStatus(r.data)).catch(() => {})
+  }
 
   useEffect(() => {
-    axios.get('/api/cve/status').then(r => setHasApiKey(r.data.has_api_key)).catch(() => {})
+    refreshStatus()
     axios.get('/api/cve/history').then(r => setHistory(r.data.history)).catch(() => {})
   }, [])
+
+  const hasApiKey = status?.has_api_key ?? false
+  const isOffline = status?.network_mode === 'offline'
+
+  const importFeed = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setImporting(true)
+    setImportMsg('')
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      const res = await axios.post('/api/cve/import-feed', form, { headers: { 'Content-Type': 'multipart/form-data' } })
+      setImportMsg(`가져오기 완료: 피드 ${res.data.total_in_feed}건 중 ${res.data.imported}건을 로컬 캐시에 저장했습니다.`)
+      refreshStatus()
+    } catch (err) {
+      setImportMsg('가져오기 실패: ' + (err.response?.data?.detail ?? err.message))
+    } finally {
+      setImporting(false)
+      e.target.value = ''
+    }
+  }
 
   const lookup = async (id) => {
     const target = (id ?? cveId).trim()
@@ -165,6 +203,25 @@ export default function CveLookup() {
         </div>
 
         <GuidePanel title="CVE 실시간 조회 사용 가이드" steps={CVE_STEPS} tips={CVE_TIPS} />
+
+        <div className={`border rounded-xl p-4 flex items-start gap-3 ${isOffline ? 'bg-amber-500/10 border-amber-500/30' : 'bg-slate-800 border-slate-700'}`}>
+          {isOffline ? <WifiOff size={18} className="text-amber-400 shrink-0 mt-0.5" /> : <Wifi size={18} className="text-green-400 shrink-0 mt-0.5" />}
+          <div className="flex-1 min-w-0">
+            <p className={`text-sm font-semibold ${isOffline ? 'text-amber-400' : 'text-green-400'}`}>
+              {isOffline ? '오프라인 모드 — NVD에 연결할 수 없어 로컬 캐시만 조회합니다' : '온라인 — NVD 실시간 조회 중'}
+            </p>
+            <p className="text-xs text-slate-400 mt-1">
+              로컬 캐시 {status?.offline_cache?.cached_count ?? 0}건
+              {status?.offline_cache?.last_updated && ` · 마지막 갱신 ${new Date(status.offline_cache.last_updated * 1000).toLocaleString()}`}
+            </p>
+            {importMsg && <p className="text-xs text-slate-300 mt-1">{importMsg}</p>}
+          </div>
+          <label className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs font-medium cursor-pointer transition-colors shrink-0">
+            <Upload size={13} />
+            {importing ? '가져오는 중...' : '피드 가져오기'}
+            <input type="file" accept=".json" className="hidden" onChange={importFeed} disabled={importing} />
+          </label>
+        </div>
 
         <div className="bg-slate-800 border border-slate-700 rounded-xl p-4 space-y-3">
           <div>
