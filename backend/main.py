@@ -25,6 +25,8 @@ from routers.secret_scan import router as secret_scan_router
 from routers.container_audit import router as container_audit_router
 from routers.dns_security import router as dns_security_router
 from routers.dashboard_overview import router as dashboard_overview_router
+from routers.attack_monitor import router as attack_monitor_router
+from routers.fsi_csp_audit import router as fsi_csp_audit_router
 from services.claude_service import IS_MOCK
 
 app = FastAPI(title="AI Security Suite", version="1.0.0")
@@ -69,6 +71,8 @@ app.include_router(secret_scan_router, dependencies=_authed)
 app.include_router(container_audit_router, dependencies=_authed)
 app.include_router(dns_security_router, dependencies=_authed)
 app.include_router(dashboard_overview_router, dependencies=_authed)
+app.include_router(attack_monitor_router, dependencies=_authed)
+app.include_router(fsi_csp_audit_router, dependencies=_authed)
 
 
 @app.get("/")

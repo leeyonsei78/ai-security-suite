@@ -1,0 +1,99 @@
+{
+  "name": "AI Security Suite - Attack Monitor Report -> Slack",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      },
+      "id": "trigger-schedule",
+      "name": "Every 5 minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-640, 0]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.AI_SECURITY_SUITE_BASE_URL || 'http://localhost:8000' }}/api/attack-monitor/history?mode=real",
+        "options": {
+          "headers": {
+            "parameters": [
+              {
+                "name": "X-API-Key",
+                "value": "={{ $env.AI_SECURITY_SUITE_API_KEY || '' }}"
+              }
+            ]
+          }
+        }
+      },
+      "id": "http-get-history",
+      "name": "GET /api/attack-monitor/history",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-420, 0]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// /api/attack-monitor/history?mode=real 는 { history: [...], total } 을 반환한다.\n// alerts-polling-to-slack.json과 같은 시간창 필터 방식을 쓰되, 여기서는 CRITICAL만이 아니라\n// INFO를 제외한 모든 판정(LOW/MEDIUM/HIGH/CRITICAL)을 Slack으로 보낸다 — 실제 위협 알림(CRITICAL만)은\n// 이미 별도로 존재하는 alerts-polling-to-slack.json이 담당하므로, 이 워크플로우는 그보다 더 자세한\n// '분석 리포트'(이벤트 목록·요약)를 원할 때 쓰는 보조용이다. 필요 없으면 이 워크플로우는 비활성화해도 된다.\nconst body = $input.first().json;\nconst history = body.history || [];\nconst cutoff = Date.now() - 5 * 60 * 1000;\nreturn history\n  .filter((h) => h.created_at && new Date(h.created_at).getTime() > cutoff)\n  .filter((h) => h.threat_level && h.threat_level !== 'INFO')\n  .map((h) => ({ json: h }));"
+      },
+      "id": "code-filter-recent",
+      "name": "Filter: new non-INFO since last poll",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-200, 0]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const h = $json;\nconst events = h.events || [];\nconst eventLines = events.slice(0, 5).map((e) => `  - [${e.severity}] ${e.category}: ${e.description}`).join('\\n');\nconst text = `[${h.threat_level}] 실시간 공격 모니터링 & 대응 센터 (실제 시스템)\\n${h.summary}\\n\\n이벤트 ${events.length}건:\\n${eventLines}\\n\\n분석 ID: ${h.id}`;\nreturn { json: { text } };"
+      },
+      "id": "code-format-message",
+      "name": "Format Slack message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [20, 0]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "text": "={{ $json.text }}",
+        "otherOptions": {}
+      },
+      "id": "slack-notify",
+      "name": "Slack: post report",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [240, 0]
+    }
+  ],
+  "connections": {
+    "Every 5 minutes": {
+      "main": [[{ "node": "GET /api/attack-monitor/history", "type": "main", "index": 0 }]]
+    },
+    "GET /api/attack-monitor/history": {
+      "main": [[{ "node": "Filter: new non-INFO since last poll", "type": "main", "index": 0 }]]
+    },
+    "Filter: new non-INFO since last poll": {
+      "main": [[{ "node": "Format Slack message", "type": "main", "index": 0 }]]
+    },
+    "Format Slack message": {
+      "main": [[{ "node": "Slack: post report", "type": "main", "index": 0 }]]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "instanceId": "ai-security-suite"
+  }
+}

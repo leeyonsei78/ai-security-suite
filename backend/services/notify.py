@@ -4,8 +4,11 @@
 INJECTION)일 때만 호출된다. 상담형 앱(인시던트 대응·위협 분석 랩)과 생성형 앱(보안
 정책 생성기)은 "위협을 판정"하는 게 아니라 대상이 아니다.
 
-SLACK_WEBHOOK_URL 또는 SMTP_* 환경변수가 없으면 Mock 모드로 동작 — 실제로 전송하지
-않고 앱 내 알림 로그에만 기록한다 (다른 앱들의 Mock/Live 모드와 동일한 패턴).
+SLACK_WEBHOOK_URL, SMTP_*, N8N_WEBHOOK_URL 중 아무것도 없으면 Mock 모드로 동작 —
+실제로 전송하지 않고 앱 내 알림 로그에만 기록한다 (다른 앱들의 Mock/Live 모드와 동일한
+패턴). N8N_WEBHOOK_URL은 Roadmap "n8n 연동 (Push: 이 앱 → n8n)" 항목 — Slack/이메일이
+사람에게 보내는 알림이라면, 이건 n8n의 Webhook 트리거로 구조화된 JSON을 그대로 보내
+n8n 쪽에서 Jira 티켓 생성 등 임의의 후속 자동화를 붙일 수 있게 하는 별도 채널이다.
 """
 
 import asyncio
@@ -30,10 +33,12 @@ SMTP_USER = os.getenv("SMTP_USER", "").strip()
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "").strip()
 ALERT_EMAIL_TO = os.getenv("ALERT_EMAIL_TO", "").strip()
 ALERT_EMAIL_FROM = os.getenv("ALERT_EMAIL_FROM", "").strip() or SMTP_USER
+N8N_WEBHOOK_URL = os.getenv("N8N_WEBHOOK_URL", "").strip()
 
 IS_SLACK_CONFIGURED = bool(SLACK_WEBHOOK_URL)
 IS_EMAIL_CONFIGURED = bool(SMTP_HOST and ALERT_EMAIL_TO)
-IS_MOCK = not (IS_SLACK_CONFIGURED or IS_EMAIL_CONFIGURED)
+IS_N8N_CONFIGURED = bool(N8N_WEBHOOK_URL)
+IS_MOCK = not (IS_SLACK_CONFIGURED or IS_EMAIL_CONFIGURED or IS_N8N_CONFIGURED)
 
 APP_LABELS = {
     "dashboard": "AI 보안 분석 대시보드",
@@ -50,6 +55,8 @@ APP_LABELS = {
     "secret_scan": "시크릿 스캐너",
     "container_audit": "컨테이너/Dockerfile 감사기",
     "dns_security": "DNS/이메일 보안 점검",
+    "attack_monitor": "실시간 공격 모니터링 & 대응 센터",
+    "fsi_csp_audit": "금융보안원 클라우드 CSP 평가",
 }
 
 ALERTS_APP = "alerts"
@@ -83,12 +90,26 @@ def _send_email(title: str, message: str) -> dict:
         return {"ok": False, "error": str(e)}
 
 
-def _dispatch(title: str, message: str) -> dict:
+def _send_n8n(payload: dict) -> dict:
+    data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        N8N_WEBHOOK_URL, data=data, headers={"Content-Type": "application/json"}
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            return {"ok": 200 <= resp.status < 300, "status": resp.status}
+    except urllib.error.URLError as e:
+        return {"ok": False, "error": str(e)}
+
+
+def _dispatch(title: str, message: str, payload: dict) -> dict:
     result = {}
     if IS_SLACK_CONFIGURED:
         result["slack"] = _send_slack(title, message)
     if IS_EMAIL_CONFIGURED:
         result["email"] = _send_email(title, message)
+    if IS_N8N_CONFIGURED:
+        result["n8n"] = _send_n8n(payload)
     return result
 
 
@@ -96,14 +117,25 @@ def send_alert(app: str, severity_label: str, summary: str, entry_id: int | None
     label = APP_LABELS.get(app, app)
     title = f"[{severity_label}] {label}에서 위협 탐지"
     message = f"{summary}\n\n분석 ID: {entry_id if entry_id is not None else 'N/A'}"
+    created_at = datetime.now(timezone.utc).isoformat()
+    # n8n Webhook 페이로드는 Slack/이메일의 사람이 읽는 텍스트와 달리, n8n 워크플로우가
+    # 그대로 조건 분기·필드 매핑에 쓸 수 있도록 구조화된 필드로 보낸다.
+    n8n_payload = {
+        "app": app,
+        "app_label": label,
+        "severity": severity_label,
+        "summary": summary,
+        "entry_id": entry_id,
+        "created_at": created_at,
+    }
 
     if IS_MOCK:
         dispatch_result = {
             "mock": True,
-            "note": "SLACK_WEBHOOK_URL 또는 SMTP_* 환경변수가 설정되지 않아 Mock 모드로 동작합니다. 실제 전송은 되지 않았습니다.",
+            "note": "SLACK_WEBHOOK_URL, SMTP_*, N8N_WEBHOOK_URL 중 아무것도 설정되지 않아 Mock 모드로 동작합니다. 실제 전송은 되지 않았습니다.",
         }
     else:
-        dispatch_result = _dispatch(title, message)
+        dispatch_result = _dispatch(title, message, n8n_payload)
 
     alert = {
         "app": app,
@@ -112,7 +144,7 @@ def send_alert(app: str, severity_label: str, summary: str, entry_id: int | None
         "summary": summary,
         "entry_id": entry_id,
         "dispatch": dispatch_result,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": created_at,
     }
     alert_id = db.add_entry(ALERTS_APP, alert)
     alert["id"] = alert_id

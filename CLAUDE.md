@@ -28,6 +28,8 @@ Claude AI를 활용한 보안 분석 도구 모음.
 | 20 | 컨테이너/Dockerfile 감사기 | ✅ 완료 |
 | 21 | DNS/이메일 보안 점검 | ✅ 완료 |
 | 22 | 통합 리스크 대시보드 | ✅ 완료 |
+| 23 | 실시간 공격 모니터링 & 대응 센터 | ✅ 완료 |
+| 24 | 금융보안원 클라우드 CSP 평가 | ✅ 완료 |
 
 ---
 
@@ -300,6 +302,33 @@ App 16(방화벽 정책 감사기)·App 18(IAM 정책 감사기)와 완전히 �
 - `backend/routers/dashboard_overview.py`(`/api/dashboard/overview` 단일 엔드포인트), `backend/services/dashboard_service.py`. 탐지 판정을 내리는 앱이 아니라 알림 시스템 대상에는 포함하지 않음(정책 생성기 등 생성형 앱과 같은 스코프 결정)
 - 실제 이 프로젝트에서 여러 세션에 걸쳐 쌓인 진짜 히스토리 데이터(전체 178건 실행, CRITICAL 126건)로 조회해 14개 앱 전부 정상 집계되는 것을 curl로 확인. 프론트는 `StatCard` 컴포넌트의 실제 prop 시그니처(`color`가 키워드가 아니라 `"border-red-600"` 같은 전체 클래스명이어야 함)를 처음에 잘못 가정했다가 기존 사용처(App 1 Dashboard.jsx)를 확인하고 수정. `vite build` 성공까지 검증
 
+### App 23: 실시간 공격 모니터링 & 대응 센터 `/attack-monitor`
+"외부의 공격이 계속 있는지 모니터링하고 대응하는 프로그램을 추가해달라"는 사용자 요청으로 신설. App 1의 "실시간" 탭은 실제 로그 소스가 없는 **데모 환경이라 합성 로그만 분석**하는 한계가 있었는데, 이 앱은 그 한계를 넘어 **이 Windows PC의 실제 보안 신호**를 조회해 분석하고, 처음으로 "탐지"에서 그치지 않고 이벤트별 **구체적 대응 제안**까지 붙인다.
+- **착수 전 실제 점검 (이 세션에서 실제로 수행)**: "어디에 공격이 있는지도 검토해달라"는 요청에 답하며 이 PC를 실제로 점검함 — Windows 방화벽은 3개 프로필 모두 켜져 있으나 연결 로깅(LogAllowed/LogBlocked)이 꺼져 있어 인바운드 이력 자체가 없었고, 최근 7일 로그온 실패(Event ID 4625) 0건(공격이 없었다기보다 감사 정책 미설정 가능성), RDP는 비활성화(양호), 일부 서비스(MySQL 3306, SMB 445, RPC 135, 국내 은행/공공 사이트용 보안 플러그인류 XTorEngine·I3GProc·smmgr·StSess 등)가 `0.0.0.0`/`::`(모든 인터페이스)에 바인딩되어 있음을 확인. 방화벽 로깅을 켜려 시도했으나 **관리자 권한이 필요해 이 세션에서는 실패**(`netsh advfirewall ... logging enable` → "The requested operation requires elevation") — 사용자가 관리자 권한 PowerShell에서 직접 켜야 함. 대신 로그온 실패 이벤트 조회(Get-WinEvent Security 4625)·Defender 탐지 조회(Get-MpThreatDetection)·리스닝 포트 조회는 관리자 권한 없이도 가능함을 확인해 주력 신호로 채택
+- 사용자가 "실제 시스템 신호"와 "App 1과 같은 데모/합성 로그" 둘 다 원해 하나의 앱 안에 탭으로 분리
+- **노출 현황 점검** (상시 노출, AI 미사용 — App 15/17/19/21과 같은 결정론적 조회 패턴): `GET /api/attack-monitor/exposure`가 방화벽 로깅 여부·RDP 활성화 여부·최근 24시간 로그온 실패 건수·모든 인터페이스에 열린 리스닝 포트 목록·Defender 실시간 보호 상태·최근 탐지 위협 건수를 매번 실제로 조회해 반환. 로깅이 꺼져 있으면 "관리자 권한으로 켜는 명령"을 결과에 함께 안내(복사 버튼 제공)
+- **탭 1: 실제 시스템 모니터링**: `WS /api/attack-monitor/ws?mode=real` — 20초마다 PowerShell로 로그온 실패 이벤트·Defender 탐지·(로깅 켜져 있다면) 방화벽 로그 tail·새로 열린 리스닝 포트(최초 연결 시 잡은 baseline과 diff)를 조회해 App 1과 동일한 `analyze_logs()` 파이프라인(Claude/Mock)에 그대로 태움 — 새 AI 프롬프트를 만들지 않고 기존 파이프라인을 재사용(App 17이 NVD를 재사용한 것과 같은 패턴)
+- **탭 2: 시뮬레이션(데모)**: `WS /api/attack-monitor/ws?mode=simulate` — App 1의 `live_monitor.generate_batch()`를 그대로 재사용(중복 구현하지 않음), 8초 주기, 이벤트 주입 가능
+- **대응 제안 (`response_playbook.py`, AI 미사용 결정론적 매핑)**: CRITICAL/HIGH로 분류된 각 이벤트에 카테고리 키워드 매칭으로 대응 제안(브루트포스→출발지 IP 인바운드 차단, 포트스캔→차단+App 16 연계, 악성코드→네트워크 격리+App 5 연계, 인젝션→App 6/3 연계, 데이터 유출→아웃바운드 차단, 권한상승→App 18 연계, 그 외 기본값→App 5 연계)을 부착. **안전 설계**: 소스 IP가 사설/루프백/미상이면 차단 명령을 아예 생성하지 않고(내부망을 실수로 차단하라고 제안하지 않기 위함), 생성되는 명령도 항상 "참고용 제안 — 자동 실행되지 않으며 확인 후 수동 실행" 문구와 복사 버튼만 제공 — 이 프로젝트 전체의 원칙(App 9 시뮬레이션 명령, App 6/17 승인 체크박스)과 동일하게 실제 방화벽 규칙 추가·프로세스 종료 등 되돌리기 어려운 동작은 백엔드가 절대 자동 수행하지 않음
+- **알림 시스템 연동 시 실제/데모 분리**: 데모(시뮬레이션) 결과가 실제 공격처럼 Slack/이메일 알림을 트리거하면 안 되므로, `mode=real`일 때만 `notify.alert_if_critical()` 호출 + `attack_monitor` 히스토리에 저장, `mode=simulate`는 별도 앱 이름(`attack_monitor_demo`)으로 저장하고 알림 미발생 — 15번째 탐지형 앱(알림 대상)은 real 모드만
+- Mock 모드 주의: `mock_data.generate_mock_analysis()`가 로그 내용과 무관하게 콘텐츠 길이 기반으로 랜덤 샘플링하는 App 1 때부터의 기존 동작이라, "실제 시스템" 탭도 Mock 모드에서는 실제로 아무 신호가 없어도 무작위 CRITICAL이 뜰 수 있음 — 프론트에 Mock 모드 주의 문구 + 각 이벤트 카드에 "수집된 원본 신호 보기"(raw_log)를 항상 함께 노출해 실제 관찰 내용을 대조할 수 있게 함
+- `backend/services/attack_monitor_service.py`(PowerShell 서브프로세스로 실제 신호 수집 — `subprocess.run(["powershell.exe", ...])`, UTF-8 출력 강제로 인코딩 깨짐 방지, `run_in_executor`로 블로킹 호출 스레드 위임은 App 1 monitor.py와 동일 패턴)/`response_playbook.py`, `backend/routers/attack_monitor.py`
+- 백엔드는 `/exposure`(실제 이 PC 데이터 반환 확인)·WS `mode=simulate`(주입 이벤트 반영 확인)·WS `mode=real`(20초 대기해 실제 raw_log에 "No suspicious signals..." 같은 진짜 상태 반영 확인)·alerts 카운트 증가(CRITICAL 시)까지 Python `websockets` 클라이언트+curl로 검증 완료(테스트로 쌓인 히스토리는 세션 종료 전 정리함). 프론트 `vite build` 성공 — 이 세션은 Chrome 확장이 연결되지 않아 실제 브라우저 렌더링은 사용자 확인 필요
+- **방화벽 로깅 활성화 후속 검증 (2026-09-05, 같은 세션)**: 사용자가 관리자 권한으로 `netsh advfirewall set allprofiles logging ... enable`을 직접 실행한 뒤 "확인해달라"고 요청해 재점검함. 프로필 레벨 로깅은 정상 ON으로 확인됐으나, **로그 파일(`pfirewall.log`) 자체에 Administrators/SYSTEM만 읽을 수 있는 별도 ACL이 걸려 있어** 비-관리자 권한으로 실행 중인 백엔드에서는 "Access is denied"로 읽지 못하는 문제를 발견 — 로깅을 켜는 것과 로그를 읽는 것은 별개의 권한이라는 점. 시스템 ACL 변경은 "시스템/보안 설정 변경"에 해당해 직접 수행하지 않고, 옵션(그대로 두기/`icacls`로 읽기 권한 추가/백엔드를 관리자 권한으로 실행)을 사용자에게 제시 → 사용자가 `icacls ... /grant "$env:USERNAME:(R)"`를 직접 실행해 해결, 실제로 로그 15줄이 정상적으로 읽히는 것까지 재검증함. 이 과정에서 실제 로그 내용을 보니 대부분이 이 개발 PC 자신의 정상 ALLOW 트래픽(로컬 5180/8000 등)이라 노이즈가 커서, `collect_real_signals()`의 방화벽 로그 필터를 "전체 tail"에서 **DROP(차단)만** 골라내도록 수정(`-Tail 40`→`-Tail 300`으로 넉넉히 잡은 뒤 DROP 정규식 매칭 후 최근 20개만 사용) — ALLOW 노이즈에 실제 위협 신호가 묻히지 않도록 함
+
+### App 24: 금융보안원 클라우드 CSP 평가 `/fsi-csp-audit`
+"로그 분석 결과를 n8n/Slack/Notion과 연결하고, 클라우드 금융보안원 CSP 평가 내용도 점검하는 프로그램을 새 메뉴로 추가해달라"는 사용자 요청 중 세 번째 항목. 이 프로젝트에 없던 완전히 새로운 규제 도메인(금융권 클라우드 컴플라이언스)이라 사용자 지시대로 기존 4개 메뉴 그룹과 분리된 **새 상단 메뉴 그룹("금융 컴플라이언스")**으로 구성.
+- **실제 자료 조사 후 설계**: 정확한 200여 개 세부항목 원문은 공개돼 있지 않아, WebSearch/WebFetch로 금융보안원 공지·2차 자료를 조사해 실제 공개된 구조를 확인한 뒤 착수함 — ① **CSP 안전성평가**(CSP 자체의 조직·운영 보안 역량 평가): 11개 분야 54개 항목(필수 16+대체 38), 4단계 절차(업무중요도평가→CSP 안전성평가→안전성확보조치/BCP 수립→정보보호위원회 심의·감독원 보고). ② **금융분야 상용 클라우드서비스 보안 관리 참고서**(이용기관이 실제 구성한 클라우드 환경 자체점검): 5개 분야 32개 기준(가상자원관리7·네트워크관리6·계정및권한관리7·암호키관리5·로깅및모니터링관리7)
+- **정확성 고지**: 세부 항목 200여 개의 원문은 확보하지 못해 분야명·항목 수만 반영하고, `DISCLAIMER`(가이드 응답·리포트 양쪽에 노출)로 "공식 평가·인증을 대체하지 않으며 최신 세부 기준은 금융보안원 공식 자료(fsec.or.kr, regtech.fsec.or.kr, csp.fsec.or.kr) 확인 필요"를 명시 — 이 프로젝트의 기존 컴플라이언스 관련 고지 패턴(App11/16/18의 compliance_notes 면책 문구)과 동일한 수준의 신중함 적용
+- 입력: 평가 유형 2종 선택(CSP 안전성평가 / 클라우드 환경 보안관리 점검) + 대상 설명·설정 텍스트 붙여넣기 + 환경 컨텍스트(선택) — App 16/18과 동일한 UX 패턴이나 "플랫폼"이 아니라 "평가 유형"을 고르는 점이 다름
+- **issue_type 9종 신규 설계**(App 16의 9종·App 18의 6종·App 20의 6종과도 겹치지 않는 독자 taxonomy): `policy_gap`(정책/체계 미비)·`access_control_weakness`(접근통제 미흡)·`encryption_gap`(암호화/키관리 미흡)·`monitoring_gap`(보안모니터링/로깅 미흡)·`incident_response_gap`(침해사고 대응체계 미흡)·`continuity_gap`(비즈니스 연속성 미흡)·`supply_chain_risk`(공급망/하도급 관리 미흡)·`physical_security_gap`(물리적 보안 미흡)·`compliance_gap`(기타)
+- 각 발견 사항에 `domain` 필드(11개 또는 5개 분야 중 하나, 결과 카드에 뱃지로 표시)를 추가해 App16/18과 같은 `_enrich()`/리포트 패턴에 도메인 축 하나를 더함
+- mock 시나리오 2건(`mock_fsi_csp_audit.py`): CSP 안전성평가는 침해사고 통보 시한 미명시+재위탁업체 미공개(HIGH), 클라우드 환경 점검은 DB 비밀번호 하드코딩+관리콘솔 MFA 미적용+DB 포트 전체공개(CRITICAL) — 다른 감사 앱들의 mock 품질과 동일 수준으로 큐레이션
+- Markdown 리포트 다운로드에 "다음 단계"로 App 16/18(방화벽/IAM 감사기) 링크 포함해 일반 네트워크·권한 감사로 이어지도록 상호 연결
+- 탐지형 앱으로 분류해 알림 시스템 대상에 포함(종합 위험도 CRITICAL 시 알림) — 16번째 탐지형 앱
+- `backend/routers/fsi_csp_audit.py`, `backend/services/fsi_csp_audit_service.py`(Claude 시스템 프롬프트+`_enrich()`)/`mock_fsi_csp_audit.py`/`fsi_csp_audit_guide.py` — App 16 firewall_audit 4파일 구성을 그대로 복제
+- 백엔드는 두 평가 유형 모두 curl로 analyze 실제 호출해 HIGH/CRITICAL 판정과 `domain`·`issue_type_label` 정상 출력, 리포트 생성, 히스토리, CRITICAL 알림 반영까지 확인 완료. 프론트 `vite build` 성공 + 새 상단 메뉴 그룹("금융 컴플라이언스") 라우팅까지 curl로 200 확인 — 이 세션은 Chrome 확장이 연결되지 않아 실제 브라우저 렌더링은 사용자 확인 필요
+
 ### 테스트 레인지 (`test-range/`)
 App 6/16/17을 실제 대상으로 테스트해볼 수 있는 로컬 전용 Docker Compose 스택 — "취약한 사이트/네트워크/서버/방화벽을 구성할 방법이 있는지 검토해달라"는 요청으로 신설. App 9(Pwn Lab)이 이미 Docker를 요구하므로 새 의존성은 아님. 전부 검증된 공식 이미지(또는 그 위의 커스텀 Dockerfile)만 사용.
 - **juice-shop** (`bkimminich/juice-shop`, 공식) — 포트 3000, App 6 대상
@@ -317,9 +346,9 @@ App 6/16/17을 실제 대상으로 테스트해볼 수 있는 로컬 전용 Dock
 - **Mock / Live 모드**: `.env`에 `ANTHROPIC_API_KEY` 없으면 자동 Mock 모드
 - **사용 가이드**: 모든 페이지에 접이식 GuidePanel 포함
 - **네비게이션 바**: MOCK/LIVE 배지 + 전체 메뉴
-- **히스토리 SQLite 영속화**: App 1(대시보드·실시간 모니터링 포함)/2/3/4/5/6/7/8/11/12/14/15/16/17/18/19/20/21의 분석 이력·상담 세션이 `backend/data/history.db`(SQLite, gitignore 대상)에 저장되어 서버 재시작에도 유지됨. 앱마다 저장 형태(단순 이력 리스트 vs 채팅 세션)가 달라도 `backend/services/db.py`의 범용 `app` 구분 단일 테이블(JSON 블롭)로 통일 처리 — `add_entry`/`get_history`/`get_entry`/`update_entry`/`clear_history` 5개 함수로 기존 `history: list[dict]`/`sessions: dict[int, dict]` 패턴을 그대로 대체함. **CTF/모의해킹 연습용 앱(App 9 Pwn/Reverse, App 10 Web CTF 아레나, App 13 모의 해킹 랩)은 서버 재시작 시 초기화되는 것이 의도된 동작이라, App 22(통합 리스크 대시보드)는 자체 결과가 없는 순수 집계 페이지라 이 영속화 대상에서 제외**됨
-- **알림 시스템**: 탐지형 앱 14개(대시보드·실시간모니터링/피싱/취약점/IoC/웹스캐너/인젝션탐지/모델감사/방화벽 정책 감사기/인프라 취약점 스캐너 의존성·네트워크/클라우드 IAM 정책 감사기/시크릿 스캐너/컨테이너·Dockerfile 감사기/DNS·이메일 보안 점검)가 각 앱 기준 최고 심각도(CRITICAL/MALICIOUS/INJECTION)로 판정하면 자동으로 Slack/이메일 알림을 시도함. `SLACK_WEBHOOK_URL` 또는 `SMTP_*`(`.env.example` 참고) 미설정 시 자동 Mock 모드로 동작 — 실제 전송 없이 알림 로그만 기록(다른 앱들의 Mock/Live 패턴과 동일). 알림 로그는 NavBar 우측 종(🔔) 아이콘 드롭다운에서 확인·삭제 가능(`GET/DELETE /api/alerts`, 20초 폴링). 상담형 앱(인시던트/위협분석)과 생성형 앱(정책생성기, 피싱 모의훈련 생성기)은 "위협 판정"이 아니라 대상에서 제외. CVE 조회(App 15)는 Claude AI 자체를 쓰지 않는 순수 조회 도구라 마찬가지로 제외, App 22(통합 리스크 대시보드)도 판정을 내리지 않는 집계 페이지라 제외. `backend/services/notify.py`, `backend/routers/alerts.py`. ⚠️ 알림 발송(urllib/smtplib)은 블로킹 호출이라 async 라우트에서 직접 기다리면 안 됨 — 실시간 모니터링 WebSocket에서 이미 겪은 함정과 같은 유형이라 `alert_if_critical()`이 내부적으로 `run_in_executor`로 스레드 위임함. 원래 7개 앱에서 Mock 데이터 조합으로 실제 CRITICAL을 트리거해 alerts 카운트 증가·비-CRITICAL 시 미증가·서버 재시작 후 유지까지 curl로 검증 완료(App 16/17/18/19/20/21은 각 앱 섹션에서 별도 검증)
-- **n8n 자동화 연동**: 모든 앱이 이미 REST API(`/api/*`)로 노출돼 있어 n8n의 HTTP Request 노드가 코드 수정 없이 그대로 호출 가능. `docs/n8n-integration.md`에 연동 방법 + 자동화용 엔드포인트 요약, `n8n-workflows/`에 바로 Import 가능한 예제 워크플로우 3개(알림 폴링→Slack, CVE 일일 감시→Slack, IoC 일괄분석 Webhook) 제공. 이와 함께 백엔드를 로컬 밖으로 노출하는 경우를 대비해 선택적 API 키 인증(`API_KEY` 환경변수, 미설정 시 기존과 동일하게 인증 없음)을 `backend/services/auth.py` + `main.py`(`/api/*` 라우터 전체에 `Depends`)로 추가 — `/api/mode`는 헬스체크 목적으로 예외. `API_KEY` 미설정/오설정/정설정 3가지 케이스와 IoC 분석·alerts 응답 필드가 예제 워크플로우 가정과 일치하는지 curl로 검증 완료. CVE 검색 예제는 이 세션 네트워크 제한으로 NVD 실호출까지는 못 했으나 `cve_lookup_service.search_cves()` 응답 스키마 확인으로 대체함. ⚠️ `API_KEY`를 켜면 프론트엔드 요청도 헤더가 없어 401을 받게 되므로(가이드에 고지), n8n 전용으로 켜거나 프론트 프록시에 헤더 주입을 추가해야 함(미착수)
+- **히스토리 SQLite 영속화**: App 1(대시보드·실시간 모니터링 포함)/2/3/4/5/6/7/8/11/12/14/15/16/17/18/19/20/21/23(실제 모드만, `attack_monitor`)/24의 분석 이력·상담 세션이 `backend/data/history.db`(SQLite, gitignore 대상)에 저장되어 서버 재시작에도 유지됨. 앱마다 저장 형태(단순 이력 리스트 vs 채팅 세션)가 달라도 `backend/services/db.py`의 범용 `app` 구분 단일 테이블(JSON 블롭)로 통일 처리 — `add_entry`/`get_history`/`get_entry`/`update_entry`/`clear_history` 5개 함수로 기존 `history: list[dict]`/`sessions: dict[int, dict]` 패턴을 그대로 대체함. **CTF/모의해킹 연습용 앱(App 9 Pwn/Reverse, App 10 Web CTF 아레나, App 13 모의 해킹 랩)은 서버 재시작 시 초기화되는 것이 의도된 동작이고, App 22(통합 리스크 대시보드)는 자체 결과가 없는 순수 집계 페이지, App 23의 시뮬레이션(데모) 탭 결과(`attack_monitor_demo`)는 별도 앱 이름으로는 저장되지만 실제 공격 이력이 아니라는 성격상 알림·App 22 집계 대상에서는 제외**됨
+- **알림 시스템**: 탐지형 앱 16개(대시보드·실시간모니터링/피싱/취약점/IoC/웹스캐너/인젝션탐지/모델감사/방화벽 정책 감사기/인프라 취약점 스캐너 의존성·네트워크/클라우드 IAM 정책 감사기/시크릿 스캐너/컨테이너·Dockerfile 감사기/DNS·이메일 보안 점검/실시간 공격 모니터링 & 대응 센터 실제 모드/금융보안원 클라우드 CSP 평가)가 각 앱 기준 최고 심각도(CRITICAL/MALICIOUS/INJECTION)로 판정하면 자동으로 Slack/이메일 알림을 시도함. `SLACK_WEBHOOK_URL` 또는 `SMTP_*`(`.env.example` 참고) 미설정 시 자동 Mock 모드로 동작 — 실제 전송 없이 알림 로그만 기록(다른 앱들의 Mock/Live 패턴과 동일). 알림 로그는 NavBar 우측 종(🔔) 아이콘 드롭다운에서 확인·삭제 가능(`GET/DELETE /api/alerts`, 20초 폴링). 상담형 앱(인시던트/위협분석)과 생성형 앱(정책생성기, 피싱 모의훈련 생성기)은 "위협 판정"이 아니라 대상에서 제외. CVE 조회(App 15)는 Claude AI 자체를 쓰지 않는 순수 조회 도구라 마찬가지로 제외, App 22(통합 리스크 대시보드)도 판정을 내리지 않는 집계 페이지라 제외. `backend/services/notify.py`, `backend/routers/alerts.py`. **n8n Push 연동** (2026-09-05): `N8N_WEBHOOK_URL` 환경변수를 설정하면 CRITICAL 알림 시 Slack/이메일과 별도로 구조화된 JSON(`{app, app_label, severity, summary, entry_id, created_at}`)을 n8n의 Webhook 트리거로도 전송 — 사람이 읽는 Slack/이메일 알림과 달리 n8n 쪽에서 그대로 조건 분기·필드 매핑해 Jira 티켓 생성 등 임의의 후속 자동화로 이어붙일 수 있음. Slack/SMTP 중 아무것도 없어도 `N8N_WEBHOOK_URL`만 있으면 Mock 모드에서 벗어남(`IS_MOCK`이 세 채널 중 하나라도 설정되면 false). 받는 쪽 예시 워크플로우는 `n8n-workflows/push-alert-webhook-receiver.json`(Webhook → 메시지 포맷 → Slack, 실제로는 Slack 자리에 원하는 자동화를 붙이면 됨) — `docs/n8n-integration.md` "8. n8n Push 연동" 참고. ⚠️ 알림 발송(urllib/smtplib)은 블로킹 호출이라 async 라우트에서 직접 기다리면 안 됨 — 실시간 모니터링 WebSocket에서 이미 겪은 함정과 같은 유형이라 `alert_if_critical()`이 내부적으로 `run_in_executor`로 스레드 위임함. 원래 7개 앱에서 Mock 데이터 조합으로 실제 CRITICAL을 트리거해 alerts 카운트 증가·비-CRITICAL 시 미증가·서버 재시작 후 유지까지 curl로 검증 완료(App 16/17/18/19/20/21은 각 앱 섹션에서 별도 검증)
+- **n8n 자동화 연동**: 모든 앱이 이미 REST API(`/api/*`)로 노출돼 있어 n8n의 HTTP Request 노드가 코드 수정 없이 그대로 호출 가능. `docs/n8n-integration.md`에 연동 방법 + 자동화용 엔드포인트 요약, `n8n-workflows/`에 바로 Import 가능한 예제 워크플로우 5개(알림 폴링→Slack, CVE 일일 감시→Slack, IoC 일괄분석 Webhook, App 23 리포트→Slack, App 23→Notion 누적) 제공. 이와 함께 백엔드를 로컬 밖으로 노출하는 경우를 대비해 선택적 API 키 인증(`API_KEY` 환경변수, 미설정 시 기존과 동일하게 인증 없음)을 `backend/services/auth.py` + `main.py`(`/api/*` 라우터 전체에 `Depends`)로 추가 — `/api/mode`는 헬스체크 목적으로 예외. `API_KEY` 미설정/오설정/정설정 3가지 케이스와 IoC 분석·alerts 응답 필드가 예제 워크플로우 가정과 일치하는지 curl로 검증 완료. CVE 검색 예제는 이 세션 네트워크 제한으로 NVD 실호출까지는 못 했으나 `cve_lookup_service.search_cves()` 응답 스키마 확인으로 대체함. ⚠️ `API_KEY`를 켜면 프론트엔드 요청도 헤더가 없어 401을 받게 되므로(가이드에 고지), n8n 전용으로 켜거나 프론트 프록시에 헤더 주입을 추가해야 함(미착수)
 - **n8n Slack 알림 채널 마이그레이션** (2026-09-04, 사용자의 실제 로컬 n8n 인스턴스 `localhost:5678` 대상 작업): 기존에 예제 워크플로우들이 사용자의 다른 용도 채널 `자동-매매`로 Slack 알림을 보내고 있어, 전용 채널 `#ai-security-suite`(신규 생성)로 이전함.
   - `alerts-polling-to-slack` → n8n에 기존에 Import돼 있던 워크플로우의 Slack 노드 채널만 교체
   - `cve-daily-watch`, `ioc-batch-analysis`는 이번에 처음 n8n에 Import(클립보드 붙여넣기로 캔버스에 paste하는 방식 — n8n이 워크플로우 JSON 붙여넣기를 자동 인식해 노드로 펼쳐줌)
@@ -330,6 +359,7 @@ App 6/16/17을 실제 대상으로 테스트해볼 수 있는 로컬 전용 Dock
   - **Critical Alerts, CVE Daily Watch 워크플로우**: 수동 Execute workflow로 실제 Slack 발송까지 검증 완료(`slack_read_channel`로 메시지 도착 확인) — Critical Alerts는 신규 MALICIOUS IoC 알림 1건, CVE Daily Watch는 log4j/openssl/struts 중 CVSS≥7.0인 실제 NVD 데이터 7건이 그대로 도착함
   - **IoC Batch Analysis 워크플로우**: 실제 프로덕션 Webhook에 curl로 POST해 검증. Slack 메시지는 도착했으나 메시지 본문 맨 앞에 의도치 않은 `=` 문자가 그대로 노출되는 버그가 있었음(예: `=악성 IoC 1건 중...`) — 클립보드 붙여넣기로 Message Text 필드를 고칠 때, 필드가 이미 expression 모드라 앞의 `=`를 붙이면 안 되는데 붙여서 발생. **(2026-09-04 후속 세션에서 수정 완료)**: `Slack: malicious IoC found` 노드의 Message Text 맨 앞 `=` 한 글자만 삭제 후 재Publish. 프로덕션 Webhook에 `{"content":"1.1.1.1"}`로 재검증해 `slack_read_channel`로 실제 Slack 메시지가 `=` 없이 `악성 IoC 1건 중 확정 악성 발견: 1.1.1.1 (봇넷 노드)`로 정상 도착하는 것까지 확인
   - Slack 채널 `#ai-security-suite` ID: `C0BUZ3AG3R7`
+- **n8n → Notion 연동 완료** (2026-09-05): `attack-monitor-to-notion.json`(App 23 실제 모드 CRITICAL/HIGH/MEDIUM 히스토리를 15분마다 Notion DB에 누적, INFO 제외) n8n에 Import + Notion 자격증명 연결 + Publish까지 완료, 실제 페이지 생성까지 end-to-end 검증. 위 두 버그(`$env` 접근 차단 → `host.docker.internal:8000` 리터럴 URL로 교체, 클립보드 인코딩)에 더해 이 워크플로우에서만 발견된 추가 이슈: Notion 노드(typeVersion 2.2)의 date 속성 파라미터 키가 `dateValue`가 아니라 `date`였음(다른 7개 속성 위협도/요약/이벤트수/분류/모드/분석ID/리포트는 문제없이 매핑됨) — n8n UI에서 Expression 모드로 직접 고치고 `attack-monitor-to-notion.json`도 동일하게 수정. Notion 데이터베이스 속성 8개(위협도/요약/이벤트수/분류/모드/분석ID/발생시각/리포트)는 사용자가 Notion UI에서 직접 입력하는 과정에서 인코딩이 깨져 저장돼 있던 것을 Notion API로 속성 ID 기준 PATCH해 복구함. 액세스 토큰은 `docs/notion access token.txt`로 전달받았으며 `.gitignore`에 `*access token*` 패턴 추가해 커밋 방지 처리.
 
 ---
 
@@ -351,10 +381,12 @@ App 6/16/17을 실제 대상으로 테스트해볼 수 있는 로컬 전용 Dock
 - [x] **DNS/이메일 보안 점검**: App 21 (`/dns-security`)로 구현됨, App 15에 이은 네 번째 Claude API 미사용 앱
 - [x] **통합 리스크 대시보드**: App 22 (`/risk-dashboard`)로 구현됨 — 오래전부터 미착수로 남아있던 후보. 새 분석 없이 기존 히스토리/알림 데이터만 집계
 - 위 5개(App 18~22)는 모두 "정보보안 관점에서 더 추가할 점검이 있을지" 질문 하나에서 이어진 같은 세션의 연속 작업(App 16의 VPN/원격접속 게이트웨이 플랫폼 추가도 같은 흐름). 무선 AP/로드밸런서·WAF 등 App 16의 추가 플랫폼 후보는 여전히 미착수 — 새 아이디어가 생기면 여기에 추가.
+- [x] **실시간 공격 모니터링 & 대응 센터**: App 23 (`/attack-monitor`)로 구현됨 — "외부 공격을 계속 모니터링하고 대응하는 프로그램" 요청으로 신설, Roadmap 사전 목록에는 없던 앱(App 13/18처럼 세션 중 요청으로 추가된 사례). App 1의 데모용 합성 로그 한계를 넘어 이 PC의 실제 Windows 보안 신호를 모니터링하고, 탐지에 그치지 않고 이벤트별 대응 제안까지 제공하는 이 프로젝트 최초의 "탐지+대응" 결합 앱
+- [x] **금융보안원 클라우드 CSP 평가**: App 24 (`/fsi-csp-audit`)로 구현됨 — "n8n/Slack/Notion 연동 + 금융보안원 CSP 평가 앱 추가"라는 한 요청의 세 번째 항목으로 신설, 사용자 지시대로 기존 메뉴 그룹과 분리된 새 상단 메뉴 그룹("금융 컴플라이언스")으로 구성. Roadmap 사전 목록에 없던 앱이자, 이 프로젝트 최초로 특정 국내 규제기관(금융보안원)의 공개 프레임워크 구조를 WebSearch/WebFetch로 조사해 반영한 앱
 
 ### 외부 자동화 연동
 - [x] **n8n 연동 (Pull: n8n → 이 앱)**: 위 "공통 기능"의 n8n 자동화 연동 항목, `docs/n8n-integration.md` 참고
-- [ ] **n8n 연동 (Push: 이 앱 → n8n)**: 지금은 CRITICAL 탐지 시 Slack/이메일로만 알림(`notify.py`)을 보내는데, 여기에 n8n Webhook URL을 추가로 호출하는 옵션을 붙여 n8n 쪽에서 Jira 티켓 생성 등 복잡한 후속 처리를 할 수 있게 하는 안 — 사용자가 검토 후 진행 여부 결정 예정
+- [x] **n8n 연동 (Push: 이 앱 → n8n)**: `notify.py`에 `N8N_WEBHOOK_URL` 지원 추가로 구현됨. CRITICAL 탐지 시 Slack/이메일과 별도로 구조화된 JSON을 n8n Webhook으로 전송 — 위 "공통 기능"과 `docs/n8n-integration.md` "8. n8n Push 연동" 참고
 
 ---
 
@@ -404,7 +436,9 @@ test_AI_security/
 │   │   ├── secret_scan.py     ← App 19 (+ /guide, /report/{id}) — Claude API 미사용
 │   │   ├── container_audit.py ← App 20 (+ /guide, /report/{id})
 │   │   ├── dns_security.py    ← App 21 (+ /guide, /report/{id}) — Claude API 미사용
-│   │   └── dashboard_overview.py ← App 22 (/overview 단일 엔드포인트, Claude/외부 API 모두 미사용)
+│   │   ├── dashboard_overview.py ← App 22 (/overview 단일 엔드포인트, Claude/외부 API 모두 미사용)
+│   │   ├── attack_monitor.py  ← App 23 (/exposure, /ws?mode=real|simulate, /history, /report/{id})
+│   │   └── fsi_csp_audit.py   ← App 24 (+ /guide, /report/{id})
 │   └── services/
 │       ├── claude_service.py
 │       ├── mock_data.py
@@ -432,7 +466,10 @@ test_AI_security/
 │       ├── secret_scanner_service.py
 │       ├── container_audit_service.py / mock_container_audit.py / container_audit_guide.py
 │       ├── dns_security_service.py
-│       └── dashboard_service.py
+│       ├── dashboard_service.py
+│       ├── attack_monitor_service.py  ← App 23 (PowerShell로 실제 Windows 신호 수집)
+│       ├── response_playbook.py       ← App 23 (탐지 카테고리 → 대응 제안 결정론적 매핑)
+│       └── fsi_csp_audit_service.py / mock_fsi_csp_audit.py / fsi_csp_audit_guide.py  ← App 24
 └── frontend/
     ├── package.json
     └── src/
@@ -465,7 +502,9 @@ test_AI_security/
             ├── SecretScanner.jsx
             ├── ContainerAudit.jsx
             ├── DnsSecurityCheck.jsx
-            └── RiskDashboard.jsx
+            ├── RiskDashboard.jsx
+            ├── AttackMonitor.jsx
+            └── FsiCspAudit.jsx
 ```
 
 ## 실행 방법
@@ -496,6 +535,7 @@ npm run dev
 | 페이지/기능 | 추가로 필요한 것 |
 |---|---|
 | `/vuln`, `/web-arena`, `/policy`, `/model-audit`, `/pentest-lab`, `/phishing-sim`, `/firewall-audit`, `/iam-audit`, `/secret-scan`, `/container-audit`, `/risk-dashboard` | 없음 — 서버 두 개만 켜면 바로 테스트 가능 |
+| `/attack-monitor`의 "실제 시스템 모니터링" 탭·노출 현황 점검 | Windows + PowerShell 필수(PowerShell 5.1 기준으로 검증). 로그온 실패/Defender 탐지/리스닝 포트 조회는 관리자 권한 없이도 동작하나, 방화벽 연결 로깅(더 정확한 인바운드 이력)을 켜려면 관리자 권한 PowerShell에서 `netsh advfirewall set allprofiles logging droppedconnections enable`(+ `allowedconnections enable`) 실행 필요(노출 현황 점검 결과에 안내됨). "시뮬레이션(데모)" 탭은 이 요구사항 없이 App 1처럼 바로 사용 가능 |
 | `/pwn-lab`의 Pwn/Reverse 6개 챌린지(실제 컴파일·gdb 실행) | Docker Desktop 켜기 또는 WSL Ubuntu 설치 (페이지 0단계에 Docker/WSL 두 가지 방법 안내됨) |
 | `/pwn-lab`의 Misc 3개 챌린지 | 없음 — 컴파일 불필요 |
 | `/web-arena` 공유 스코어보드를 팀원과 같이 쓰기 | `npm run dev -- --host` + 방화벽에서 5180/8000 포트 개방 후 `http://<호스트 IP>:5180` 공유 |
@@ -518,6 +558,9 @@ SMTP_PASSWORD=
 ALERT_EMAIL_TO=
 ALERT_EMAIL_FROM=
 
+# n8n Push 연동 (선택) — CRITICAL 탐지 시 구조화된 JSON을 n8n Webhook으로도 전송
+N8N_WEBHOOK_URL=
+
 # CVE 실시간 조회 (선택, .env.example 참고) — 없어도 동작하나 요청 한도가 낮음
 NVD_API_KEY=
 
@@ -529,9 +572,17 @@ API 키 없으면 Mock 모드로 자동 동작. 알림 관련 변수도 하나�
 
 ---
 
+## 대기 중인 작업
+
+- **NVD_API_KEY 발급 대기** (2026-09-05): 사용자가 [nvd.nist.gov/developers/request-an-api-key](https://nvd.nist.gov/developers/request-an-api-key)에서 신청 완료, 이메일로 키가 오면 처리 필요. **코드 변경은 필요 없음** — App 15/17이 이미 `NVD_API_KEY` 환경변수를 지원하도록 구현돼 있어 설정만 하면 됨:
+  1. 키를 `backend/.env`에 추가: `NVD_API_KEY=발급받은_키` (이 프로젝트는 `backend/.env`에 이미 `N8N_WEBHOOK_URL`이 들어있으니 그 파일에 한 줄만 추가하면 됨 — `.gitignore`로 커밋 대상에서 이미 제외됨)
+  2. 백엔드 재시작 (환경변수는 프로세스 시작 시 한 번만 읽으므로 `--reload`로는 반영 안 됨 — `uvicorn` 프로세스를 완전히 죽였다가 다시 실행)
+  3. `GET /api/cve/status`로 `"hasApiKey": true`인지 확인 (또는 `/cve-lookup` 페이지에서 확인)
+  4. 키 적용 전후로 체감 차이: 요청 한도가 30초당 5건 → 50건으로 늘어남 — `/cve-lookup`의 키워드 검색이나 `/infra-scan` 의존성 스캔(패키지 여러 개)에서 딜레이가 크게 줄어드는 것으로 확인 가능
+
 ## 이어서 작업하는 방법
 
 세션이 끊기면:
-1. 이 파일의 **진행 상황 표** 확인
+1. 이 파일의 **진행 상황 표**와 바로 위 **대기 중인 작업** 확인
 2. 서버 재시작: 백엔드 `uvicorn main:app --reload --port 8000`, 프론트엔드 `npm run dev` (기능별 추가 요구사항은 위 [실행 방법] 표 참고)
-3. **Roadmap**에서 다음 작업 선택
+3. **Roadmap**에서 다음 작업 선택 (2026-09-05 기준 전부 완료 — 새 아이디어는 사용자 요청 또는 "정보보안 관점에서 더 점검할 것" 제안 방식으로 계속 추가될 수 있음)

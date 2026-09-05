@@ -24,6 +24,8 @@ import SecretScanner from './pages/SecretScanner'
 import ContainerAudit from './pages/ContainerAudit'
 import DnsSecurityCheck from './pages/DnsSecurityCheck'
 import RiskDashboard from './pages/RiskDashboard'
+import AttackMonitor from './pages/AttackMonitor'
+import FsiCspAudit from './pages/FsiCspAudit'
 
 export default function App() {
   const [isMock, setIsMock] = useState(null)
@@ -58,6 +60,8 @@ export default function App() {
         <Route path="/container-audit" element={<ContainerAudit />} />
         <Route path="/dns-security" element={<DnsSecurityCheck />} />
         <Route path="/risk-dashboard" element={<RiskDashboard />} />
+        <Route path="/attack-monitor" element={<AttackMonitor />} />
+        <Route path="/fsi-csp-audit" element={<FsiCspAudit />} />
       </Routes>
     </BrowserRouter>
   )

@@ -26,6 +26,10 @@ backend/data/
 *.db
 *.db-journal
 
+# Secrets (accidentally placed outside .env)
+*access token*
+*.token
+
 # OS
 .DS_Store
 Thumbs.db

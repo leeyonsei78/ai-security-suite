@@ -4,7 +4,7 @@ import axios from 'axios'
 import {
   Shield, Mail, ShieldAlert, Search, Siren, Globe, FlaskConical, Syringe, Cpu, Swords,
   ScrollText, BrainCircuit, ShieldCheck, Bell, Trash2, Send, Database, ShieldQuestion, Radar,
-  KeyRound, ScanSearch, Container, MailCheck, Gauge, ChevronDown,
+  KeyRound, ScanSearch, Container, MailCheck, Gauge, ChevronDown, Zap, Landmark,
 } from 'lucide-react'
 
 const groups = [
@@ -14,6 +14,7 @@ const groups = [
     icon: ShieldAlert,
     links: [
       { to: '/', icon: Shield, label: '보안 대시보드' },
+      { to: '/attack-monitor', icon: Zap, label: '실시간 공격 모니터링 & 대응' },
       { to: '/phishing', icon: Mail, label: '피싱 탐지기' },
       { to: '/vuln', icon: ShieldAlert, label: '취약점 스캐너' },
       { to: '/ioc', icon: Search, label: 'IoC 분석기' },
@@ -56,6 +57,14 @@ const groups = [
     links: [
       { to: '/cve-lookup', icon: Database, label: 'CVE 조회' },
       { to: '/risk-dashboard', icon: Gauge, label: '통합 리스크 대시보드' },
+    ],
+  },
+  {
+    key: 'finance-compliance',
+    label: '금융 컴플라이언스',
+    icon: Landmark,
+    links: [
+      { to: '/fsi-csp-audit', icon: Landmark, label: '금융보안원 클라우드 CSP 평가' },
     ],
   },
 ]

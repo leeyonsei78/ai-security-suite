@@ -1,0 +1,102 @@
+{
+  "name": "AI Security Suite - Attack Monitor -> Notion Log",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "id": "trigger-schedule",
+      "name": "Every 15 minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-860, 0]
+    },
+    {
+      "parameters": {
+        "url": "http://host.docker.internal:8000/api/attack-monitor/history?mode=real",
+        "options": {}
+      },
+      "id": "http-get-history",
+      "name": "GET /api/attack-monitor/history",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-640, 0]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// alerts-polling-to-slack.json과 동일한 '최근 폴링 주기 내 생성분만' 시간창 필터.\n// Notion은 실시간 알림이 아니라 '누적 기록'이 목적이라 INFO를 포함한 전체를 남길 수도 있지만,\n// 실제 모드는 20초마다 도는 루프라 INFO까지 전부 쌓으면 하루 수천 행이 생겨 그대로는 비현실적임 —\n// 기본값은 threat_level이 INFO가 아닌 것만 Notion에 축적한다. 전체를 원하면 아래 필터 줄을 지우면 된다.\nconst body = $input.first().json;\nconst history = body.history || [];\nconst cutoff = Date.now() - 15 * 60 * 1000;\nreturn history\n  .filter((h) => h.created_at && new Date(h.created_at).getTime() > cutoff)\n  .filter((h) => h.threat_level && h.threat_level !== 'INFO')\n  .map((h) => ({ json: h }));"
+      },
+      "id": "code-filter-recent",
+      "name": "Filter: new non-INFO since last poll",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-420, 0]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const h = $json;\nconst events = h.events || [];\nconst topCategories = [...new Set(events.map((e) => e.category))].slice(0, 3).join(', ');\nreturn {\n  json: {\n    title: `[${h.threat_level}] 분석 #${h.id}`,\n    threat_level: h.threat_level,\n    summary: h.summary || '',\n    event_count: events.length,\n    categories: topCategories,\n    mode: h.mode || 'real',\n    analysis_id: h.id,\n    occurred_at: h.created_at ? new Date(h.created_at).toISOString() : null,\n    report_url: `http://host.docker.internal:8000/api/attack-monitor/report/${h.id}?mode=real`\n  }\n};"
+      },
+      "id": "code-format-row",
+      "name": "Format Notion row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-200, 0]
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "create",
+        "databaseId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "3d2a5631-6360-8017-bdbd-c81559416c1b"
+        },
+        "title": "={{ $json.title }}",
+        "propertiesUi": {
+          "propertyValues": [
+            { "key": "위협도|select", "selectValue": "={{ $json.threat_level }}" },
+            { "key": "요약|rich_text", "textContent": "={{ $json.summary }}" },
+            { "key": "이벤트수|number", "numberValue": "={{ $json.event_count }}" },
+            { "key": "분류|rich_text", "textContent": "={{ $json.categories }}" },
+            { "key": "모드|select", "selectValue": "={{ $json.mode }}" },
+            { "key": "분석ID|number", "numberValue": "={{ $json.analysis_id }}" },
+            { "key": "발생시각|date", "date": "={{ $json.occurred_at }}" },
+            { "key": "리포트|url", "urlValue": "={{ $json.report_url }}" }
+          ]
+        }
+      },
+      "id": "notion-create-page",
+      "name": "Notion: append log row",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [20, 0]
+    }
+  ],
+  "connections": {
+    "Every 15 minutes": {
+      "main": [[{ "node": "GET /api/attack-monitor/history", "type": "main", "index": 0 }]]
+    },
+    "GET /api/attack-monitor/history": {
+      "main": [[{ "node": "Filter: new non-INFO since last poll", "type": "main", "index": 0 }]]
+    },
+    "Filter: new non-INFO since last poll": {
+      "main": [[{ "node": "Format Notion row", "type": "main", "index": 0 }]]
+    },
+    "Format Notion row": {
+      "main": [[{ "node": "Notion: append log row", "type": "main", "index": 0 }]]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "instanceId": "ai-security-suite"
+  }
+}

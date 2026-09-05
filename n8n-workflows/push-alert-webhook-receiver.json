@@ -1,0 +1,58 @@
+{
+  "name": "AI Security Suite - Push Alert Receiver (Webhook)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ai-security-push-alert",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "webhook-push-alert",
+      "name": "Webhook: push alert",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-640, 0]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// backend/services/notify.py의 _send_n8n()이 CRITICAL 탐지 시 이 Webhook으로 구조화된\n// JSON을 POST한다: { app, app_label, severity, summary, entry_id, created_at }.\n// 이 노드는 그 페이로드를 사람이 읽는 메시지로 포맷하는 예시일 뿐 — 실제로는 여기서\n// Jira 티켓 생성, PagerDuty 인시던트 오픈 등 원하는 후속 자동화로 바로 이어붙이면 된다.\nconst b = $json.body || {};\nconst text = `🔗 [n8n Push] [${b.severity}] ${b.app_label}\\n${b.summary}\\n\\n분석 ID: ${b.entry_id ?? 'N/A'}\\n발생: ${b.created_at || ''}`;\nreturn { json: { text } };"
+      },
+      "id": "code-format-push-message",
+      "name": "Format push message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-420, 0]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "C0BUZ3AG3R7"
+        },
+        "text": "={{ $json.text }}",
+        "otherOptions": {}
+      },
+      "id": "slack-push-notify",
+      "name": "Slack: post push alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [-200, 0]
+    }
+  ],
+  "connections": {
+    "Webhook: push alert": {
+      "main": [[{ "node": "Format push message", "type": "main", "index": 0 }]]
+    },
+    "Format push message": {
+      "main": [[{ "node": "Slack: post push alert", "type": "main", "index": 0 }]]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "instanceId": "ai-security-suite"
+  }
+}
