@@ -1,0 +1,31 @@
+[
+  {
+    "eventTime": "2026-09-03T04:11:02Z",
+    "eventName": "ConsoleLogin",
+    "userIdentity": { "type": "Root", "accountId": "123456789012" },
+    "sourceIPAddress": "198.51.100.23",
+    "additionalEventData": { "MFAUsed": "No", "LoginTo": "https://console.aws.amazon.com/" }
+  },
+  {
+    "eventTime": "2026-09-03T04:13:47Z",
+    "eventName": "PutUserPolicy",
+    "userIdentity": { "type": "Root", "accountId": "123456789012" },
+    "requestParameters": {
+      "userName": "svc-backup",
+      "policyName": "InlineAdminOverride",
+      "policyDocument": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"*\",\"Resource\":\"*\"}]}"
+    }
+  },
+  {
+    "eventTime": "2026-09-03T04:15:20Z",
+    "eventName": "CreateAccessKey",
+    "userIdentity": { "type": "Root", "accountId": "123456789012" },
+    "requestParameters": { "userName": "svc-backup" },
+    "responseElements": { "accessKey": { "accessKeyId": "AKIA-EXAMPLE-REDACTED", "status": "Active" } }
+  },
+  {
+    "eventTime": "2026-09-03T04:18:02Z",
+    "eventName": "ListBuckets",
+    "userIdentity": { "type": "IAMUser", "userName": "svc-backup", "accountId": "123456789012" }
+  }
+]

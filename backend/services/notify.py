@@ -58,6 +58,7 @@ APP_LABELS = {
     "attack_monitor": "실시간 공격 모니터링 & 대응 센터",
     "attack_monitor_aws": "실시간 공격 모니터링 (AWS 샌드박스)",
     "fsi_csp_audit": "금융보안원 클라우드 CSP 평가",
+    "forensics_artifact_audit": "포렌식 아티팩트 감사기",
 }
 
 ALERTS_APP = "alerts"

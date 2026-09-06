@@ -1,0 +1,8 @@
+last_visit_time         url                                                              title
+2026-09-02 14:02:11      https://intranet.company.local/portal                           사내 포털
+2026-09-02 14:05:33      https://mail.company.local/owa                                  메일
+2026-09-02 14:40:02      https://drive.google.com/drive/my-drive                         My Drive - Google Drive
+2026-09-02 14:55:30      http://file-share-backup-cdn.net/upload?session=8f2a1c9d         (낯선 도메인, 첫 방문)
+2026-09-02 14:56:02      http://file-share-backup-cdn.net/upload?session=8f2a1c9d&part=2  (낯선 도메인, 연속 업로드)
+2026-09-02 14:56:19      http://file-share-backup-cdn.net/upload?session=8f2a1c9d&part=3  (낯선 도메인, 연속 업로드)
+2026-09-02 15:10:44      https://calendar.company.local/                                 사내 캘린더

@@ -1,0 +1,8 @@
+FullName                                          CreationTime           LastWriteTime
+C:\Users\jkim\AppData\Local\Temp\update.exe        2026-08-28 03:10:02    2026-08-28 03:11:03
+C:\Users\jkim\Documents\report_q3.docx             2026-08-01 09:00:00    2026-08-28 03:10:45
+C:\Users\jkim\Documents\budget_2026.xlsx           2026-07-15 10:20:00    2026-08-28 03:10:47
+C:\Users\jkim\Documents\project_plan.pptx          2026-06-20 14:00:00    2026-08-28 03:10:51
+C:\Users\jkim\Documents\meeting_notes.txt          2026-08-27 11:00:00    2026-08-28 03:11:12
+C:\Users\jkim\Documents\client_list.csv            2026-05-10 08:30:00    2026-08-28 03:11:24
+C:\Users\jkim\Documents\contract_draft.pdf         2026-08-20 16:45:00    2026-08-28 03:11:28

@@ -5,59 +5,90 @@ import {
   Shield, Mail, ShieldAlert, Search, Siren, Globe, FlaskConical, Syringe, Cpu, Swords,
   ScrollText, BrainCircuit, ShieldCheck, Bell, Trash2, Send, Database, ShieldQuestion, Radar,
   KeyRound, ScanSearch, Container, MailCheck, Gauge, ChevronDown, Zap, Landmark,
+  LayoutGrid, Server, Network, Cloud, Fingerprint,
 } from 'lucide-react'
 import ModeSelector from './ModeSelector'
 
+// 그룹 구조: "대상"(서버/네트워크/보안장비/클라우드) 축과 "기능"(취약점분석/모의해킹/
+// 사고대응·포렌식) 축이 섞여 있어 한 축으로만 나누면 억지 분류가 생김(예: 방화벽
+// 감사기는 네트워크+보안장비+클라우드를 동시에 다룸, IoC 분석기·CVE 조회는 대상이
+// 아예 없는 범용 도구). 그래서 대상이 뚜렷한 앱은 대상 축 그룹으로, 대상이 없거나
+// 여러 대상을 넘나드는 범용/분석형 도구는 별도 그룹(공통/취약점분석)으로 분리함.
+// 폐쇄망·인터넷망 구분은 메뉴 축으로 두지 않음 — 이미 ModeSelector가 앱별 cloud/
+// local/offline/mock을 런타임에 감지해 배지로 보여주므로, 메뉴를 또 쪼개면 같은
+// 앱이 중복 노출되거나 두 표시가 어긋날 수 있음 (2026-09-06).
 const groups = [
   {
-    key: 'detect',
-    label: '탐지·분석',
-    icon: ShieldAlert,
+    key: 'common',
+    label: '공통',
+    icon: LayoutGrid,
     links: [
       { to: '/', icon: Shield, label: '보안 대시보드' },
-      { to: '/attack-monitor', icon: Zap, label: '실시간 공격 모니터링 & 대응' },
-      { to: '/phishing', icon: Mail, label: '피싱 탐지기' },
-      { to: '/vuln', icon: ShieldAlert, label: '취약점 스캐너' },
+      { to: '/risk-dashboard', icon: Gauge, label: '통합 리스크 대시보드' },
+      { to: '/cve-lookup', icon: Database, label: 'CVE 조회', requiresInternet: true },
       { to: '/ioc', icon: Search, label: 'IoC 분석기' },
-      { to: '/webscan', icon: Globe, label: '웹 스캐너' },
-      { to: '/threat', icon: FlaskConical, label: '위협 분석 랩' },
-      { to: '/injection', icon: Syringe, label: '인젝션 탐지기' },
-      { to: '/model-audit', icon: BrainCircuit, label: 'AI 모델 감사' },
-      { to: '/firewall-audit', icon: ShieldQuestion, label: '방화벽 정책 감사기' },
-      { to: '/infra-scan', icon: Radar, label: '인프라 취약점 스캐너' },
-      { to: '/iam-audit', icon: KeyRound, label: 'IAM 정책 감사기' },
-      { to: '/secret-scan', icon: ScanSearch, label: '시크릿 스캐너' },
-      { to: '/container-audit', icon: Container, label: '컨테이너/Dockerfile 감사기' },
-      { to: '/dns-security', icon: MailCheck, label: 'DNS/이메일 보안 점검' },
-    ],
-  },
-  {
-    key: 'respond',
-    label: '대응·생성',
-    icon: Siren,
-    links: [
-      { to: '/incident', icon: Siren, label: '인시던트 대응' },
+      { to: '/phishing', icon: Mail, label: '피싱 탐지기' },
       { to: '/policy', icon: ScrollText, label: '보안 정책 생성기' },
-      { to: '/phishing-sim', icon: Send, label: '피싱 모의훈련 생성기' },
     ],
   },
   {
-    key: 'practice',
-    label: '실습·CTF',
+    key: 'server',
+    label: '서버',
+    icon: Server,
+    links: [
+      { to: '/webscan', icon: Globe, label: '웹 취약점 스캐너' },
+      { to: '/container-audit', icon: Container, label: '컨테이너/Dockerfile 감사기' },
+      { to: '/secret-scan', icon: ScanSearch, label: '시크릿 스캐너' },
+      { to: '/infra-scan', icon: Radar, label: '인프라 취약점 스캐너', requiresInternet: true },
+    ],
+  },
+  {
+    key: 'network',
+    label: '네트워크·보안장비',
+    icon: Network,
+    links: [
+      { to: '/firewall-audit', icon: ShieldQuestion, label: '방화벽 정책 감사기' },
+      { to: '/dns-security', icon: MailCheck, label: 'DNS/이메일 보안 점검', requiresInternet: true },
+    ],
+  },
+  {
+    key: 'cloud',
+    label: '클라우드',
+    icon: Cloud,
+    links: [
+      { to: '/iam-audit', icon: KeyRound, label: 'IAM 정책 감사기' },
+    ],
+  },
+  {
+    key: 'vuln-analysis',
+    label: '취약점분석',
+    icon: ShieldAlert,
+    links: [
+      { to: '/vuln', icon: ShieldAlert, label: '취약점 스캐너' },
+      { to: '/model-audit', icon: BrainCircuit, label: 'AI 모델 감사' },
+      { to: '/injection', icon: Syringe, label: '인젝션 탐지기' },
+    ],
+  },
+  {
+    key: 'pentest',
+    label: '모의해킹',
     icon: Swords,
     links: [
       { to: '/pwn-lab', icon: Cpu, label: 'Pwn/Reverse 실습실' },
       { to: '/web-arena', icon: Swords, label: 'Web CTF 아레나' },
       { to: '/pentest-lab', icon: ShieldCheck, label: '모의 해킹 랩' },
+      { to: '/phishing-sim', icon: Send, label: '피싱 모의훈련 생성기' },
     ],
   },
   {
-    key: 'lookup',
-    label: '조회',
-    icon: Database,
+    key: 'ir-forensics',
+    label: '사고대응·포렌식',
+    icon: Siren,
     links: [
-      { to: '/cve-lookup', icon: Database, label: 'CVE 조회' },
-      { to: '/risk-dashboard', icon: Gauge, label: '통합 리스크 대시보드' },
+      { to: '/incident', icon: Siren, label: '인시던트 대응' },
+      { to: '/attack-monitor', icon: Zap, label: '실시간 공격 모니터링 & 대응' },
+      { to: '/threat', icon: FlaskConical, label: '위협 분석 랩' },
+      { to: '/forensics', icon: Fingerprint, label: '포렌식 실습·분석 센터' },
     ],
   },
   {
@@ -206,7 +237,7 @@ export default function NavBar() {
 
       {currentGroup && (
         <div className="px-6 flex items-center gap-1 overflow-x-auto border-t border-slate-800 bg-slate-950/40">
-          {currentGroup.links.map(({ to, icon: Icon, label }) => (
+          {currentGroup.links.map(({ to, icon: Icon, label, requiresInternet }) => (
             <NavLink
               key={to}
               to={to}
@@ -220,6 +251,11 @@ export default function NavBar() {
               }
             >
               <Icon size={14} />{label}
+              {requiresInternet && (
+                <span title="외부 인터넷 연결 필요 (폐쇄망에서는 동작하지 않음)" className="text-xs opacity-70">
+                  🌐
+                </span>
+              )}
             </NavLink>
           ))}
         </div>

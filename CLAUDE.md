@@ -30,6 +30,7 @@ Claude AI를 활용한 보안 분석 도구 모음.
 | 22 | 통합 리스크 대시보드 | ✅ 완료 |
 | 23 | 실시간 공격 모니터링 & 대응 센터 | ✅ 완료 |
 | 24 | 금융보안원 클라우드 CSP 평가 | ✅ 완료 |
+| 25 | 포렌식 실습·분석 센터 | ✅ 완료 |
 
 ---
 
@@ -383,6 +384,55 @@ App 16(방화벽 정책 감사기)·App 18(IAM 정책 감사기)와 완전히 �
   - `GET /api/fsi-csp-audit/guide` 응답에 `data_collection` 필드로 추가, 프론트에 분야별 접이식 카드(`DataCollectionGuide`/`DomainCollectionCard`, `FsiCspAudit.jsx`)로 노출 — 평가 유형 선택 시 대상 분야 목록 바로 아래, 붙여넣기 입력창 위에 배치
   - **⚠️ 후속 사용자 피드백으로 발견한 UX 문제**: 배포 직후 사용자가 명령어만 보고 "이 명령어를 (여기서) 치라는 것인지" 헷갈려 함 — App16/18/20의 `how_to_export` 필드는 "결과를 복사해 붙여넣으세요"까지 명시하는데, 새로 만든 `DATA_COLLECTION`은 `where`/`what_to_check`/`commands`만 있고 "명령 결과를 이 앱에 어떻게 쓰는지"가 빠져있었음. `COMMAND_USAGE_NOTE`(도메인마다 반복하지 않고 cloud_env_management 패널 상단에 한 번만 노출되는 공용 안내문 — "이 앱이 대신 실행 안 함, 클라우드 계정 접근 가능한 곳에서 직접 실행 후 결과를 복사해 아래 입력창에 붙여넣으라")를 추가해 해결(`command_usage_note` 필드, `FsiCspAudit.jsx`의 `DataCollectionGuide`가 `usageNote` prop으로 표시). **교훈**: 새 가이드 구조를 만들 때는 "정보가 어디 있는지"뿐 아니라 "그 정보를 이 앱에 어떻게 입력하는지"까지 필드로 명시할 것 — 기존 App16 패턴(`how_to_export`)이 이미 이 문제를 해결한 형태였는데 새로 설계하면서 놓쳤던 것.
 
+### App 25: 포렌식 실습·분석 센터 `/forensics`
+메뉴 재편(2026-09-06, "서버/네트워크/클라우드/보안장비/모의해킹/취약점분석/사고대응/포렌식 축으로 다시 고민해달라") 도중 "사고대응·포렌식" 그룹에 실제 포렌식 전용 앱이 없다는 걸 발견 — App 7(위협 분석 랩)이 포렌식 아티팩트/메모리 포렌식 분석 유형을 갖고 있긴 하지만 자유 텍스트 프롬프트형이라, "포렌식 앱을 어느 방향으로" 물었을 때 사용자가 **세 방향(실습 랩/아티팩트 감사기/증거 수집 도구) 조합**을 선택해 하나의 앱에 3개 탭으로 구현. App 9(Pwn Lab)이 "실습이 없다"는 공백을, App 16/18/20이 "구조화된 감사"를, App 23이 "이 PC의 실제 신호 수집"을 각각 먼저 다뤘던 패턴을 포렌식 도메인에 그대로 이어붙인 조합.
+
+- **탭 1: 실습 랩** — App 9(Pwn/Reverse)·App 10(Web CTF)과 같은 "텍스트가 아니라 실제로 유효한 파일을 다운로드해 진짜 도구로 분석" 철학이되, Docker/WSL 같은 무거운 환경이 필요 없도록 이 프로젝트가 이미 요구하는 Python 3.11+ 표준 라이브러리만으로 세 파일 포맷을 실제로 만든다:
+  - **브라우저 히스토리**(입문): `sqlite3.Connection.serialize()`(Python 3.11+ 표준 라이브러리)로 만든 진짜 SQLite DB — 정상 방문 기록 사이에 낯선 도메인+Base64 인코딩된 flag가 담긴 URL이 섞여 있음. sqlite3 CLI 없이도 Python 한 줄로 조회 가능
+  - **네트워크 트래픽**(중급): Ethernet/IP/TCP 헤더를 struct로 직접 조립하고 IP/TCP 체크섬까지 정확히 계산한 진짜 pcap 파일(Wireshark에서 체크섬 오류 없이 깨끗하게 열림) — 평문 FTP 계정정보 + HTTP 응답 헤더에 숨긴 Base64 flag. Wireshark 없이도 PowerShell `Select-String`으로 평문 문자열만으로 풀 수 있는 대안 경로 제공
+  - **파일 카빙**(입문~중급): 쓰레기 바이트 뒤에 진짜 ZIP 아카이브(Python `zipfile`)가 이어붙은 바이너리 — ZIP은 파일 끝의 중앙 디렉토리를 기준으로 읽으므로 확장자만 `.zip`으로 바꾸면 대부분의 압축 프로그램이 그대로 열림(설치 없는 최소 경로), `binwalk` 등 정식 카빙 도구 사용법도 함께 안내
+  - 세 파일 생성 함수는 스크래치패드에서 실제로 실행해 (a) sqlite3로 재조회해 flag 디코딩 (b) 수동 pcap 파서로 페이로드 재추출 (c) zipfile로 재오픈 — 다운로드 API(`GET /api/forensics/lab/challenges/{id}/download`)를 통해 실제 curl로 받은 파일까지 다시 한번 검증해 세 challenge 모두 end-to-end로 flag 복구 확인 완료
+  - FLAGS는 CHALLENGES/바이트와 분리해 `/verify`(`POST /api/forensics/lab/verify`)의 서버 측 비교에만 사용(Pwn Lab과 동일 원칙). 서버 재시작 시 초기화되는 CTF 연습용 데이터라 `db.py` 대상 아님(App 9/10/13과 동일 스코프)
+- **탭 2: 아티팩트 감사기** — App 16/18/20과 동일한 "붙여넣기/업로드 → Claude가 구조화된 감사" 패턴을 포렌식에 적용, App 7의 자유 서술형 분석과 달리 findings/timeline/IOC를 구조화된 스키마로 반환:
+  - 입력 유형 5종: Windows 이벤트 로그 / 브라우저 히스토리 / 레지스트리 / 파일시스템 타임라인 / 실행 중 프로세스 목록
+  - **issue_type 6종 신규 설계**(App16의 9종·App18의 6종·App20의 6종과도 안 겹치는 독자 taxonomy): `evidence_of_compromise`(침해 증거)·`anti_forensic_technique`(안티포렌식 기법 — 로그삭제·타임스탬프 조작)·`persistence_mechanism`(지속성 메커니즘)·`data_exfiltration_evidence`(데이터 유출 증거)·`lateral_movement_evidence`(내부 이동 증거)·`timeline_gap`(타임라인 공백/조작 의심)
+  - 각 발견 사항에 MITRE ATT&CK 기법 ID(`mitre_technique`, 예: `T1070.001`)를 태깅하고, 응답에 `timeline`(재구성된 사건 순서)과 `iocs`(추출된 지표)를 findings와 별도 필드로 포함 — App 7의 프로세 서술형 타임라인/MITRE 배지를 "findings 배열 + 통계" 구조로 재조합한 형태
+  - 오프라인 규칙 기반 엔진(`forensics_audit_offline_engine.py`)은 로그 삭제(Event 1102/wevtutil cl)·볼륨섀도우 삭제·인코딩된 PowerShell·Run 키·PsExec/WMI·프로세스 마스커레이딩 정규식 매칭 + 반복된 로그온 실패 카운트(브루트포스 추정) + **타임스탬프를 실제로 파싱해 최대 공백 구간을 찾는 타임라인 갭 탐지**(AI 없이는 서사적 timeline 재구성이 불가능한 대신 이 휴리스틱으로 일부 보완)까지 구현
+  - Markdown 리포트에 "다음 단계"로 App 4(IoC 분석기)·App 16(방화벽 감사기)·App 18(IAM 감사기) 링크 포함해 추출된 IOC/계정/네트워크 후속 조사로 연결
+  - 탐지형 앱으로 분류해 알림 시스템 대상에 포함(종합 심각도 CRITICAL 시 알림) — 18번째 탐지형 앱, App 22 통합 대시보드에도 `notify.APP_LABELS` 추가만으로 자동 편입
+  - `backend/routers/forensics.py`(`/audit/*`), `backend/services/forensics_audit_service.py`(Claude 시스템 프롬프트+`_enrich()`)/`mock_forensics_audit.py`(입력 유형 5종 큐레이션)/`forensics_audit_guide.py`/`forensics_audit_offline_engine.py` — App 16 firewall_audit 4파일 구성을 그대로 복제
+- **탭 3: 증거 수집 도구** — App 23(`attack_monitor_service.py`)의 PowerShell 서브프로세스 수집 패턴을 재사용하되 목적이 다르다: App 23은 "지금 위협이 있는가" 판정용 신호 수집이고, 이 탭은 **실제 조사에 쓸 증거를 무결성 검증 가능한 형태로 남기는 chain of custody(증거 보관 연속성) 기록**이 목적이라 AI를 전혀 쓰지 않는다(App 15/17/19/21과 같은 결정론적 부류)
+  - 수집 항목 6종: 로그온 성공/실패 이벤트(4624/4625)·프로세스 생성 이벤트(4688)·레지스트리 Run/RunOnce 키·Prefetch 파일 목록(관리자 권한 필요할 수 있음)·실행 중 프로세스 목록·USB 저장장치 연결 이력(USBSTOR)
+  - 각 수집 시 원본 데이터의 **SHA-256 해시**를 함께 기록해 "수집 시점 이후 데이터가 변경되지 않았음"을 증명할 수 있게 하고, 수집자·수집 시각(UTC)·실행 명령 원문을 함께 남겨 `GET /api/forensics/collection/custody-report`로 전체 Chain of Custody 문서를 Markdown으로 다운로드 가능
+  - 위협을 판정하지 않는 순수 수집 도구라 notify.py 알림 대상·App 22 집계 대상 모두 아님(App 22 리스크 대시보드와 같은 스코프 결정)
+  - 실제로 이 PC에서 curl로 `run_keys`(16건)·`running_processes`(60건) 수집 성공, 관리자 권한이 필요한 `prefetch_files`는 실제로 "Access to the path ... is denied" 에러로 우아하게 실패(크래시 없이 chain of custody에 "실패"로 기록됨)까지 확인 — 블로킹 PowerShell 호출은 이 프로젝트의 반복된 패턴대로 라우터에서 `run_in_executor`로 스레드 위임
+  - `backend/services/forensics_collection_service.py`, `backend/routers/forensics.py`(`/collection/*`)
+- 세 탭 모두 새 최상단 그룹 재편 시 만든 "사고대응·포렌식" 그룹에 배치(`NavBar.jsx`)
+- 백엔드는 lab(3개 챌린지 다운로드+flag 검증), audit(오프라인 모드로 CRITICAL/HIGH/LOW 판정 뒤섞인 실제 이벤트 로그 텍스트 분석, 리포트 생성, CRITICAL 알림 발생, App22 대시보드 자동 편입까지) collection(6개 항목 중 3개 실제 수집 성공+1개 정상 실패) 전부 curl로 실제 호출해 검증, 테스트로 쌓인 히스토리는 세션 종료 전 정리함(알림 로그는 공용 테이블이라 다른 세션의 정상 알림 47건과 섞여있어 전체 삭제 대신 그대로 둠). 프론트 `vite build` 성공
+- **실제 브라우저 검증 완료** (2026-09-06, 같은 날 후속 — Chrome 확장을 사용자가 설치한 뒤 재연결 성공): Claude in Chrome으로 실제 브라우저에서 end-to-end 확인 — ① 실습 랩: 브라우저 히스토리 챌린지 flag 제출 → "정답입니다!" 실제 확인. ② 아티팩트 감사기: AI 모드를 오프라인으로 전환 후 클라우드 감사 로그(AWS) 텍스트를 실제로 분석해 CRITICAL 판정+MITRE 배지(T1078.004/T1098)+대응 권고까지 렌더링 확인, 아티팩트 유형별 플랫폼 pill 전환(AWS↔Azure)도 명령/안내 문구가 실제로 바뀌는 것 확인. ③ 증거 수집 도구: 이 PC 로컬 수집(`Get-WinEvent` 실제 실행 결과+SHA-256 해시 렌더링), 원격 SSH(예약 테스트 IP 대상 타임아웃 에러가 화면에 정확히 표시), 클라우드 CLI(AWS CLI 미설치 에러가 화면에 정확히 표시), Cisco IOS 선택 시 네트워크 장비 전용 캐비트 문구 노출까지 전부 확인.
+  - ⚠️ **자동화 도구 사용 중 발견한 사실 하나(앱 버그 아님)**: 브라우저 자동화로 textarea에 `key` 액션(ctrl+a, Backspace, ctrl+End)을 보냈을 때 실제 DOM 값이 전혀 바뀌지 않아 한동안 "입력이 안 된다"고 오인했으나, `document.querySelector('textarea').value`로 직접 확인해보니 애초에 값이 비어 있었고 화면에 보이던 "텍스트"는 실제로는 placeholder(연한 회색, 스크린샷 압축에서 일반 텍스트처럼 보임)였음이 드러남 — 실제 원인은 자동화 도구의 `key`(modifier 조합) 액션이 이 환경에서 신뢰할 수 없었던 것이지, 앱의 React 상태 관리 문제가 아니었음. **교훈**: 브라우저 자동화로 입력 확인이 애매할 때는 스크린샷만 믿지 말고 `javascript_tool`로 실제 DOM 값(`.value`)과 버튼 `disabled` 상태를 직접 조회해 진단할 것.
+- **아티팩트 감사기 가이드 — OS/클라우드/장비 벤더별 세분화** (2026-09-06, 같은 날 후속: "OS별로 다르니 구분, 클라우드도 종류별로, 방화벽·스위치도 제품별로, 모든 명령어에 복사 기능, 왜 해야 하는지도 설명"이라는 요청): 기존에는 아티팩트 유형 5종 전부가 Windows PowerShell 명령 하나씩만 갖고 있어 Linux/macOS 서버나 클라우드·네트워크 장비를 조사할 때는 쓸 수 없었음.
+  - `forensics_audit_guide.py`의 `ARTIFACT_TYPES`를 평평한 `how_to_export`/`commands` 구조에서 **`variants` 배열**(플랫폼별 `where`/`commands`/`note`) 구조로 재설계 — event_log/browser_history/filesystem_timeline/process_list는 각각 Windows·Linux·macOS 3variant, `registry_export`는 Linux(cron/systemd)·macOS(LaunchAgents)까지 포괄하도록 개념을 넓혀 `persistence_artifacts`로 개명(이 앱은 실사용 히스토리가 없어 하위호환 이슈 없음)
+  - **신규 아티팩트 유형 2종 추가**: `cloud_audit_log`(AWS CloudTrail/Azure Activity Log/GCP Cloud Audit Logs 3종) · `network_device_log`(Cisco IOS/Fortinet FortiGate/Palo Alto PAN-OS/Juniper Junos 4종) — `forensics_audit_service.py`의 `ARTIFACT_LABELS`·`mock_forensics_audit.py`의 mock 템플릿(루트 계정 로그인+IAM 정책 변경+액세스 키 발급 시나리오, 새벽 시간대 미승인 장비 설정 변경+아웃바운드 유출 규칙 추가 시나리오)·`forensics_audit_offline_engine.py`의 오프라인 규칙(루트 계정 사용/CloudTrail 중지/IAM 정책 조작, 콘솔 설정 변경/특정 목적지 아웃바운드 허용 등 4건 추가)까지 3개 파일 모두 동일하게 확장해 mock/offline 모드에서도 이 2개 신규 유형이 정상 동작
+  - 각 아티팩트 유형에 `why`(이걸 왜 수집하는지 조사 관점의 근거) 필드 신설, 각 플랫폼 variant에 `where`(어디서/어떤 터미널로 실행하는지)를 명시해 초보자가 그대로 따라할 수 있게 함 — App3 recon 가이드에서 얻은 "어디에 입력하는지 + 실행 가능한 예시" 교훈을 그대로 적용
+  - `COMMAND_USAGE_NOTE` 신규(App24의 동일 이름 필드와 같은 역할) — "이 앱이 대신 실행하지 않는다, 결과를 복사해 붙여넣거나 파일 업로드하면 자동 분석된다"는 안내를 가이드 패널 상단에 상시 노출
+  - 프론트(`Forensics.jsx`)는 아티팩트 유형 선택 시 플랫폼 pill 버튼(Windows/Linux/macOS 등)으로 variant를 전환하고, 각 명령어를 개별 `CopyButton`으로 감싸 명령 단위로 복사 가능하게 함(기존에는 전체 명령을 한 번에 합쳐 복사하는 버튼 하나뿐이었음)
+  - "정보 결과를 붙여넣기/업로드하면 분석되게 해달라"는 요청은 실제로는 이미 구현돼 있던 동작(붙여넣기는 버튼 클릭으로, 파일 업로드는 자동으로 분석 — 다른 앱들과 동일한 패턴)임을 확인하고, 텍스트박스 바로 아래 안내 문구만 추가해 이 동작을 명시적으로 알 수 있게 함
+  - 백엔드는 새 guide 응답 구조(`variants`/`command_usage_note` 포함)와 신규 2개 유형의 오프라인 분석(각각 CRITICAL/HIGH 판정, MITRE 태그까지 정상 출력)을 curl로 검증, `npm run build` 성공
+- **증거 수집 도구 — SSH 원격 수집 + 클라우드 CLI 수집 + 오프라인 엔진 벤더 확장 + 샘플 파일** (2026-09-06, 같은 날 후속: 세션이 스스로 제안한 개선점 3가지 — "① 증거 수집 도구가 이 PC만 되는 문제 ② 방화벽 오프라인 탐지가 Cisco 문법 전용인 문제 ③ 신규 2개 유형 샘플 파일 부재" — 을 사용자가 "모두 해결해달라"고 요청):
+  - **① SSH 원격 수집 + 클라우드 CLI 수집** (`forensics_collection_service.py` 대폭 확장, `paramiko` 신규 의존성 추가): 기존엔 이 PC(Windows) 자신만 실제로 수집 가능했고 Linux/macOS/클라우드/네트워크 장비는 가이드 문서(사람이 직접 실행)로만 존재했음 — 이제 그 문서의 명령어를 실제로 실행하는 두 경로 추가.
+    - `collect_remote()`: paramiko로 Linux/macOS/네트워크 장비(Cisco/Fortinet/Palo Alto/Juniper)에 SSH 접속해 명령 실행. paramiko는 프로세스로 셸을 띄우지 않는 순수 Python SSH 구현이라, App 23이 WinRM 비밀번호 노출 방지를 위해 임시 `.ps1` 파일 우회를 따로 만들어야 했던 것과 달리 애초에 그 위험이 없음(자격증명은 저장하지 않고 매 요청 전달만 함 — App 23과 동일 원칙)
+    - ⚠️ **설계 결정**: 네트워크 장비는 SSH `exec_command`가 매번 새 채널(=새 세션)을 열어 `terminal length 0` 같은 상태가 다음 명령으로 이어지지 않고, 벤더별 CLI가 POSIX 셸이 아니라 여러 명령 연결(`;`)도 보장 안 됨 — 그래서 네트워크 장비 4종은 가이드의 여러 명령 중 핵심 조회 명령 1개만 자동화 대상으로 삼고 실패 시 가이드의 수동 명령으로 안내. Linux/macOS는 sshd가 명령 문자열을 실제 로그인 셸로 실행하므로 여러 명령을 그대로 순차 실행해도 안전해 그대로 유지
+    - `collect_cloud()`: AWS/Azure/GCP는 원격 접속이 아니라 이 백엔드 호스트에 이미 설치·인증된 CLI(aws/az/gcloud)를 서브프로세스로 실행 — 클라우드 API는 "어디서"가 아니라 "어떤 자격증명으로"가 중요하므로 조사관 자신의 PC에 구성된 CLI 인증을 재사용하는 것이 자연스럽다고 판단. CLI 미설치(FileNotFoundError)와 미인증(비정상 종료)을 구분해 안내
+    - 신규 엔드포인트: `POST /collection/check-ssh`(App 23 `check_remote_connection`과 동일한 사전 점검 목적)·`/collection/collect-remote`·`/collection/remote-options`(GET)·`/collection/check-cloud`·`/collection/collect-cloud`·`/collection/cloud-options`(GET)
+    - 프론트(`Forensics.jsx`)는 "증거 수집 도구" 탭에 이 PC(Windows)/원격 SSH/클라우드 CLI 3가지 수집 대상 전환 버튼 추가, 각각 `LocalCollectionPanel`/`RemoteSshPanel`/`CloudCliPanel`로 분리하되 Chain of Custody 기록 목록과 리포트 다운로드는 공용으로 유지
+    - **실제 검증 한계**: 이 세션 환경에 실제 SSH 서버(WSL Ubuntu는 설치 중 상태)나 클라우드 CLI(aws/az/gcloud 전부 미설치)가 없어 전체 성공 경로(happy path)는 검증하지 못함 — 대신 연결 실패(타임아웃/connection refused)·인증 실패·CLI 미설치 3가지 실패 경로가 각각 구분되는 명확한 한국어 메시지로 우아하게 처리되는 것과, 실패 기록도 chain of custody에 정상적으로 남는 것까지 curl로 확인함. App 23의 WinRM 원격 대상과 마찬가지로 실제 대상 검증은 사용자 환경에서 필요
+  - **② 오프라인 엔진 벤더별 확장** (`forensics_audit_offline_engine.py`): 기존 `network_device_log` 탐지가 Cisco ACL 문법(`permit ip any host`)에만 맞춰져 있어 Fortinet/Palo Alto/Juniper 로그는 전혀 매칭되지 않던 문제를 해결 — Fortinet(`logdesc="Policy configuration changed"`·로깅 비활성화 패턴), Palo Alto(`commit succeeded ... admin:` 패턴), Juniper(`UI_COMMIT`, 공식 문서화된 안정적 syslog 메시지) 3개 패턴 신규 추가. Cisco `%SYS-5-CONFIG_I`/Juniper `UI_COMMIT`은 공식 문서화된 안정적 로그라 신뢰도가 높은 반면 Fortinet/Palo Alto는 필드 구성이 버전·설정에 따라 달라질 수 있어 상대적으로 best-effort에 가깝다는 점을 `engine_note`에 명시(App 17의 "best-effort 매칭" 고지와 같은 정직성 원칙)
+  - **③ 샘플 파일 추가**: `frontend/public/samples/forensics/`에 7개 아티팩트 유형 전부의 예시 파일 신규 작성(`event_log-windows.txt` 등) — 각각 `mock_forensics_audit.py`의 큐레이션 시나리오와 내용이 대응하도록 작성해, 업로드 즉시 해당 시나리오의 CRITICAL/HIGH 판정을 재현할 수 있음(App 16의 예시 파일 패턴과 동일). `Forensics.jsx`의 아티팩트 감사기 가이드 패널에 "예시 파일 다운로드" 링크 추가(`ContainerAudit.jsx`의 `SAMPLE_FILES` 패턴 재사용)
+  - `backend/requirements.txt`에 `paramiko>=5.0.0` 추가
+  - ⚠️ **이 세션에서 겪은 uvicorn --reload 무응답**: 새 코드 추가 후 `--reload`가 파일 변경을 감지("WatchFiles detected changes... Reloading...")했다고 로그에 남겼지만 실제로는 워커 프로세스가 재시작되지 않아(재시작 시 찍히는 "Started server process"가 다시 나타나지 않음) 새 엔드포인트가 계속 404를 반환하는 것을 발견 — App 16 섹션에 이미 기록된 것과 동일 계열의 문제. `Get-Process`로 두 PID(리로더+워커)를 모두 `Stop-Process`하고 완전히 재기동해 해결. **교훈**: `--reload`의 "Reloading..." 로그만으로는 실제 반영을 신뢰하지 말고, 새 엔드포인트를 curl로 직접 호출해 확인할 것 — 이 프로젝트에서 이미 여러 번 반복된 패턴.
+  - 새 엔드포인트는 curl로 성공/실패 양쪽 경로 모두 검증(연결 실패 3종 구분, chain of custody 기록에 실패도 정상 기록, 로컬/원격/클라우드 3가지 기록이 하나의 custody 리포트에 함께 렌더링됨), `npm run build` 성공. 브라우저 UI는 이번에도 Chrome 확장 미연결로 사용자 확인 필요
+
 ### 테스트 레인지 (`test-range/`)
 App 6/16/17을 실제 대상으로 테스트해볼 수 있는 로컬 전용 Docker Compose 스택 — "취약한 사이트/네트워크/서버/방화벽을 구성할 방법이 있는지 검토해달라"는 요청으로 신설. App 9(Pwn Lab)이 이미 Docker를 요구하므로 새 의존성은 아님. 전부 검증된 공식 이미지(또는 그 위의 커스텀 Dockerfile)만 사용.
 - **juice-shop** (`bkimminich/juice-shop`, 공식) — 포트 3000, App 6 대상
@@ -402,7 +452,7 @@ App 6/16/17을 실제 대상으로 테스트해볼 수 있는 로컬 전용 Dock
 
 ## 공통 기능
 
-- **AI 실행 모드 (cloud/local/offline/mock)** (2026-09-05, 폐쇄망 지원 롤아웃): 기존 Mock/Live 2모드를 4모드로 확장 — `cloud`(Claude API)/`local`(사내 로컬 LLM)/`offline`(네트워크 없이 동작하는 규칙 기반 실제 분석)/`mock`(기존 방식의 고정 샘플, 학습용으로 명시적 선택시에만). `backend/services/mode_manager.py`가 `ANTHROPIC_API_KEY`·`LOCAL_LLM_BASE_URL` 설정 여부와 실제 네트워크 도달 가능 여부를 함께 봐서 cloud→local→offline 순으로 자동 감지하고, NavBar의 `ModeSelector`(`GET/POST /api/mode`, `/override`)로 전 앱 공통 수동 전환도 가능(재시작에도 유지). Claude를 쓰는 16개 앱(대시보드·실시간모니터링/피싱/취약점/IoC/인시던트/위협분석/인젝션탐지/정책생성기/모델감사/피싱모의훈련생성기/방화벽·IAM·컨테이너 감사기/금융보안원 CSP평가) 전부 이 패턴으로 전환 완료 — 각 앱은 `mode_manager.get_ai_mode()`로 분기해 offline일 때 `<app>_offline_engine.py`(정규식/키워드 기반 실제 입력 분석 — 탐지형은 vuln_offline_engine.py, 생성형은 policy_offline_engine.py처럼 템플릿+키워드 커스터마이즈 패턴)로 위임하고, cloud/local 호출이 런타임에 실패하면 자동으로 offline로 폴백(`fallback_reason` 기록). Claude를 원래 안 쓰던 8개 앱(웹스캐너/Pwn Lab/Web CTF/모의해킹랩/인프라스캐너/시크릿스캐너/DNS보안/통합대시보드)은 대상 아님. App 15(CVE 조회)처럼 Claude가 아니라 외부 실시간 API에 의존하는 앱은 `mode_manager.get_external_api_mode()`라는 별도 online/offline 축을 쓰며, 로컬 캐시(write-through)+공식 데이터 피드 가져오기로 폐쇄망을 지원(App 3/15 섹션 참고). 상세 설계·발견한 버그는 App 3 섹션의 "폐쇄망(오프라인) 지원 + 로컬 LLM 연동" 참고 — 나머지 앱들도 동일 패턴이라 개별 섹션에 중복 기술하지 않음.
+- **AI 실행 모드 (cloud/local/offline/mock)** (2026-09-05, 폐쇄망 지원 롤아웃): 기존 Mock/Live 2모드를 4모드로 확장 — `cloud`(Claude API)/`local`(사내 로컬 LLM)/`offline`(네트워크 없이 동작하는 규칙 기반 실제 분석)/`mock`(기존 방식의 고정 샘플, 학습용으로 명시적 선택시에만). `backend/services/mode_manager.py`가 `ANTHROPIC_API_KEY`·`LOCAL_LLM_BASE_URL` 설정 여부와 실제 네트워크 도달 가능 여부를 함께 봐서 cloud→local→offline 순으로 자동 감지하고, NavBar의 `ModeSelector`(`GET/POST /api/mode`, `/override`)로 전 앱 공통 수동 전환도 가능(재시작에도 유지). Claude를 쓰는 16개 앱(대시보드·실시간모니터링/피싱/취약점/IoC/인시던트/위협분석/인젝션탐지/정책생성기/모델감사/피싱모의훈련생성기/방화벽·IAM·컨테이너 감사기/금융보안원 CSP평가) 전부 이 패턴으로 전환 완료 — 각 앱은 `mode_manager.get_ai_mode()`로 분기해 offline일 때 `<app>_offline_engine.py`(정규식/키워드 기반 실제 입력 분석 — 탐지형은 vuln_offline_engine.py, 생성형은 policy_offline_engine.py처럼 템플릿+키워드 커스터마이즈 패턴)로 위임하고, cloud/local 호출이 런타임에 실패하면 자동으로 offline로 폴백(`fallback_reason` 기록). App 25(포렌식 실습·분석 센터)의 '아티팩트 감사기' 탭도 같은 패턴(`forensics_audit_offline_engine.py`)이라 사실상 17개 앱째지만, 같은 앱 안의 '실습 랩'·'증거 수집 도구' 탭은 처음부터 AI를 쓰지 않아(App 25 섹션 참고) 앱 하나가 두 부류에 걸쳐 있는 이 프로젝트 최초의 사례. Claude를 원래 안 쓰던 앱(웹스캐너/Pwn Lab/Web CTF/모의해킹랩/인프라스캐너/시크릿스캐너/DNS보안/통합대시보드)은 대상 아님. App 15(CVE 조회)처럼 Claude가 아니라 외부 실시간 API에 의존하는 앱은 `mode_manager.get_external_api_mode()`라는 별도 online/offline 축을 쓰며, 로컬 캐시(write-through)+공식 데이터 피드 가져오기로 폐쇄망을 지원(App 3/15 섹션 참고). 상세 설계·발견한 버그는 App 3 섹션의 "폐쇄망(오프라인) 지원 + 로컬 LLM 연동" 참고 — 나머지 앱들도 동일 패턴이라 개별 섹션에 중복 기술하지 않음.
 - **파일 업로드(Word/PDF/Excel/txt/csv) + 명령어 복사 버튼 — 전체 앱 적용** (2026-09-05): "모든 붙여넣기 화면에 파일 업로드 추가, 정보 수집 명령어에 복사 기능 추가"라는 사용자 요청으로 16개 페이지 전부에 적용.
   - **백엔드**: `POST /api/extract-text`(신규, `backend/routers/extract.py` + `backend/services/file_extract.py`) — txt/csv 등 텍스트 파일은 그대로 디코딩하고, `.docx`는 python-docx(문단+표), `.pdf`는 pypdf(페이지별 텍스트, 암호 PDF는 빈 암호로 우선 시도), `.xlsx/.xls`는 openpyxl(시트별 행을 CSV처럼 직렬화)로 실제 파싱한다. 최대 100,000자로 잘라 반환(`truncated` 플래그). 원본 파일은 어디에도 저장하지 않음(App19 시크릿 스캐너의 "원본 미저장" 원칙과 동일). `requirements.txt`에 `python-docx`/`pypdf`/`openpyxl` 추가.
   - **프론트 공용 컴포넌트**: `FileUploadButton.jsx`(파일 선택 → `/api/extract-text` 호출 → `onExtracted(text, filename)` 콜백으로 결과 전달, 로딩 상태 표시)와 `CopyButton.jsx`(App23 AttackMonitor의 기존 복사 버튼을 공용화) 신설.
@@ -411,9 +461,9 @@ App 6/16/17을 실제 대상으로 테스트해볼 수 있는 로컬 전용 Dock
   - **명령어 복사 버튼**: 정보 수집 명령어를 보여주는 6곳(App3 `VulnScenarioGuide.jsx`의 recon 명령, App11 `SecurityPolicyGenerator.jsx`의 environment_recon, App16/18/20의 플랫폼별 명령, App24의 분야별 `DATA_COLLECTION` 명령)에 전부 `CopyButton` 추가.
   - **검증**: 실제 Word(.docx, 문단+표 포함)/PDF(reportlab으로 생성)/Excel(.xlsx, 다중 셀) 테스트 파일을 만들어 추출 → App3(취약점 스캐너)·App2(피싱 탐지기)의 실제 분석 엔드포인트까지 이어지는 전체 파이프라인을 curl로 end-to-end 검증(Word 문서에 담긴 nmap 결과에서 vsftpd 백도어를 실제로 탐지, 피싱 이메일 텍스트를 SUSPICIOUS로 정확히 판정). `npm run build` 성공, 16개 페이지의 override-파라미터 패턴 일관성을 grep으로 재확인.
 - **사용 가이드**: 모든 페이지에 접이식 GuidePanel 포함
-- **네비게이션 바**: 전체 메뉴 + AI 실행 모드 배지(클릭해서 전환)
-- **히스토리 SQLite 영속화**: App 1(대시보드·실시간 모니터링 포함)/2/3/4/5/6/7/8/11/12/14/15/16/17/18/19/20/21/23(실제 모드만, `attack_monitor`)/24의 분석 이력·상담 세션이 `backend/data/history.db`(SQLite, gitignore 대상)에 저장되어 서버 재시작에도 유지됨. 앱마다 저장 형태(단순 이력 리스트 vs 채팅 세션)가 달라도 `backend/services/db.py`의 범용 `app` 구분 단일 테이블(JSON 블롭)로 통일 처리 — `add_entry`/`get_history`/`get_entry`/`update_entry`/`clear_history` 5개 함수로 기존 `history: list[dict]`/`sessions: dict[int, dict]` 패턴을 그대로 대체함. **CTF/모의해킹 연습용 앱(App 9 Pwn/Reverse, App 10 Web CTF 아레나, App 13 모의 해킹 랩)은 서버 재시작 시 초기화되는 것이 의도된 동작이고, App 22(통합 리스크 대시보드)는 자체 결과가 없는 순수 집계 페이지, App 23의 시뮬레이션(데모) 탭 결과(`attack_monitor_demo`)는 별도 앱 이름으로는 저장되지만 실제 공격 이력이 아니라는 성격상 알림·App 22 집계 대상에서는 제외**됨
-- **알림 시스템**: 탐지형 앱 17개(대시보드·실시간모니터링/피싱/취약점/IoC/웹스캐너/인젝션탐지/모델감사/방화벽 정책 감사기/인프라 취약점 스캐너 의존성·네트워크/클라우드 IAM 정책 감사기/시크릿 스캐너/컨테이너·Dockerfile 감사기/DNS·이메일 보안 점검/실시간 공격 모니터링 & 대응 센터 실제 모드·AWS 샌드박스 모드/금융보안원 클라우드 CSP 평가)가 각 앱 기준 최고 심각도(CRITICAL/MALICIOUS/INJECTION)로 판정하면 자동으로 Slack/이메일 알림을 시도함. `SLACK_WEBHOOK_URL` 또는 `SMTP_*`(`.env.example` 참고) 미설정 시 자동 Mock 모드로 동작 — 실제 전송 없이 알림 로그만 기록(다른 앱들의 Mock/Live 패턴과 동일). 알림 로그는 NavBar 우측 종(🔔) 아이콘 드롭다운에서 확인·삭제 가능(`GET/DELETE /api/alerts`, 20초 폴링). 상담형 앱(인시던트/위협분석)과 생성형 앱(정책생성기, 피싱 모의훈련 생성기)은 "위협 판정"이 아니라 대상에서 제외. CVE 조회(App 15)는 Claude AI 자체를 쓰지 않는 순수 조회 도구라 마찬가지로 제외, App 22(통합 리스크 대시보드)도 판정을 내리지 않는 집계 페이지라 제외. `backend/services/notify.py`, `backend/routers/alerts.py`. **n8n Push 연동** (2026-09-05): `N8N_WEBHOOK_URL` 환경변수를 설정하면 CRITICAL 알림 시 Slack/이메일과 별도로 구조화된 JSON(`{app, app_label, severity, summary, entry_id, created_at}`)을 n8n의 Webhook 트리거로도 전송 — 사람이 읽는 Slack/이메일 알림과 달리 n8n 쪽에서 그대로 조건 분기·필드 매핑해 Jira 티켓 생성 등 임의의 후속 자동화로 이어붙일 수 있음. Slack/SMTP 중 아무것도 없어도 `N8N_WEBHOOK_URL`만 있으면 Mock 모드에서 벗어남(`IS_MOCK`이 세 채널 중 하나라도 설정되면 false). 받는 쪽 예시 워크플로우는 `n8n-workflows/push-alert-webhook-receiver.json`(Webhook → 메시지 포맷 → Slack, 실제로는 Slack 자리에 원하는 자동화를 붙이면 됨) — `docs/n8n-integration.md` "8. n8n Push 연동" 참고. ⚠️ 알림 발송(urllib/smtplib)은 블로킹 호출이라 async 라우트에서 직접 기다리면 안 됨 — 실시간 모니터링 WebSocket에서 이미 겪은 함정과 같은 유형이라 `alert_if_critical()`이 내부적으로 `run_in_executor`로 스레드 위임함. 원래 7개 앱에서 Mock 데이터 조합으로 실제 CRITICAL을 트리거해 alerts 카운트 증가·비-CRITICAL 시 미증가·서버 재시작 후 유지까지 curl로 검증 완료(App 16/17/18/19/20/21은 각 앱 섹션에서 별도 검증)
+- **네비게이션 바**: 전체 메뉴 + AI 실행 모드 배지(클릭해서 전환). **메뉴 구조 재편**(2026-09-06, "서버/네트워크/클라우드/보안장비/모의해킹/취약점분석/사고대응/포렌식 축으로 다시 고민해달라"는 요청): 기존 5그룹(탐지·분석/대응·생성/실습·CTF/조회/금융컴플라이언스)이 워크플로우 단계 기준이라 "탐지·분석" 하나에 15개 앱이 몰려 있던 것을, "대상"(서버/네트워크·보안장비/클라우드)과 "기능"(취약점분석/모의해킹/사고대응·포렌식)이라는 서로 다른 두 축이 섞여 있었다는 점을 짚고 8그룹(공통/서버/네트워크·보안장비/클라우드/취약점분석/모의해킹/사고대응·포렌식/금융 컴플라이언스)으로 재편. 대상이 뚜렷한 앱은 대상 축 그룹으로, IoC 분석기·CVE 조회처럼 대상이 없거나 방화벽 감사기처럼 여러 대상(네트워크+보안장비+클라우드)에 걸치는 도구는 "공통"/"취약점분석"으로 분리해 억지 분류를 피함. 폐쇄망/인터넷망 구분은 메뉴 축으로 만들지 않기로 함 — 이미 ModeSelector가 앱별 실행 모드를 런타임 배지로 보여주므로 메뉴까지 쪼개면 중복·불일치 우려가 있어, 대신 태생적으로 외부 인터넷이 필수인 3개 앱(CVE 조회/DNS 보안 점검/인프라 취약점 스캐너)에만 메뉴 항목 옆 🌐 배지(툴팁: "외부 인터넷 연결 필요")를 추가. `NavBar.jsx`의 `groups` 배열 재구성 + `requiresInternet` 플래그로 구현.
+- **히스토리 SQLite 영속화**: App 1(대시보드·실시간 모니터링 포함)/2/3/4/5/6/7/8/11/12/14/15/16/17/18/19/20/21/23(실제 모드만, `attack_monitor`)/24/25(`forensics_artifact_audit`/`forensics_collection`)의 분석 이력·상담 세션이 `backend/data/history.db`(SQLite, gitignore 대상)에 저장되어 서버 재시작에도 유지됨. 앱마다 저장 형태(단순 이력 리스트 vs 채팅 세션)가 달라도 `backend/services/db.py`의 범용 `app` 구분 단일 테이블(JSON 블롭)로 통일 처리 — `add_entry`/`get_history`/`get_entry`/`update_entry`/`clear_history` 5개 함수로 기존 `history: list[dict]`/`sessions: dict[int, dict]` 패턴을 그대로 대체함. **CTF/모의해킹 연습용 앱(App 9 Pwn/Reverse, App 10 Web CTF 아레나, App 13 모의 해킹 랩, App 25의 '실습 랩' 탭)은 서버 재시작 시 초기화되는 것이 의도된 동작이고, App 22(통합 리스크 대시보드)는 자체 결과가 없는 순수 집계 페이지, App 23의 시뮬레이션(데모) 탭 결과(`attack_monitor_demo`)는 별도 앱 이름으로는 저장되지만 실제 공격 이력이 아니라는 성격상 알림·App 22 집계 대상에서는 제외**됨
+- **알림 시스템**: 탐지형 앱 18개(대시보드·실시간모니터링/피싱/취약점/IoC/웹스캐너/인젝션탐지/모델감사/방화벽 정책 감사기/인프라 취약점 스캐너 의존성·네트워크/클라우드 IAM 정책 감사기/시크릿 스캐너/컨테이너·Dockerfile 감사기/DNS·이메일 보안 점검/실시간 공격 모니터링 & 대응 센터 실제 모드·AWS 샌드박스 모드/금융보안원 클라우드 CSP 평가/포렌식 아티팩트 감사기)가 각 앱 기준 최고 심각도(CRITICAL/MALICIOUS/INJECTION)로 판정하면 자동으로 Slack/이메일 알림을 시도함. `SLACK_WEBHOOK_URL` 또는 `SMTP_*`(`.env.example` 참고) 미설정 시 자동 Mock 모드로 동작 — 실제 전송 없이 알림 로그만 기록(다른 앱들의 Mock/Live 패턴과 동일). 알림 로그는 NavBar 우측 종(🔔) 아이콘 드롭다운에서 확인·삭제 가능(`GET/DELETE /api/alerts`, 20초 폴링). 상담형 앱(인시던트/위협분석)과 생성형 앱(정책생성기, 피싱 모의훈련 생성기)은 "위협 판정"이 아니라 대상에서 제외. CVE 조회(App 15)는 Claude AI 자체를 쓰지 않는 순수 조회 도구라 마찬가지로 제외, App 22(통합 리스크 대시보드)도 판정을 내리지 않는 집계 페이지라 제외. `backend/services/notify.py`, `backend/routers/alerts.py`. **n8n Push 연동** (2026-09-05): `N8N_WEBHOOK_URL` 환경변수를 설정하면 CRITICAL 알림 시 Slack/이메일과 별도로 구조화된 JSON(`{app, app_label, severity, summary, entry_id, created_at}`)을 n8n의 Webhook 트리거로도 전송 — 사람이 읽는 Slack/이메일 알림과 달리 n8n 쪽에서 그대로 조건 분기·필드 매핑해 Jira 티켓 생성 등 임의의 후속 자동화로 이어붙일 수 있음. Slack/SMTP 중 아무것도 없어도 `N8N_WEBHOOK_URL`만 있으면 Mock 모드에서 벗어남(`IS_MOCK`이 세 채널 중 하나라도 설정되면 false). 받는 쪽 예시 워크플로우는 `n8n-workflows/push-alert-webhook-receiver.json`(Webhook → 메시지 포맷 → Slack, 실제로는 Slack 자리에 원하는 자동화를 붙이면 됨) — `docs/n8n-integration.md` "8. n8n Push 연동" 참고. ⚠️ 알림 발송(urllib/smtplib)은 블로킹 호출이라 async 라우트에서 직접 기다리면 안 됨 — 실시간 모니터링 WebSocket에서 이미 겪은 함정과 같은 유형이라 `alert_if_critical()`이 내부적으로 `run_in_executor`로 스레드 위임함. 원래 7개 앱에서 Mock 데이터 조합으로 실제 CRITICAL을 트리거해 alerts 카운트 증가·비-CRITICAL 시 미증가·서버 재시작 후 유지까지 curl로 검증 완료(App 16/17/18/19/20/21은 각 앱 섹션에서 별도 검증)
 - **n8n 자동화 연동**: 모든 앱이 이미 REST API(`/api/*`)로 노출돼 있어 n8n의 HTTP Request 노드가 코드 수정 없이 그대로 호출 가능. `docs/n8n-integration.md`에 연동 방법 + 자동화용 엔드포인트 요약, `n8n-workflows/`에 바로 Import 가능한 예제 워크플로우 5개(알림 폴링→Slack, CVE 일일 감시→Slack, IoC 일괄분석 Webhook, App 23 리포트→Slack, App 23→Notion 누적) 제공. 이와 함께 백엔드를 로컬 밖으로 노출하는 경우를 대비해 선택적 API 키 인증(`API_KEY` 환경변수, 미설정 시 기존과 동일하게 인증 없음)을 `backend/services/auth.py` + `main.py`(`/api/*` 라우터 전체에 `Depends`)로 추가 — `/api/mode`는 헬스체크 목적으로 예외. `API_KEY` 미설정/오설정/정설정 3가지 케이스와 IoC 분석·alerts 응답 필드가 예제 워크플로우 가정과 일치하는지 curl로 검증 완료. CVE 검색 예제는 이 세션 네트워크 제한으로 NVD 실호출까지는 못 했으나 `cve_lookup_service.search_cves()` 응답 스키마 확인으로 대체함. ⚠️ `API_KEY`를 켜면 프론트엔드 요청도 헤더가 없어 401을 받게 되므로(가이드에 고지), n8n 전용으로 켜거나 프론트 프록시에 헤더 주입을 추가해야 함(미착수)
 - **n8n Slack 알림 채널 마이그레이션** (2026-09-04, 사용자의 실제 로컬 n8n 인스턴스 `localhost:5678` 대상 작업): 기존에 예제 워크플로우들이 사용자의 다른 용도 채널 `자동-매매`로 Slack 알림을 보내고 있어, 전용 채널 `#ai-security-suite`(신규 생성)로 이전함.
   - `alerts-polling-to-slack` → n8n에 기존에 Import돼 있던 워크플로우의 Slack 노드 채널만 교체
@@ -449,6 +499,7 @@ App 6/16/17을 실제 대상으로 테스트해볼 수 있는 로컬 전용 Dock
 - 위 5개(App 18~22)는 모두 "정보보안 관점에서 더 추가할 점검이 있을지" 질문 하나에서 이어진 같은 세션의 연속 작업(App 16의 VPN/원격접속 게이트웨이 플랫폼 추가도 같은 흐름). 무선 AP/로드밸런서·WAF 등 App 16의 추가 플랫폼 후보는 여전히 미착수 — 새 아이디어가 생기면 여기에 추가.
 - [x] **실시간 공격 모니터링 & 대응 센터**: App 23 (`/attack-monitor`)로 구현됨 — "외부 공격을 계속 모니터링하고 대응하는 프로그램" 요청으로 신설, Roadmap 사전 목록에는 없던 앱(App 13/18처럼 세션 중 요청으로 추가된 사례). App 1의 데모용 합성 로그 한계를 넘어 이 PC의 실제 Windows 보안 신호를 모니터링하고, 탐지에 그치지 않고 이벤트별 대응 제안까지 제공하는 이 프로젝트 최초의 "탐지+대응" 결합 앱
 - [x] **금융보안원 클라우드 CSP 평가**: App 24 (`/fsi-csp-audit`)로 구현됨 — "n8n/Slack/Notion 연동 + 금융보안원 CSP 평가 앱 추가"라는 한 요청의 세 번째 항목으로 신설, 사용자 지시대로 기존 메뉴 그룹과 분리된 새 상단 메뉴 그룹("금융 컴플라이언스")으로 구성. Roadmap 사전 목록에 없던 앱이자, 이 프로젝트 최초로 특정 국내 규제기관(금융보안원)의 공개 프레임워크 구조를 WebSearch/WebFetch로 조사해 반영한 앱
+- [x] **포렌식 실습·분석 센터**: App 25 (`/forensics`)로 구현됨 — 메뉴를 8개 도메인/기능 그룹으로 재편하는 과정에서 "사고대응·포렌식" 그룹에 포렌식 전용 앱이 없다는 공백을 발견해 신설. Roadmap 사전 목록에 없던 앱이자, "실습 랩/아티팩트 감사기/증거 수집 도구" 세 방향을 사용자가 하나의 앱으로 조합해달라고 선택한 첫 사례(App 9/16/23의 세 가지 서로 다른 패턴을 포렌식 도메인에 재조합)
 
 ### 외부 자동화 연동
 - [x] **n8n 연동 (Pull: n8n → 이 앱)**: 위 "공통 기능"의 n8n 자동화 연동 항목, `docs/n8n-integration.md` 참고
@@ -462,6 +513,7 @@ App 6/16/17을 실제 대상으로 테스트해볼 수 있는 로컬 전용 Dock
 Backend:  Python 3.11+ / FastAPI / Uvicorn / httpx
 AI:       Anthropic Claude API (claude-sonnet-4-6) / 로컬 LLM(OpenAI 호환, 선택)
 파일 파싱: python-docx / pypdf / openpyxl (Word/PDF/Excel 업로드 텍스트 추출)
+원격 수집: paramiko (App 25 '증거 수집 도구' 탭의 SSH 기반 Linux/macOS/네트워크 장비 수집)
 Frontend: React 18 / Vite / TailwindCSS / react-router-dom
 ```
 
@@ -506,7 +558,8 @@ test_AI_security/
 │   │   ├── dashboard_overview.py ← App 22 (/overview 단일 엔드포인트, Claude/외부 API 모두 미사용)
 │   │   ├── attack_monitor.py  ← App 23 (/exposure, /ws?mode=real|simulate, /history, /report/{id})
 │   │   ├── fsi_csp_audit.py   ← App 24 (+ /guide, /report/{id})
-│   │   └── extract.py         ← 공용 파일 업로드→텍스트 추출 (POST /api/extract-text, Word/PDF/Excel/텍스트)
+│   │   ├── extract.py         ← 공용 파일 업로드→텍스트 추출 (POST /api/extract-text, Word/PDF/Excel/텍스트)
+│   │   └── forensics.py       ← App 25 (/lab/*, /audit/*, /collection/*)
 │   └── services/
 │       ├── claude_service.py  ← App 1 (+ log_offline_engine.py 폐쇄망 규칙 기반 로그 분석)
 │       ├── mock_data.py
@@ -541,7 +594,10 @@ test_AI_security/
 │       ├── dashboard_service.py
 │       ├── attack_monitor_service.py  ← App 23 (PowerShell로 실제 Windows 신호 수집)
 │       ├── response_playbook.py       ← App 23 (탐지 카테고리 → 대응 제안 결정론적 매핑)
-│       └── fsi_csp_audit_service.py / mock_fsi_csp_audit.py / fsi_csp_audit_guide.py / fsi_csp_audit_offline_engine.py  ← App 24
+│       ├── fsi_csp_audit_service.py / mock_fsi_csp_audit.py / fsi_csp_audit_guide.py / fsi_csp_audit_offline_engine.py  ← App 24
+│       ├── forensics_lab.py  ← App 25 '실습 랩' 탭 (SQLite/pcap/ZIP 실제 파일 생성, AI 미사용)
+│       ├── forensics_audit_service.py / mock_forensics_audit.py / forensics_audit_guide.py / forensics_audit_offline_engine.py  ← App 25 '아티팩트 감사기' 탭
+│       └── forensics_collection_service.py  ← App 25 '증거 수집 도구' 탭 (PowerShell 실제 수집 + chain of custody, AI 미사용)
 └── frontend/
     ├── package.json
     └── src/
@@ -580,7 +636,8 @@ test_AI_security/
             ├── DnsSecurityCheck.jsx
             ├── RiskDashboard.jsx
             ├── AttackMonitor.jsx
-            └── FsiCspAudit.jsx
+            ├── FsiCspAudit.jsx
+            └── Forensics.jsx
 ```
 
 ## 실행 방법
@@ -611,6 +668,10 @@ npm run dev
 | 페이지/기능 | 추가로 필요한 것 |
 |---|---|
 | `/vuln`, `/web-arena`, `/policy`, `/model-audit`, `/pentest-lab`, `/phishing-sim`, `/firewall-audit`, `/iam-audit`, `/secret-scan`, `/container-audit`, `/risk-dashboard` | 없음 — 서버 두 개만 켜면 바로 테스트 가능 |
+| `/forensics`의 "실습 랩" 탭 | 챌린지 다운로드/flag 검증 자체는 서버 두 개만 켜면 바로 가능. 분석에 Python(이미 필요) 외 pcap 챌린지는 Wireshark(권장, 없어도 PowerShell로 대체 가능), 카빙 챌린지는 정석대로 하려면 binwalk(선택, 없어도 확장자만 바꿔 열면 됨) |
+| `/forensics`의 "증거 수집 도구" 탭 — 이 PC(Windows) | Windows + PowerShell 필수(App 23과 동일). Prefetch 파일 목록 조회는 관리자 권한이 필요할 수 있음(없으면 chain of custody에 실패로 기록됨) |
+| `/forensics`의 "증거 수집 도구" 탭 — 원격 SSH(Linux/macOS/네트워크 장비) | `backend/requirements.txt`의 `paramiko`(pip install 대상 — 서버 재시작 필요). 대상 시스템에 SSH 접속 가능해야 하고, 네트워크 장비는 명령 1개만 자동 실행되므로 실패 시 아티팩트 감사기 가이드의 수동 명령 사용 |
+| `/forensics`의 "증거 수집 도구" 탭 — 클라우드 CLI(AWS/Azure/GCP) | 이 백엔드 호스트에 해당 CLI(aws/az/gcloud)가 설치되고 인증되어 있어야 함 — 원격 접속이 아니라 로컬 CLI를 그대로 실행 |
 | `/attack-monitor`의 "실제 시스템 모니터링" 탭·노출 현황 점검 | Windows + PowerShell 필수(PowerShell 5.1 기준으로 검증). 로그온 실패/Defender 탐지/리스닝 포트 조회는 관리자 권한 없이도 동작하나, 방화벽 연결 로깅(더 정확한 인바운드 이력)을 켜려면 관리자 권한 PowerShell에서 `netsh advfirewall set allprofiles logging droppedconnections enable`(+ `allowedconnections enable`) 실행 필요(노출 현황 점검 결과에 안내됨). "시뮬레이션(데모)" 탭은 이 요구사항 없이 App 1처럼 바로 사용 가능 |
 | `/attack-monitor`에서 원격 PC/서버를 대상으로 지정 | 대상 PC에서 `Enable-PSRemoting -Force` 실행 필요(WinRM 활성화). 워크그룹(비-도메인) 환경이면 이 PC에서도 `Set-Item WSMan:\localhost\Client\TrustedHosts -Value '<대상host>' -Force` 필요 — 두 명령 모두 앱의 대상 선택 패널에 복사 버튼과 함께 안내됨. 자격증명은 저장되지 않고 매 요청마다 전달만 함 |
 | `/attack-monitor`의 "AWS 활동 모니터링" 탭 | test-range의 LocalStack 샌드박스가 떠 있어야 함(`cd test-range && docker compose up -d localstack aws-sandbox`) — 별도 자격증명/설정 불필요, 앱 안의 [연결 테스트]로 확인 가능. `docker` 명령이 백엔드 호스트에서 실행 가능해야 함(Docker Desktop) |
@@ -661,6 +722,8 @@ API 키 없으면 Mock 모드로 자동 동작. 알림 관련 변수도 하나�
 
 ## 대기 중인 작업
 
+- App 25(포렌식 실습·분석 센터)의 실제 브라우저 렌더링 — **완료** (2026-09-06, Chrome 확장 연결 후 Claude in Chrome으로 3탭 전부 end-to-end 확인. App 25 섹션의 "실제 브라우저 검증 완료" 참고)
+- App 25 증거 수집 도구의 SSH 원격 수집·클라우드 CLI 수집 실제 성공 경로(happy path) 검증 — 이 세션 환경에 SSH 서버(WSL Ubuntu 설치 중)나 클라우드 CLI(aws/az/gcloud 전부 미설치)가 없어 연결 실패 경로(타임아웃, CLI 미설치)만 실제 브라우저에서까지 확인함. 사용자가 실제 Linux/macOS 서버(SSH) 또는 인증된 클라우드 CLI 환경에서 "연결 테스트"·"지금 수집"으로 성공 경로 확인 필요. 네트워크 장비(Cisco/Fortinet/Palo Alto/Juniper) SSH 자동 수집은 실제 장비가 없어 전혀 검증하지 못했고, 장비 펌웨어에 따라 아예 동작하지 않을 수 있음(App 25 섹션의 "SSH 원격 수집 + 클라우드 CLI 수집" 참고)
 - App 23 원격 대상 모니터링(WinRM)의 실제 원격 PC 대상 end-to-end 검증 — 이 세션 환경에 WinRM이 설정된 두 번째 PC가 없어 코드 레벨(연결 실패 두 경로+특수문자 자격증명 이스케이프)까지만 검증함. 사용자가 실제 대상 PC에서 `Enable-PSRemoting -Force` 실행 후 앱에서 "연결 테스트"로 확인 필요. 상세는 App 23 섹션의 "원격 대상 모니터링 (WinRM)" 참고
 - 사용자가 실제로 `wsl --install -d Ubuntu`를 재시도 중 — Docker Desktop의 내부 전용 배포판(`docker-desktop`)만 등록되어 있어 Ubuntu가 없었던 것이 원인으로 확인됨(App 3 recon 가이드 섹션의 "후속 6" 참고). 재시도 결과 대기 중.
 - **Claude API 비용 최적화 — 크레딧 충전 대기 중** (2026-09-06): "비용을 줄이되 가성비 좋게" 요청에 따라 `claude-api` 스킬의 cost-optimize 절차 진행. ① `usage_log.py`(response.usage JSONL 기록) 16개 파일에 추가 완료. ② 16개 시스템 프롬프트에 프롬프트 캐싱(`cache_control`)을 걸었다가, `count_tokens` 실측 결과 가장 긴 프롬프트도 906토큰으로 Sonnet 4.6/5의 캐싱 최소 기준(1,024토큰)에 못 미쳐 **효과 없음을 확인하고 전부 되돌림**(현재 프롬프트 길이가 유지되는 한 캐싱은 무의미 — 프롬프트가 나중에 커지면 재검토). ③ Sonnet 4.6→Sonnet 5 + `effort:"low"` 전환 스팟체크를 시도했으나 (a) Anthropic 계정 크레딧 잔액 부족(`credit balance is too low`, 결제수단 미등록 추정), (b) `requirements.txt`에 `anthropic==0.40.0`으로 고정돼 있어 `output_config`(effort) 파라미터를 SDK가 인식 못 함(`extra_body` 우회 또는 SDK 업그레이드 필요) — 두 가지로 막혀 **미완료**. 사용자가 console.anthropic.com에서 크레딧 충전 후 알려주기로 함. 재개 시: 크레딧 확인 → `extra_body`로 effort 우회 → 피싱(단순분류)/firewall_audit(복잡감사) 샘플로 Sonnet 4.6 vs 5+low 스팟체크 → 문제없으면 16개 파일 모델 전환. 커밋 안 됨(`usage_log.py` 신규 + 15개 서비스 파일 수정, working tree에 남아있음).

@@ -24,6 +24,7 @@ import DnsSecurityCheck from './pages/DnsSecurityCheck'
 import RiskDashboard from './pages/RiskDashboard'
 import AttackMonitor from './pages/AttackMonitor'
 import FsiCspAudit from './pages/FsiCspAudit'
+import Forensics from './pages/Forensics'
 
 export default function App() {
   return (
@@ -54,6 +55,7 @@ export default function App() {
         <Route path="/risk-dashboard" element={<RiskDashboard />} />
         <Route path="/attack-monitor" element={<AttackMonitor />} />
         <Route path="/fsi-csp-audit" element={<FsiCspAudit />} />
+        <Route path="/forensics" element={<Forensics />} />
       </Routes>
     </BrowserRouter>
   )

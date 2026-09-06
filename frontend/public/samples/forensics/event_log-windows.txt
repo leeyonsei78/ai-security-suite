@@ -1,0 +1,10 @@
+TimeCreated           Id    Message
+2026-09-01 02:14:03   4625  An account failed to log on. Account Name: admin, Source Network Address: 203.0.113.44
+2026-09-01 02:14:05   4625  An account failed to log on. Account Name: admin, Source Network Address: 203.0.113.44
+2026-09-01 02:14:08   4625  An account failed to log on. Account Name: admin, Source Network Address: 203.0.113.44
+2026-09-01 02:14:11   4625  An account failed to log on. Account Name: admin, Source Network Address: 203.0.113.44
+2026-09-01 02:14:15   4625  An account failed to log on. Account Name: admin, Source Network Address: 203.0.113.44
+2026-09-01 02:14:20   4625  An account failed to log on. Account Name: admin, Source Network Address: 203.0.113.44
+2026-09-01 02:14:32   4624  An account was successfully logged on. Account Name: admin, Logon Type: 3, Source Network Address: 203.0.113.44
+2026-09-01 02:23:10   4688  A new process has been created. New Process Name: powershell.exe, Command Line: powershell.exe -w hidden -enc SGVsbG8gV29ybGQhIFRoaXMgaXMgYSB0ZXN0IHBheWxvYWQ=
+2026-09-01 05:40:55   1102  The audit log was cleared.

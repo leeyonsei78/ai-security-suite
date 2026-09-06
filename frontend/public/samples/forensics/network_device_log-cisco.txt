@@ -1,0 +1,5 @@
+*Sep  4 02:31:10.221: %SYS-5-CONFIG_I: Configured from console by netadmin_temp on vty0 (203.0.113.9)
+*Sep  4 02:31:45.100: %SEC-6-IPACCESSLOGP: list OUTBOUND permitted tcp 10.0.1.15(53421) -> 203.0.113.77(443), 1 packet
+*Sep  4 02:32:05.330: access-list OUTBOUND permit ip any host 203.0.113.77
+*Sep  4 02:35:12.004: %SYS-5-CONFIG_I: Configured from console by netadmin_temp on vty0 (203.0.113.9)
+*Sep  4 03:10:00.000: %LINK-3-UPDOWN: Interface GigabitEthernet0/1, changed state to up

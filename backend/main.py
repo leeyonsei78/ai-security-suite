@@ -30,6 +30,7 @@ from routers.dashboard_overview import router as dashboard_overview_router
 from routers.attack_monitor import router as attack_monitor_router
 from routers.fsi_csp_audit import router as fsi_csp_audit_router
 from routers.extract import router as extract_router
+from routers.forensics import router as forensics_router
 
 app = FastAPI(title="AI Security Suite", version="1.0.0")
 
@@ -76,6 +77,7 @@ app.include_router(dashboard_overview_router, dependencies=_authed)
 app.include_router(attack_monitor_router, dependencies=_authed)
 app.include_router(fsi_csp_audit_router, dependencies=_authed)
 app.include_router(extract_router, dependencies=_authed)
+app.include_router(forensics_router, dependencies=_authed)
 
 
 @app.get("/")
