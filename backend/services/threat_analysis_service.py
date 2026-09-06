@@ -3,7 +3,7 @@ import json
 from dotenv import load_dotenv
 from services.mock_threat_analysis import generate_mock_analysis, generate_mock_chat
 from services.threat_offline_engine import analyze_offline
-from services import mode_manager, local_llm_client
+from services import mode_manager, local_llm_client, usage_log
 
 load_dotenv()
 
@@ -104,6 +104,7 @@ def _real_analyze(analysis_type: str, input_data: str, context: str, backend: st
             system=prompt,
             messages=[{"role": "user", "content": user_content}],
         )
+        usage_log.log_usage("threat_analysis", message.usage, model="claude-sonnet-4-6")
         text = message.content[0].text
 
     start, end = text.find("{"), text.rfind("}") + 1
@@ -157,6 +158,7 @@ async def chat(analysis_type: str, summary: str, history: list[dict], message: s
             system=system,
             messages=history + [{"role": "user", "content": message}],
         )
+        usage_log.log_usage("threat_analysis_chat", resp.usage, model="claude-sonnet-4-6")
         return resp.content[0].text
     except Exception as e:
         backend_label = "로컬 LLM" if mode == "local" else "Claude Cloud"

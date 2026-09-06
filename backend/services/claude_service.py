@@ -4,7 +4,7 @@ import json
 from dotenv import load_dotenv
 from services.mock_data import generate_mock_analysis
 from services.log_offline_engine import analyze_offline
-from services import mode_manager, local_llm_client
+from services import mode_manager, local_llm_client, usage_log
 
 load_dotenv()
 
@@ -60,6 +60,7 @@ def _real_analyze(log_content: str, backend: str = "cloud") -> dict:
             system=SYSTEM_PROMPT,
             messages=[{"role": "user", "content": user_prompt}],
         )
+        usage_log.log_usage("dashboard", message.usage, model="claude-sonnet-4-6")
         text = message.content[0].text
 
     start = text.find("{")

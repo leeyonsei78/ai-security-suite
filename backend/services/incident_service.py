@@ -3,7 +3,7 @@ import json
 from dotenv import load_dotenv
 from services.mock_incident import generate_mock_plan, generate_mock_chat
 from services.incident_offline_engine import analyze_offline
-from services import mode_manager, local_llm_client
+from services import mode_manager, local_llm_client, usage_log
 
 load_dotenv()
 
@@ -58,6 +58,7 @@ def _real_plan(incident_type: str, severity: str, description: str, backend: str
             system=PLAN_PROMPT,
             messages=[{"role": "user", "content": user_prompt}],
         )
+        usage_log.log_usage("incident", message.usage, model="claude-sonnet-4-6")
         text = message.content[0].text
     start, end = text.find("{"), text.rfind("}") + 1
     if start != -1 and end > start:
@@ -107,6 +108,7 @@ async def chat_response(incident_type: str, severity: str, description: str,
         resp = client.messages.create(
             model="claude-sonnet-4-6", max_tokens=1024,
             system=system, messages=history + [{"role": "user", "content": message}])
+        usage_log.log_usage("incident_chat", resp.usage, model="claude-sonnet-4-6")
         return resp.content[0].text
     except Exception as e:
         backend_label = "로컬 LLM" if mode == "local" else "Claude Cloud"

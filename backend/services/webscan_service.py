@@ -5,6 +5,7 @@ import socket
 import datetime
 from dotenv import load_dotenv
 from services.mock_webscan import generate_mock_webscan
+from services import usage_log
 
 load_dotenv()
 
@@ -266,6 +267,7 @@ async def scan_url(url: str) -> dict:
                 model="claude-sonnet-4-6", max_tokens=300,
                 messages=[{"role": "user", "content":
                     f"웹 보안 스캔 결과를 한 문단(2~3문장)으로 요약해주세요:\n{json.dumps(scan_summary, ensure_ascii=False)}"}])
+            usage_log.log_usage("webscan", msg.usage, model="claude-sonnet-4-6")
             summary = msg.content[0].text
         except Exception:
             pass

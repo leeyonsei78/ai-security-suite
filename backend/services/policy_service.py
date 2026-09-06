@@ -3,7 +3,7 @@ import json
 from dotenv import load_dotenv
 from services.mock_policy import generate_mock_policy
 from services.policy_offline_engine import generate_offline
-from services import mode_manager, local_llm_client
+from services import mode_manager, local_llm_client, usage_log
 
 load_dotenv()
 
@@ -64,6 +64,7 @@ def _real_generate(environment_type: str, compliance: list[str], description: st
             system=SYSTEM_PROMPT,
             messages=[{"role": "user", "content": user_prompt}],
         )
+        usage_log.log_usage("policy", message.usage, model="claude-sonnet-4-6")
         text = message.content[0].text
 
     start = text.find("{")

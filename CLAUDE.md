@@ -515,6 +515,7 @@ test_AI_security/
 │       ├── file_extract.py    ← 공용 파일 텍스트 추출 (python-docx/pypdf/openpyxl, 원본 미저장)
 │       ├── db.py              ← 히스토리 SQLite 영속화 (범용, App 1/2/3/4/5/6/7/8/11/12/14/15/16/17/18/19/20/21 공용)
 │       ├── auth.py            ← 선택적 API 키 인증 (n8n 등 외부 연동용, API_KEY 미설정 시 비활성)
+│       ├── usage_log.py       ← Claude API response.usage를 JSONL로 기록 (비용 실측용, 원본 프롬프트 미저장)
 │       ├── notify.py          ← Critical 탐지 시 Slack/이메일 알림
 │       ├── live_monitor.py    ← App 1 실시간 모니터링용 합성 로그 생성기
 │       ├── phishing_service.py / mock_phishing.py / phishing_offline_engine.py
@@ -662,6 +663,7 @@ API 키 없으면 Mock 모드로 자동 동작. 알림 관련 변수도 하나�
 
 - App 23 원격 대상 모니터링(WinRM)의 실제 원격 PC 대상 end-to-end 검증 — 이 세션 환경에 WinRM이 설정된 두 번째 PC가 없어 코드 레벨(연결 실패 두 경로+특수문자 자격증명 이스케이프)까지만 검증함. 사용자가 실제 대상 PC에서 `Enable-PSRemoting -Force` 실행 후 앱에서 "연결 테스트"로 확인 필요. 상세는 App 23 섹션의 "원격 대상 모니터링 (WinRM)" 참고
 - 사용자가 실제로 `wsl --install -d Ubuntu`를 재시도 중 — Docker Desktop의 내부 전용 배포판(`docker-desktop`)만 등록되어 있어 Ubuntu가 없었던 것이 원인으로 확인됨(App 3 recon 가이드 섹션의 "후속 6" 참고). 재시도 결과 대기 중.
+- **Claude API 비용 최적화 — 크레딧 충전 대기 중** (2026-09-06): "비용을 줄이되 가성비 좋게" 요청에 따라 `claude-api` 스킬의 cost-optimize 절차 진행. ① `usage_log.py`(response.usage JSONL 기록) 16개 파일에 추가 완료. ② 16개 시스템 프롬프트에 프롬프트 캐싱(`cache_control`)을 걸었다가, `count_tokens` 실측 결과 가장 긴 프롬프트도 906토큰으로 Sonnet 4.6/5의 캐싱 최소 기준(1,024토큰)에 못 미쳐 **효과 없음을 확인하고 전부 되돌림**(현재 프롬프트 길이가 유지되는 한 캐싱은 무의미 — 프롬프트가 나중에 커지면 재검토). ③ Sonnet 4.6→Sonnet 5 + `effort:"low"` 전환 스팟체크를 시도했으나 (a) Anthropic 계정 크레딧 잔액 부족(`credit balance is too low`, 결제수단 미등록 추정), (b) `requirements.txt`에 `anthropic==0.40.0`으로 고정돼 있어 `output_config`(effort) 파라미터를 SDK가 인식 못 함(`extra_body` 우회 또는 SDK 업그레이드 필요) — 두 가지로 막혀 **미완료**. 사용자가 console.anthropic.com에서 크레딧 충전 후 알려주기로 함. 재개 시: 크레딧 확인 → `extra_body`로 effort 우회 → 피싱(단순분류)/firewall_audit(복잡감사) 샘플로 Sonnet 4.6 vs 5+low 스팟체크 → 문제없으면 16개 파일 모델 전환. 커밋 안 됨(`usage_log.py` 신규 + 15개 서비스 파일 수정, working tree에 남아있음).
 
 (그 외에는 2026-09-05 폐쇄망/AI 실행 모드 롤아웃이 대상 16개 앱 전부 완료됨. 상세는 위 "공통 기능"의 "AI 실행 모드" 항목과 App 3/15 섹션 참고. 2026-09-06 커밋 `5942131`로 `origin/master`에 푸시 완료.)
 

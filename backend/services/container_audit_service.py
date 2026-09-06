@@ -3,7 +3,7 @@ import json
 from dotenv import load_dotenv
 from services.mock_container_audit import generate_mock_audit
 from services.container_audit_offline_engine import analyze_offline
-from services import mode_manager, local_llm_client
+from services import mode_manager, local_llm_client, usage_log
 
 load_dotenv()
 
@@ -74,6 +74,7 @@ def _real_analyze(source_type: str, content: str, context: str, backend: str = "
             system=SYSTEM_PROMPT,
             messages=[{"role": "user", "content": user_prompt}],
         )
+        usage_log.log_usage("container_audit", message.usage, model="claude-sonnet-4-6")
         text = message.content[0].text
 
     start = text.find("{")
