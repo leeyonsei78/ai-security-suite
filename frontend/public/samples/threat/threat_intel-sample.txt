@@ -1,0 +1,4 @@
+C2 도메인: update-service.net, cdn-delivery.net
+공격 방법: MFA 피로 공격 → 헬프데스크 사회공학
+대상: 클라우드 서비스 기업 IT 헬프데스크
+목적: 도메인 관리자 권한 탈취 후 랜섬웨어 배포

@@ -229,6 +229,7 @@ CHALLENGES = [
             "실제 Chrome/Edge의 히스토리 DB와 동일하게 urls 테이블 구조로 되어 있습니다."
         ),
         "objective": "SQLite DB의 urls 테이블을 조회해 의심스러운 방문 기록을 찾고, 그 안에 인코딩되어 숨겨진 flag를 복원하세요.",
+        "learning_point": "브라우저 히스토리는 실제 침해사고 조사에서 가장 먼저 확인하는 아티팩트 중 하나입니다 — 피싱 링크 클릭, C2 체크인, 데이터 유출 URL이 그대로 남습니다. 도구 설치 없이 sqlite3 표준 라이브러리만으로 DB를 직접 조회하는 법을 익힙니다.",
         "analysis_steps": [
             "설치 없이 조회하기: python -c \"import sqlite3; [print(r) for r in sqlite3.connect('history.sqlite').execute('SELECT url, title, visit_count FROM urls')]\"",
             "GUI로 보고 싶다면 DB Browser for SQLite(sqlitebrowser.org, 무료)를 설치해 파일을 열고 Browse Data 탭에서 urls 테이블을 확인하세요.",
@@ -262,6 +263,7 @@ CHALLENGES = [
             "계정정보, 그리고 데이터 유출 흔적입니다."
         ),
         "objective": "패킷 캡처를 분석해 (1) 평문 FTP 계정정보를 찾고 (2) HTTP 응답 헤더에 숨겨진 유출 데이터를 Base64 디코딩해 flag를 복원하세요.",
+        "learning_point": "네트워크 캡처는 사고 대응에서 '무엇이 실제로 전송됐는지'를 확인할 수 있는 유일한 증거인 경우가 많습니다. 평문 프로토콜(FTP)이 왜 위험한지, 그리고 정상적인 응답처럼 보이는 HTTP 헤더에도 데이터가 숨겨질 수 있다는 점을 직접 확인합니다.",
         "analysis_steps": [
             "Wireshark로 capture.pcap을 열고 필터 창에 ftp 를 입력해 USER/PASS 명령을 확인합니다.",
             "필터를 http 로 바꿔 응답 패킷을 펼치고 HTTP 헤더의 X-Debug-Flag 값을 확인합니다.",
@@ -296,6 +298,7 @@ CHALLENGES = [
             "이어붙어 숨겨져 있습니다."
         ),
         "objective": "파일 카빙(file carving) 기법으로 숨겨진 파일을 복구해 flag를 찾으세요.",
+        "learning_point": "삭제되거나 손상된 것처럼 보이는 파일도 파일 포맷의 구조(ZIP은 파일 끝의 중앙 디렉토리를 기준으로 읽음)를 이해하면 복구할 수 있습니다 — 실제 디스크 포렌식에서 미할당 영역 복구에 쓰이는 핵심 기법입니다.",
         "analysis_steps": [
             "가장 간단한 방법: evidence.bin의 확장자를 evidence.zip으로 바꾼 뒤 그대로 열어보세요 — ZIP은 파일 끝의 '중앙 디렉토리'를 기준으로 읽기 때문에 앞에 다른 데이터가 붙어 있어도 대부분의 압축 프로그램이 무시하고 열 수 있습니다.",
             "정석적인 방법: binwalk evidence.bin 으로 파일 내부에 숨겨진 시그니처(PK\\x03\\x04 = ZIP)의 위치를 찾습니다.",

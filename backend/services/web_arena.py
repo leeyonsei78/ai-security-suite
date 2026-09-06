@@ -31,6 +31,7 @@ CHALLENGE_META = [
         "id": "sqli",
         "title": "SQL Injection: 관리자로 로그인하기",
         "difficulty": "입문",
+        "meaning": "SQL Injection — 사용자 입력을 파라미터화 없이 SQL 쿼리 문자열에 그대로 조립해, 입력값으로 쿼리의 의미 자체를 바꿔버릴 수 있는 취약점입니다.",
         "situation": "로그인 폼이 파라미터화 없이 SQL 쿼리 문자열을 그대로 조립합니다. admin의 실제 비밀번호를 몰라도 로그인할 수 있는 입력을 찾아보세요.",
         "endpoint": "POST /api/web-arena/sqli/login  { username, password }",
         "hints": [
@@ -43,6 +44,7 @@ CHALLENGE_META = [
         "id": "idor",
         "title": "IDOR: 다른 사람의 주문 훔쳐보기",
         "difficulty": "입문",
+        "meaning": "IDOR(Insecure Direct Object Reference) — 서버가 요청된 리소스 ID의 소유권을 검증하지 않아, ID만 바꾸면 다른 사용자의 데이터에 접근할 수 있는 취약점입니다.",
         "situation": "guest로 로그인하면 본인 주문(1001)은 정상적으로 볼 수 있습니다. 하지만 서버는 요청한 주문 ID가 정말 내 것인지 검증하지 않습니다.",
         "endpoint": "POST /api/web-arena/idor/login { username } → GET /api/web-arena/idor/orders/{id}",
         "hints": [
@@ -55,6 +57,7 @@ CHALLENGE_META = [
         "id": "xss",
         "title": "Reflected XSS: 검색창에 스크립트 심기",
         "difficulty": "입문",
+        "meaning": "Reflected XSS — 사용자 입력을 HTML 이스케이프 없이 그대로 응답에 반영해, 악성 스크립트가 피해자의 브라우저에서 실행되는 취약점입니다.",
         "situation": "검색 결과 페이지가 입력값을 이스케이프 없이 그대로 HTML에 출력합니다.",
         "endpoint": "GET /api/web-arena/xss/search?q=...",
         "hints": [
@@ -67,6 +70,7 @@ CHALLENGE_META = [
         "id": "ssrf",
         "title": "SSRF: 서버를 시켜 내부 API 훔쳐보기",
         "difficulty": "중급",
+        "meaning": "SSRF(Server-Side Request Forgery) — 서버가 사용자가 지정한 URL로 대신 요청을 보내는 기능을 악용해, 외부에서 직접 접근할 수 없는 내부 전용 리소스에 서버를 거쳐 접근하는 공격입니다.",
         "situation": "링크 미리보기 기능이 사용자가 준 URL을 서버가 대신 요청해서 보여줍니다. 이 서버에는 외부에서 직접 접근하면 거부당하는 '내부 전용' API가 하나 있습니다 — 하지만 서버 자신이 요청하면 통과됩니다.",
         "endpoint": "GET /api/web-arena/ssrf/fetch?url=...  (참고: 내부 API는 GET /api/web-arena/ssrf/internal-metadata 에 있지만 직접 접근하면 거부됩니다)",
         "hints": [
@@ -79,6 +83,7 @@ CHALLENGE_META = [
         "id": "jwt",
         "title": "JWT: 약한 시크릿으로 관리자 토큰 위조하기",
         "difficulty": "중급",
+        "meaning": "JWT 위조 — 서명 검증에 쓰이는 시크릿 키가 추측 가능할 만큼 약하면, 공격자가 토큰의 내용(role 등)을 원하는 대로 바꿔 다시 서명할 수 있는 취약점입니다.",
         "situation": "로그인하면 HS256으로 서명된 JWT를 받습니다. 이 서버는 시크릿 키로 흔히 쓰이는 값 중 하나를 그대로 쓰고 있습니다.",
         "endpoint": "POST /api/web-arena/jwt/login { username } → GET /api/web-arena/jwt/admin (Authorization: Bearer <token>)",
         "hints": [
@@ -92,6 +97,7 @@ CHALLENGE_META = [
         "id": "ssti",
         "title": "SSTI: 템플릿 문자열로 서버 내부 값 읽어내기",
         "difficulty": "중급",
+        "meaning": "SSTI(Server-Side Template Injection) — 사용자 입력을 템플릿 엔진에 그대로 전달해 렌더링하면, 템플릿 문법을 이용해 애플리케이션 컨텍스트의 다른 값까지 읽어낼 수 있는 취약점입니다.",
         "situation": "인사말 미리보기 기능이 사용자가 입력한 템플릿 문자열을 서버 내부 컨텍스트와 함께 그대로 렌더링합니다. 의도된 사용법은 {user[name]} 같은 값을 보여주는 것이지만, 컨텍스트에는 그보다 훨씬 많은 것이 들어있습니다.",
         "endpoint": "POST /api/web-arena/ssti/render { template }",
         "hints": [

@@ -272,6 +272,7 @@ function SqliChallenge({ meta, solved, onSolved, playerName }) {
         <span className="text-xs font-bold text-violet-400">{meta.difficulty}</span>
       </div>
       <p className="text-base font-bold text-slate-100">{meta.title}</p>
+      {meta.meaning && <p className="text-xs text-slate-400"><span className="font-semibold text-slate-300">의미: </span>{meta.meaning}</p>}
       <p className="text-xs text-slate-300">{meta.situation}</p>
       <p className="text-[11px] font-mono text-slate-500">{meta.endpoint}</p>
 
@@ -326,6 +327,7 @@ function IdorChallenge({ meta, solved, onSolved, playerName }) {
         <span className="text-xs font-bold text-cyan-400">{meta.difficulty}</span>
       </div>
       <p className="text-base font-bold text-slate-100">{meta.title}</p>
+      {meta.meaning && <p className="text-xs text-slate-400"><span className="font-semibold text-slate-300">의미: </span>{meta.meaning}</p>}
       <p className="text-xs text-slate-300">{meta.situation}</p>
       <p className="text-[11px] font-mono text-slate-500">{meta.endpoint}</p>
 
@@ -372,6 +374,7 @@ function XssChallenge({ meta, solved, onSolved, playerName }) {
         <span className="text-xs font-bold text-amber-400">{meta.difficulty}</span>
       </div>
       <p className="text-base font-bold text-slate-100">{meta.title}</p>
+      {meta.meaning && <p className="text-xs text-slate-400"><span className="font-semibold text-slate-300">의미: </span>{meta.meaning}</p>}
       <p className="text-xs text-slate-300">{meta.situation}</p>
       <p className="text-[11px] font-mono text-slate-500">{meta.endpoint}</p>
 
@@ -425,6 +428,7 @@ function SsrfChallenge({ meta, solved, onSolved, playerName }) {
         <span className="text-xs font-bold text-rose-400">{meta.difficulty}</span>
       </div>
       <p className="text-base font-bold text-slate-100">{meta.title}</p>
+      {meta.meaning && <p className="text-xs text-slate-400"><span className="font-semibold text-slate-300">의미: </span>{meta.meaning}</p>}
       <p className="text-xs text-slate-300">{meta.situation}</p>
       <p className="text-[11px] font-mono text-slate-500">{meta.endpoint}</p>
 
@@ -475,6 +479,7 @@ function JwtChallenge({ meta, solved, onSolved, playerName }) {
         <span className="text-xs font-bold text-indigo-400">{meta.difficulty}</span>
       </div>
       <p className="text-base font-bold text-slate-100">{meta.title}</p>
+      {meta.meaning && <p className="text-xs text-slate-400"><span className="font-semibold text-slate-300">의미: </span>{meta.meaning}</p>}
       <p className="text-xs text-slate-300">{meta.situation}</p>
       <p className="text-[11px] font-mono text-slate-500">{meta.endpoint}</p>
 
@@ -526,6 +531,7 @@ function SstiChallenge({ meta, solved, onSolved, playerName }) {
         <span className="text-xs font-bold text-teal-400">{meta.difficulty}</span>
       </div>
       <p className="text-base font-bold text-slate-100">{meta.title}</p>
+      {meta.meaning && <p className="text-xs text-slate-400"><span className="font-semibold text-slate-300">의미: </span>{meta.meaning}</p>}
       <p className="text-xs text-slate-300">{meta.situation}</p>
       <p className="text-[11px] font-mono text-slate-500">{meta.endpoint}</p>
 

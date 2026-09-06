@@ -191,6 +191,9 @@ function ChallengeCard({ challenge }) {
       </div>
 
       <p className="text-base font-bold text-slate-100">{challenge.title}</p>
+      {challenge.meaning && (
+        <p className="text-xs text-slate-400 leading-relaxed"><span className="font-semibold text-slate-300">의미: </span>{challenge.meaning}</p>
+      )}
       <p className="text-xs text-slate-300 leading-relaxed">{challenge.situation}</p>
       <p className="text-xs text-slate-400 leading-relaxed"><span className="font-semibold text-slate-300">목표: </span>{challenge.objective}</p>
 

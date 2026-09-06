@@ -115,6 +115,11 @@ function LabChallengeCard({ challenge }) {
       <p className="text-base font-bold text-slate-100">{challenge.title}</p>
       <p className="text-xs text-slate-300 leading-relaxed">{challenge.situation}</p>
       <p className="text-xs text-slate-400 leading-relaxed"><span className="font-semibold text-slate-300">목표: </span>{challenge.objective}</p>
+      {challenge.learning_point && (
+        <p className="text-xs text-cyan-200/80 leading-relaxed bg-cyan-950/20 border border-cyan-500/10 rounded-lg p-2.5">
+          <span className="font-semibold text-cyan-300">💡 이 챌린지가 실무와 연결되는 지점: </span>{challenge.learning_point}
+        </p>
+      )}
 
       <button
         onClick={download}
@@ -350,8 +355,14 @@ function AuditTab() {
 
         {currentType && (
           <div className="bg-slate-950/60 border border-slate-700 rounded-xl p-3 space-y-3">
+            {currentType.meaning && (
+              <div>
+                <p className="text-xs font-medium text-cyan-300 mb-1">의미</p>
+                <p className="text-[11px] text-slate-400 leading-relaxed">{currentType.meaning}</p>
+              </div>
+            )}
             <div>
-              <p className="text-xs font-medium text-cyan-300 mb-1">왜 수집하나요?</p>
+              <p className="text-xs font-medium text-cyan-300 mb-1">왜 수집하나요? (점검 목적)</p>
               <p className="text-[11px] text-slate-400 leading-relaxed">{currentType.why}</p>
             </div>
 
@@ -856,6 +867,24 @@ const COLLECTION_SOURCES = [
   { id: 'cloud', label: '클라우드 CLI (AWS/Azure/GCP)', icon: Cloud },
 ]
 
+const COLLECTION_SOURCE_INFO = {
+  local: {
+    meaning: '이 백엔드가 실행 중인 로컬 PC 자체에서 PowerShell로 실제 보안 신호를 조회합니다.',
+    purpose: '침해가 의심되는 이 PC의 로그온 이력·프로세스 생성 이벤트·지속성 메커니즘(레지스트리 Run 키)·최근 실행 프로그램(Prefetch)·실행 중 프로세스·USB 연결 이력을 실제로 수집해 조사 증거로 남깁니다.',
+    prereq: 'Windows + PowerShell만 있으면 바로 가능합니다 — 다만 Prefetch 조회는 관리자 권한이 필요할 수 있습니다(없으면 chain of custody에 실패로 정직하게 기록됩니다).',
+  },
+  ssh: {
+    meaning: 'paramiko로 다른 서버·장비에 SSH 접속해 원격에서 명령을 실행하고 결과를 가져옵니다.',
+    purpose: '이 PC가 아니라 실제 조사 대상인 Linux/macOS 서버, 또는 네트워크 장비(Cisco/Fortinet/Palo Alto/Juniper)의 로그·설정을 원격으로 수집합니다.',
+    prereq: '대상 시스템에 SSH로 접속 가능해야 하고 유효한 자격증명이 필요합니다(자격증명은 저장되지 않고 이 요청에만 사용됨). 네트워크 장비는 대표 명령 1개만 자동 실행되며, 실패하면 "아티팩트 감사기" 탭 가이드의 수동 명령을 직접 실행하세요.',
+  },
+  cloud: {
+    meaning: '원격 접속이 아니라 이 백엔드 호스트에 이미 설치·인증된 CLI(aws/az/gcloud)를 그대로 실행합니다.',
+    purpose: 'CloudTrail/Activity Log/Cloud Audit Logs 같은 클라우드 감사 로그를 조회해 계정·리소스 변경 이력을 증거로 남깁니다.',
+    prereq: '이 백엔드가 실행되는 호스트에 해당 CLI가 설치되고 인증(로그인)되어 있어야 합니다 — 없으면 "명령을 찾을 수 없습니다"로 실패합니다. 먼저 이 호스트에 해당 CLI를 설치·인증하세요.',
+  },
+}
+
 function CollectionTab() {
   const [source, setSource] = useState('local')
   const [collectedBy, setCollectedBy] = useState('')
@@ -915,6 +944,14 @@ function CollectionTab() {
           />
         </div>
       </div>
+
+      {COLLECTION_SOURCE_INFO[source] && (
+        <div className="bg-cyan-950/30 border border-cyan-500/20 rounded-xl p-3 text-xs space-y-1.5">
+          <p><span className="font-semibold text-cyan-300">의미: </span><span className="text-slate-300">{COLLECTION_SOURCE_INFO[source].meaning}</span></p>
+          <p><span className="font-semibold text-cyan-300">점검 목적: </span><span className="text-slate-300">{COLLECTION_SOURCE_INFO[source].purpose}</span></p>
+          <p><span className="font-semibold text-cyan-300">필요 조건: </span><span className="text-slate-300">{COLLECTION_SOURCE_INFO[source].prereq}</span></p>
+        </div>
+      )}
 
       {source === 'local' && <LocalCollectionPanel collectedBy={collectedBy} onCollected={onCollected} />}
       {source === 'ssh' && <RemoteSshPanel collectedBy={collectedBy} onCollected={onCollected} />}

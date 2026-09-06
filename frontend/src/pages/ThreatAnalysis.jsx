@@ -3,11 +3,44 @@ import axios from 'axios'
 import {
   FlaskConical, Bug, HardDrive, Cpu, Network,
   ChevronDown, ChevronUp, Send, Bot, User,
-  AlertTriangle, Shield, Eye, Clock, Copy, CheckCheck, Cloud, Server, WifiOff,
+  AlertTriangle, Shield, Eye, Clock, Copy, CheckCheck, Cloud, Server, WifiOff, Download,
 } from 'lucide-react'
 import GuidePanel from '../components/GuidePanel'
 import FileUploadButton from '../components/FileUploadButton'
 import CollectionGuide from '../components/CollectionGuide'
+
+// 실제로 오프라인 규칙 엔진에서 4종 모두 HIGH 판정 + 서로 다른 근거(IOC/MITRE 기법/타임라인/
+// 프로세스 마스커레이딩 등)가 나오는 것까지 확인된 예시 — 다운로드해서 그대로 업로드(또는
+// 붙여넣기)하면 바로 결과를 볼 수 있다 (App 3/8/12/17의 SAMPLE_FILES 패턴과 동일).
+const SAMPLE_FILES = {
+  malware: '/samples/threat/malware-sample.txt',
+  forensics: '/samples/threat/forensics-sample.txt',
+  memory: '/samples/threat/memory-sample.txt',
+  threat_intel: '/samples/threat/threat_intel-sample.txt',
+}
+
+const INPUT_TYPE_INFO = {
+  malware: {
+    meaning: '의심되는 실행 파일·스크립트에서 뽑아낸 strings 결과, 코드 스니펫, 또는 실행 시 관찰된 행위(파일 생성·레지스트리·네트워크) 로그입니다.',
+    purpose: '악성코드가 실제로 어떤 기능(키로깅·자격증명 탈취·C2 통신 등)을 갖고 있는지, MITRE ATT&CK의 어느 기법에 해당하는지, IoC(IP/도메인/해시)는 무엇인지 파악합니다.',
+    source: '온라인 샌드박스(VirusTotal/any.run 등)의 행위 분석 리포트를 우선 활용하고, 로컬에서 직접 볼 때는 strings/Procmon 결과를 사용하세요. ⚠️ 의심 파일을 업무 PC에서 직접 실행하지 마세요.',
+  },
+  forensics: {
+    meaning: 'Windows 이벤트 로그, 파일 시스템 타임스탬프, 레지스트리 export, 브라우저 히스토리 등 조사 대상 시스템에 남은 흔적입니다.',
+    purpose: '여러 아티팩트를 시간순으로 엮어 공격이 언제·어떤 순서로 진행됐는지 타임라인을 재구성하고, 로그 삭제 같은 안티포렌식 시도가 있었는지 확인합니다.',
+    source: 'Get-WinEvent(이벤트 로그), 레지스트리 Run 키 export, Prefetch 파일 목록, 브라우저 히스토리 파일을 조사 대상 시스템에서 직접 수집하세요.',
+  },
+  memory: {
+    meaning: '실행 중인 시스템의 메모리를 덤프한 뒤 Volatility 등으로 분석한 출력(pstree/netscan/cmdline, strings 등)입니다.',
+    purpose: '프로세스 마스커레이딩, 코드 인젝션, 디스크에 흔적이 남지 않는 메모리 전용 악성 행위(fileless malware)를 점검합니다.',
+    source: 'Volatility 3(vol -f dump.mem windows.pstree/netscan/cmdline)로 사전에 덤프한 메모리 이미지를 분석한 출력을 붙여넣으세요. 상세 절차는 Pwn/Reverse 실습실 참고.',
+  },
+  threat_intel: {
+    meaning: '수집된 IoC 목록, 관찰된 공격 수법(TTP), 피해 환경과 공격 목적 등 위협 인텔리전스 데이터입니다.',
+    purpose: '알려진 위협 행위자(APT 그룹)와의 연관성, 유사 캠페인, 이 공격을 조기에 탐지할 수 있는 지점(탐지 기회)을 찾습니다. 오프라인 모드는 행위자 귀속을 지어내지 않고 IoC/기법만 정리해줍니다.',
+    source: 'VirusTotal/OTX/abuse.ch에서 조회한 IoC, MITRE ATT&CK Navigator의 기법 매핑, 벤더 CTI 리포트의 내용을 정리해 붙여넣으세요.',
+  },
+}
 
 const MODE_BADGE = {
   cloud:   { icon: Cloud,        label: '외부 AI API로 분석됨', color: 'text-green-400',  bg: 'bg-green-500/10 border-green-500/30' },
@@ -590,11 +623,29 @@ export default function ThreatAnalysis() {
               </div>
             </div>
 
+            {INPUT_TYPE_INFO[analysisType] && (
+              <div className="bg-violet-950/30 border border-violet-500/20 rounded-xl p-3 text-xs space-y-1.5">
+                <p><span className="font-semibold text-violet-300">의미: </span><span className="text-slate-300">{INPUT_TYPE_INFO[analysisType].meaning}</span></p>
+                <p><span className="font-semibold text-violet-300">점검 목적: </span><span className="text-slate-300">{INPUT_TYPE_INFO[analysisType].purpose}</span></p>
+                <p><span className="font-semibold text-violet-300">어디서 수집하나요: </span><span className="text-slate-300">{INPUT_TYPE_INFO[analysisType].source}</span></p>
+              </div>
+            )}
+
             <CollectionGuide
               items={collectionGuide?.[analysisType]?.items}
               usageNote={collectionGuide?.[analysisType]?.usage_note}
               accentColor={ACCENT_BY_COLOR[currentType?.color] ?? 'text-cyan-300'}
             />
+
+            {SAMPLE_FILES[analysisType] && (
+              <a
+                href={SAMPLE_FILES[analysisType]}
+                download
+                className="inline-flex items-center gap-1.5 text-[11px] text-violet-400 hover:text-violet-300 underline underline-offset-2"
+              >
+                <Download size={11} /> 예시 파일 다운로드 (실제로 탐지되는 것까지 확인된 샘플 — 바로 업로드해서 테스트 가능)
+              </a>
+            )}
 
             {/* Context */}
             <div>

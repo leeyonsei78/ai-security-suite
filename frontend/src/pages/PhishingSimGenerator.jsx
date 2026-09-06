@@ -162,6 +162,16 @@ export default function PhishingSimGenerator() {
               </div>
             </div>
 
+            {(() => {
+              const current = scenarios.find(s => s.id === scenarioType)
+              return current?.meaning ? (
+                <div className="bg-rose-950/30 border border-rose-500/20 rounded-xl p-3 text-xs">
+                  <span className="font-semibold text-rose-300">의미: </span>
+                  <span className="text-slate-300">{current.meaning}</span>
+                </div>
+              ) : null
+            })()}
+
             <div>
               <p className="text-xs font-semibold text-slate-400 mb-2 flex items-center gap-1.5"><Gauge size={13} /> 난이도</p>
               <div className="flex gap-2">
