@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from services.ioc_service import analyze_ioc
+from services.ioc_service import analyze_ioc, fetch_real_examples
 from services import db, notify
 
 router = APIRouter(prefix="/api/ioc", tags=["ioc"])
@@ -28,8 +28,17 @@ async def analyze(request: AnalyzeRequest):
     malicious = [r for r in results if r.get("verdict") == "MALICIOUS"]
     if malicious:
         summary = f"{len(malicious)}개의 악성 IoC 탐지: " + ", ".join(f"{r.get('ioc')}({r.get('category', '')})" for r in malicious[:5])
-        await notify.alert_if_critical(APP_NAME, True, "MALICIOUS", summary, entry["id"])
+        await notify.alert_if_critical(APP_NAME, True, "MALICIOUS", summary, entry["id"], entry)
     return entry
+
+
+@router.get("/real-examples")
+async def real_examples(limit: int = 6):
+    try:
+        urls = await fetch_real_examples(limit)
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    return {"iocs": urls, "source": "abuse.ch URLhaus (https://urlhaus.abuse.ch)"}
 
 
 @router.get("/history")

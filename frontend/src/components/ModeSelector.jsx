@@ -1,15 +1,31 @@
 import { useState, useEffect, useRef } from 'react'
 import axios from 'axios'
-import { Cloud, Server, WifiOff, FlaskConical, ChevronDown, Check } from 'lucide-react'
+import { Cloud, Server, Terminal, WifiOff, FlaskConical, ChevronDown, Check } from 'lucide-react'
 
 const MODE_CONFIG = {
-  cloud:   { icon: Cloud,        label: 'Claude Cloud', color: 'text-green-400',  bg: 'bg-green-500/20' },
-  local:   { icon: Server,       label: '로컬 LLM',      color: 'text-blue-400',   bg: 'bg-blue-500/20' },
-  offline: { icon: WifiOff,      label: '오프라인(폐쇄망)', color: 'text-amber-400', bg: 'bg-amber-500/20' },
-  mock:    { icon: FlaskConical, label: 'Mock 데모',      color: 'text-slate-400',  bg: 'bg-slate-500/20' },
+  cloud: {
+    icon: Cloud, label: '외부 AI API', color: 'text-green-400', bg: 'bg-green-500/20',
+    desc: '이 프로젝트에서 "AI"라고 부르는 것은 기본적으로 이것 — Anthropic(Claude)의 API를 인터넷으로 호출합니다. 인터넷 연결과 API 키(크레딧)가 필요합니다.',
+  },
+  local: {
+    icon: Server, label: '로컬 LLM', color: 'text-blue-400', bg: 'bg-blue-500/20',
+    desc: '일반 인터넷이 아니라, 사내망에 별도로 구축해둔 오픈소스 AI 모델(예: Ollama) 서버를 호출합니다. 이 프로젝트가 그 서버를 제공하지는 않으며 직접 구축해야 하고, 주로 외부 인터넷 없이도 AI 분석이 필요한 폐쇄망 환경에서 씁니다.',
+  },
+  claude_cli: {
+    icon: Terminal, label: 'Claude Code CLI', color: 'text-purple-400', bg: 'bg-purple-500/20',
+    desc: '이 PC에 로그인된 Claude Code를 헤드리스로 호출합니다 — API 크레딧이 아니라 Claude 구독 사용량으로 처리됩니다. 외부 AI API의 크레딧이 소진됐을 때 수동으로 골라 쓰는 대안이며, 이 PC에 Claude Code가 설치·로그인돼 있어야 합니다. 크레딧이 복구되면 다시 "외부 AI API"나 "자동 감지"로 바꾸면 됩니다.',
+  },
+  offline: {
+    icon: WifiOff, label: '오프라인(폐쇄망)', color: 'text-amber-400', bg: 'bg-amber-500/20',
+    desc: 'AI를 전혀 쓰지 않습니다 — 미리 정해둔 정규식/패턴으로만 판정하는 규칙 기반 엔진입니다. 다른 AI 모드를 쓸 수 없을 때 자동으로 전환됩니다.',
+  },
+  mock: {
+    icon: FlaskConical, label: 'Mock 데모', color: 'text-slate-400', bg: 'bg-slate-500/20',
+    desc: '실제 분석이 아닌, 고정된 학습용 샘플 데이터입니다.',
+  },
 }
 
-const ORDER = ['cloud', 'local', 'offline', 'mock']
+const ORDER = ['cloud', 'local', 'claude_cli', 'offline', 'mock']
 
 export default function ModeSelector() {
   const [status, setStatus] = useState(null)
@@ -66,7 +82,7 @@ export default function ModeSelector() {
           <div className="px-3 py-2 border-b border-slate-700">
             <p className="text-xs font-semibold text-slate-300">AI 실행 모드</p>
             <p className="text-[11px] text-slate-500 mt-0.5">
-              자동(기본값)은 Claude Cloud → 로컬 LLM → 오프라인 순으로 사용 가능한 걸 고릅니다.
+              자동(기본값)은 외부 AI API → 로컬 LLM → 오프라인 순으로 사용 가능한 걸 고릅니다.
               Mock은 실제 분석이 아닌 학습용 샘플 데이터입니다.
             </p>
           </div>
@@ -92,19 +108,22 @@ export default function ModeSelector() {
                 key={key}
                 onClick={() => !disabled && choose(key)}
                 disabled={disabled}
-                className={`w-full text-left px-3 py-2 flex items-center justify-between gap-2 ${
+                className={`w-full text-left px-3 py-2 flex items-start justify-between gap-2 ${
                   disabled ? 'opacity-40 cursor-not-allowed' : 'hover:bg-slate-700/60'
                 }`}
-                title={disabled ? `사용하려면 설정이 필요합니다 (${key === 'local' ? '.env의 LOCAL_LLM_BASE_URL' : key === 'cloud' ? '.env의 ANTHROPIC_API_KEY' : ''})` : ''}
+                title={disabled ? `사용하려면 설정이 필요합니다 (${key === 'local' ? '.env의 LOCAL_LLM_BASE_URL' : key === 'cloud' ? '.env의 ANTHROPIC_API_KEY' : key === 'claude_cli' ? '이 PC에 Claude Code 설치·로그인' : ''})` : ''}
               >
-                <span className="flex items-center gap-1.5">
-                  <MIcon size={13} className={c.color} />
-                  <span className="text-xs text-slate-200">{c.label}</span>
-                  {m.configured && !m.reachable && key !== 'offline' && key !== 'mock' && (
-                    <span className="text-[10px] text-red-400">(연결 안 됨)</span>
-                  )}
+                <span className="flex-1 min-w-0">
+                  <span className="flex items-center gap-1.5">
+                    <MIcon size={13} className={`${c.color} shrink-0`} />
+                    <span className="text-xs text-slate-200">{c.label}</span>
+                    {m.configured && !m.reachable && key !== 'offline' && key !== 'mock' && (
+                      <span className="text-[10px] text-red-400">(연결 안 됨)</span>
+                    )}
+                  </span>
+                  <span className="block text-[10.5px] text-slate-500 leading-snug mt-0.5 pr-2">{c.desc}</span>
                 </span>
-                {selected && <Check size={13} className="text-blue-400" />}
+                {selected && <Check size={13} className="text-blue-400 shrink-0 mt-0.5" />}
               </button>
             )
           })}

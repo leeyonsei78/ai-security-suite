@@ -1,0 +1,8 @@
+{
+  "model": "gpt-3.5-turbo-0301",
+  "temperature": 0.9,
+  "max_tokens": 8000,
+  "api_key_location": "frontend bundle (import.meta.env.VITE_API_KEY)",
+  "rate_limit": null,
+  "logging": "errors only"
+}

@@ -1,0 +1,9 @@
+TimeCreated           Id    Message
+2026-09-05 02:14:03   4625  An account failed to log on. Account Name: admin, Source Network Address: 203.0.113.44
+2026-09-05 02:14:05   4625  An account failed to log on. Account Name: admin, Source Network Address: 203.0.113.44
+2026-09-05 02:14:08   4625  An account failed to log on. Account Name: admin, Source Network Address: 203.0.113.44
+2026-09-05 02:14:11   4625  An account failed to log on. Account Name: admin, Source Network Address: 203.0.113.44
+2026-09-05 02:14:32   4624  An account was successfully logged on. Account Name: admin, Logon Type: 3, Source Network Address: 203.0.113.44
+2026-09-05 02:23:10   4688  A new process has been created. New Process Name: powershell.exe, Command Line: powershell.exe -w hidden -enc SGVsbG8gV29ybGQh
+2026-09-05 09:00:12   4624  An account was successfully logged on. Account Name: jsmith, Logon Type: 2, Source Network Address: 10.0.0.23
+2026-09-05 09:31:07   4688  A new process has been created. New Process Name: outlook.exe, Command Line: "C:\Program Files\Microsoft Office\outlook.exe"

@@ -5,13 +5,20 @@ import {
   Trash2, Download, BookOpen, ChevronDown, ChevronUp, ShieldAlert, KeyRound,
   Cloud, Server, WifiOff, FlaskConical,
 } from 'lucide-react'
+// 실제로 오프라인 규칙 엔진에서 CRITICAL 등 유의미한 탐지가 나오는 것까지 확인된 예시 —
+// 다운로드해서 그대로 업로드(또는 붙여넣기)하면 바로 결과를 볼 수 있다 (App 3/16/17/18/20의 SAMPLE_FILES 패턴과 동일).
+const SAMPLE_FILES = {
+  system_prompt: '/samples/model-audit/system-prompt-sample.txt',
+  config: '/samples/model-audit/config-sample.json',
+  tools: '/samples/model-audit/tools-sample.json',
+}
 import GuidePanel from '../components/GuidePanel'
 import FileUploadButton from '../components/FileUploadButton'
 
 const AUDIT_STEPS = [
   "상단 탭에서 감사할 대상 유형을 선택합니다: 시스템 프롬프트 / API·앱 설정 / 도구(Function calling) 정의.",
   '왼쪽 텍스트 박스에 실제 사용 중인 내용을 붙여넣습니다 (placeholder 예시 참고).',
-  '[AI로 모델 감사] 버튼을 클릭합니다.',
+  '[모델 감사] 버튼을 클릭합니다.',
   '오른쪽 결과에서 종합 위험 점수와 OWASP LLM Top 10 태그가 붙은 상세 발견 사항을 확인합니다.',
   "시스템 프롬프트를 감사한 경우, '시스템 프롬프트 노출 위험' 배너의 레드팀 테스트 문구를 자신의 실서비스 챗봇에 직접 입력해 실제로 새는지 검증해보세요.",
   '[Markdown 다운로드]로 감사 리포트를 저장합니다.',
@@ -28,6 +35,24 @@ const INPUT_TYPES = [
   { id: 'tools', icon: Wrench, label: '도구(Function calling) 정의' },
 ]
 
+const INPUT_TYPE_INFO = {
+  system_prompt: {
+    meaning: 'AI 챗봇/에이전트에게 대화 시작 시 주어지는 "역할 지시문"입니다 — 사용자에게는 보이지 않지만 모델의 답변 방식·제약을 규정하는 숨겨진 지침입니다.',
+    purpose: '내부 URL·API 키 같은 민감정보가 프롬프트 안에 섞여 있어 사용자의 유도 질문으로 그대로 유출될 수 있는지, 안전장치(거절 지침 등)가 쉽게 우회되는 구조인지 점검합니다.',
+    source: '본인이 개발·운영 중인 챗봇의 소스코드(시스템 메시지 정의 부분), LangChain 등 프레임워크의 프롬프트 템플릿, 또는 AI 서비스 관리 콘솔의 프롬프트 설정 화면에서 확인하세요.',
+  },
+  config: {
+    meaning: '이 AI 애플리케이션이 어떤 모델을 어떻게 호출하는지에 대한 설정값입니다 — 모델명, temperature, max_tokens, API 키 보관 위치, rate limit, 로깅 정책 등.',
+    purpose: 'API 키가 프론트엔드 번들에 그대로 노출되는지, rate limit이 없어 과금 폭탄·DoS에 취약한지, 로깅이 부족해 사고 발생 시 추적이 어려운지 등 설정 자체의 보안 허점을 점검합니다.',
+    source: '애플리케이션의 .env/설정 파일, API 클라이언트 초기화 코드(SDK 호출부), 또는 클라우드/AI 서비스 콘솔의 설정 화면에서 실제 값을 확인해 붙여넣으세요.',
+  },
+  tools: {
+    meaning: 'LLM 에이전트가 스스로 호출할 수 있는 함수(도구)의 이름·설명·파라미터 정의 목록입니다 — 예: 파일 읽기, 셸 명령 실행, DB 조회 등 (Function calling/Tool use).',
+    purpose: '사용자의 프롬프트 인젝션이나 유도에 따라 모델이 임의 명령 실행·파일 접근·외부 요청 같은 위험한 동작으로 이어질 수 있는 과도한 권한의 도구가 정의돼 있는지 점검합니다.',
+    source: 'OpenAI Function calling, LangChain Tools, MCP 서버 등 에이전트 프레임워크에서 도구를 등록하는 코드(스키마 정의 부분)를 그대로 복사하세요.',
+  },
+}
+
 const PLACEHOLDERS = {
   system_prompt: `당신은 저희 쇼핑몰의 고객지원 챗봇입니다.\n내부 관리자 페이지: https://admin-internal.example.com/panel\n결제 API 키: sk-live-abcd1234...\n친절하고 정중하게 답변하세요.`,
   config: `{\n  "model": "gpt-3.5-turbo-0301",\n  "temperature": 0.9,\n  "max_tokens": 8000,\n  "api_key_location": "frontend bundle (import.meta.env.VITE_API_KEY)",\n  "rate_limit": null,\n  "logging": "errors only"\n}`,
@@ -35,7 +60,7 @@ const PLACEHOLDERS = {
 }
 
 const MODE_BADGE = {
-  cloud:   { icon: Cloud,        label: 'Claude Cloud로 분석됨', color: 'text-green-400',  bg: 'bg-green-500/10 border-green-500/30' },
+  cloud:   { icon: Cloud,        label: '외부 AI API로 분석됨', color: 'text-green-400',  bg: 'bg-green-500/10 border-green-500/30' },
   local:   { icon: Server,       label: '로컬 LLM으로 분석됨',    color: 'text-blue-400',   bg: 'bg-blue-500/10 border-blue-500/30' },
   offline: { icon: WifiOff,      label: '오프라인 규칙 기반으로 분석됨(폐쇄망)', color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/30' },
   mock:    { icon: FlaskConical, label: 'Mock 데모 데이터 (학습용, 실제 분석 아님)', color: 'text-slate-400', bg: 'bg-slate-500/10 border-slate-500/30' },
@@ -45,11 +70,17 @@ function ModeBanner({ result }) {
   if (!result?.mode) return null
   const cfg = MODE_BADGE[result.mode] ?? MODE_BADGE.offline
   const Icon = cfg.icon
+  // "(폐쇄망)"은 실제로 인터넷이 안 되는 경우를 위한 표현인데, fallback_reason이 있다는 건
+  // 인터넷은 되지만 AI 호출 자체가 실패(크레딧 소진 등)해서 대체됐다는 뜻이라 그대로 두면
+  // "내 네트워크가 문제"라고 오해할 수 있다 — 이 경우엔 라벨에서 그 표현을 바꿔준다.
+  const label = (result.mode === 'offline' && result.fallback_reason)
+    ? cfg.label.replace('(폐쇄망)', '(AI 호출 실패로 대체)')
+    : cfg.label
   return (
     <div className={`border rounded-xl p-3 flex items-start gap-2 ${cfg.bg}`}>
       <Icon size={14} className={`${cfg.color} shrink-0 mt-0.5`} />
       <div>
-        <p className={`text-xs font-semibold ${cfg.color}`}>{cfg.label}</p>
+        <p className={`text-xs font-semibold ${cfg.color}`}>{label}</p>
         {result.fallback_reason && (
           <p className="text-xs text-slate-400 mt-1">{result.fallback_reason}</p>
         )}
@@ -173,6 +204,24 @@ export default function ModelAudit() {
               <FileUploadButton className="ml-auto" onExtracted={(text) => { setContent(text); analyze(text) }} />
             </div>
 
+            {INPUT_TYPE_INFO[inputType] && (
+              <div className="bg-violet-950/30 border border-violet-500/20 rounded-xl p-3 text-xs space-y-1.5">
+                <p><span className="font-semibold text-violet-300">의미: </span><span className="text-slate-300">{INPUT_TYPE_INFO[inputType].meaning}</span></p>
+                <p><span className="font-semibold text-violet-300">점검 목적: </span><span className="text-slate-300">{INPUT_TYPE_INFO[inputType].purpose}</span></p>
+                <p><span className="font-semibold text-violet-300">어디서 수집하나요: </span><span className="text-slate-300">{INPUT_TYPE_INFO[inputType].source}</span></p>
+              </div>
+            )}
+
+            {SAMPLE_FILES[inputType] && (
+              <a
+                href={SAMPLE_FILES[inputType]}
+                download
+                className="inline-flex items-center gap-1.5 text-[11px] text-violet-400 hover:text-violet-300 underline underline-offset-2"
+              >
+                <Download size={11} /> 예시 파일 다운로드 (실제로 탐지되는 것까지 확인된 샘플 — 바로 업로드해서 테스트 가능)
+              </a>
+            )}
+
             <textarea
               value={content}
               onChange={e => setContent(e.target.value)}
@@ -186,7 +235,7 @@ export default function ModelAudit() {
               disabled={loading || !content.trim()}
               className="w-full py-3 bg-violet-600 hover:bg-violet-700 disabled:bg-slate-700 disabled:text-slate-500 rounded-xl font-semibold transition-colors"
             >
-              {loading ? '감사 중...' : 'AI로 모델 감사'}
+              {loading ? '감사 중...' : '모델 감사'}
             </button>
           </div>
 

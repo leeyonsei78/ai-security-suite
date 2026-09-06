@@ -11,7 +11,7 @@ import CopyButton from '../components/CopyButton'
 import { DEFAULT_ACCEPT as UPLOAD_ACCEPT } from '../components/FileUploadButton'
 
 const MODE_BADGE = {
-  cloud:   { icon: Cloud,        label: 'Claude Cloud로 분석됨', color: 'text-green-400',  bg: 'bg-green-500/10 border-green-500/30' },
+  cloud:   { icon: Cloud,        label: '외부 AI API로 분석됨', color: 'text-green-400',  bg: 'bg-green-500/10 border-green-500/30' },
   local:   { icon: Server,       label: '로컬 LLM으로 분석됨',    color: 'text-blue-400',   bg: 'bg-blue-500/10 border-blue-500/30' },
   offline: { icon: WifiOff,      label: '오프라인 규칙 기반으로 분석됨(폐쇄망)', color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/30' },
   mock:    { icon: FlaskConical, label: 'Mock 데모 데이터 (학습용, 실제 분석 아님)', color: 'text-slate-400', bg: 'bg-slate-500/10 border-slate-500/30' },
@@ -21,11 +21,17 @@ function ModeBanner({ result }) {
   if (!result?.mode) return null
   const cfg = MODE_BADGE[result.mode] ?? MODE_BADGE.offline
   const Icon = cfg.icon
+  // "(폐쇄망)"은 실제로 인터넷이 안 되는 경우를 위한 표현인데, fallback_reason이 있다는 건
+  // 인터넷은 되지만 AI 호출 자체가 실패(크레딧 소진 등)해서 대체됐다는 뜻이라 그대로 두면
+  // "내 네트워크가 문제"라고 오해할 수 있다 — 이 경우엔 라벨에서 그 표현을 바꿔준다.
+  const label = (result.mode === 'offline' && result.fallback_reason)
+    ? cfg.label.replace('(폐쇄망)', '(AI 호출 실패로 대체)')
+    : cfg.label
   return (
     <div className={`border rounded-xl p-3 flex items-start gap-2 ${cfg.bg}`}>
       <Icon size={14} className={`${cfg.color} shrink-0 mt-0.5`} />
       <div>
-        <p className={`text-xs font-semibold ${cfg.color}`}>{cfg.label}</p>
+        <p className={`text-xs font-semibold ${cfg.color}`}>{label}</p>
         {result.fallback_reason && (
           <p className="text-xs text-slate-400 mt-1">{result.fallback_reason}</p>
         )}
@@ -41,7 +47,7 @@ const AUDIT_STEPS = [
   '감사할 클라우드 IAM 플랫폼을 선택합니다 (AWS IAM / Azure RBAC / GCP IAM).',
   "선택한 플랫폼에 맞는 명령어로 실제 정책·사용자 정보를 조회합니다 (아래 '정보 가져오는 방법' 참고).",
   '조회 결과를 그대로 복사해 붙여넣거나, 파일로 저장해 업로드합니다. 환경 컨텍스트(선택)에 용도를 적으면 더 정확한 분석이 됩니다.',
-  '[AI로 감사 실행] 버튼을 클릭합니다.',
+  '[감사 실행] 버튼을 클릭합니다.',
   '발견 사항을 심각도 순으로 확인하고, 각 항목의 권장 조치를 반영합니다.',
   '네트워크/방화벽 규칙도 함께 점검하려면 결과 하단의 방화벽 정책 감사기 링크로 이동합니다.',
 ]
@@ -257,7 +263,7 @@ export default function IamAudit() {
               disabled={loading || !content.trim()}
               className="w-full py-3 bg-violet-600 hover:bg-violet-700 disabled:bg-slate-700 disabled:text-slate-500 rounded-xl font-semibold transition-colors"
             >
-              {loading ? '감사 중...' : 'AI로 감사 실행'}
+              {loading ? '감사 중...' : '감사 실행'}
             </button>
 
             {guide?.disclaimer && (

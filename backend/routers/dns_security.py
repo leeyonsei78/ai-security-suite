@@ -35,7 +35,7 @@ async def check(request: CheckRequest):
     if entry.get("overall_risk") == "CRITICAL":
         top = next((c for c in entry.get("checks", []) if c.get("severity") == "CRITICAL"), None)
         summary = f"{top['check']}: {top['description']}" if top else entry.get("summary", "")
-        await notify.alert_if_critical(APP_NAME, True, "CRITICAL", summary, entry["id"])
+        await notify.alert_if_critical(APP_NAME, True, "CRITICAL", summary, entry["id"], entry)
 
     return entry
 

@@ -103,7 +103,7 @@ async def generate_phishing_sim(scenario_type: str, difficulty: str, context: st
             data = _real_generate(scenario_type, difficulty, context, backend=mode)
         except Exception as e:
             data = generate_offline(scenario_type, difficulty, context)
-            data["fallback_reason"] = f"{'로컬 LLM' if mode == 'local' else 'Claude Cloud'} 호출 실패로 오프라인 템플릿 기반으로 대체됨: {e}"
+            data["fallback_reason"] = f"{'로컬 LLM' if mode == 'local' else '외부 AI API'} 호출 실패로 오프라인 템플릿 기반으로 대체됨: {e}"
             mode = "offline"
     else:
         data = generate_offline(scenario_type, difficulty, context)

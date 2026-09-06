@@ -25,7 +25,7 @@ async def analyze_log_file(file: UploadFile = File(...)):
     result["filename"] = file.filename
     result["id"] = db.add_entry(APP_NAME, result)
     await notify.alert_if_critical(
-        APP_NAME, result.get("threat_level") == "CRITICAL", "CRITICAL", result.get("summary", ""), result["id"]
+        APP_NAME, result.get("threat_level") == "CRITICAL", "CRITICAL", result.get("summary", ""), result["id"], result
     )
     return result
 
@@ -39,7 +39,7 @@ async def analyze_log_text(request: TextAnalysisRequest):
     result["filename"] = "manual_input"
     result["id"] = db.add_entry(APP_NAME, result)
     await notify.alert_if_critical(
-        APP_NAME, result.get("threat_level") == "CRITICAL", "CRITICAL", result.get("summary", ""), result["id"]
+        APP_NAME, result.get("threat_level") == "CRITICAL", "CRITICAL", result.get("summary", ""), result["id"], result
     )
     return result
 

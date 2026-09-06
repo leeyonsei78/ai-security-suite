@@ -8,8 +8,12 @@ import GuidePanel from '../components/GuidePanel'
 import CopyButton from '../components/CopyButton'
 import { DEFAULT_ACCEPT as UPLOAD_ACCEPT } from '../components/FileUploadButton'
 
+// 백엔드(routers/firewall_audit.py)와 반드시 같은 값으로 유지 — 다르면 여기서는 통과됐는데
+// 서버에서 거부되는(혹은 그 반대) 불일치가 생긴다.
+const MAX_CONTENT_CHARS = 60000
+
 const MODE_BADGE = {
-  cloud:   { icon: Cloud,        label: 'Claude Cloud로 분석됨', color: 'text-green-400',  bg: 'bg-green-500/10 border-green-500/30' },
+  cloud:   { icon: Cloud,        label: '외부 AI API로 분석됨', color: 'text-green-400',  bg: 'bg-green-500/10 border-green-500/30' },
   local:   { icon: Server,       label: '로컬 LLM으로 분석됨',    color: 'text-blue-400',   bg: 'bg-blue-500/10 border-blue-500/30' },
   offline: { icon: WifiOff,      label: '오프라인 규칙 기반으로 분석됨(폐쇄망)', color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/30' },
   mock:    { icon: FlaskConical, label: 'Mock 데모 데이터 (학습용, 실제 분석 아님)', color: 'text-slate-400', bg: 'bg-slate-500/10 border-slate-500/30' },
@@ -19,11 +23,17 @@ function ModeBanner({ result }) {
   if (!result?.mode) return null
   const cfg = MODE_BADGE[result.mode] ?? MODE_BADGE.offline
   const Icon = cfg.icon
+  // "(폐쇄망)"은 실제로 인터넷이 안 되는 경우를 위한 표현인데, fallback_reason이 있다는 건
+  // 인터넷은 되지만 AI 호출 자체가 실패(크레딧 소진 등)해서 대체됐다는 뜻이라 그대로 두면
+  // "내 네트워크가 문제"라고 오해할 수 있다 — 이 경우엔 라벨에서 그 표현을 바꿔준다.
+  const label = (result.mode === 'offline' && result.fallback_reason)
+    ? cfg.label.replace('(폐쇄망)', '(AI 호출 실패로 대체)')
+    : cfg.label
   return (
     <div className={`border rounded-xl p-3 flex items-start gap-2 ${cfg.bg}`}>
       <Icon size={14} className={`${cfg.color} shrink-0 mt-0.5`} />
       <div>
-        <p className={`text-xs font-semibold ${cfg.color}`}>{cfg.label}</p>
+        <p className={`text-xs font-semibold ${cfg.color}`}>{label}</p>
         {result.fallback_reason && (
           <p className="text-xs text-slate-400 mt-1">{result.fallback_reason}</p>
         )}
@@ -40,7 +50,7 @@ const AUDIT_STEPS = [
   "감사할 플랫폼을 선택합니다 (Linux iptables / AWS 보안그룹 / Azure NSG / GCP 방화벽 규칙 / 라우터·스위치 / VPN 게이트웨이 / Windows 방화벽 / 기타).",
   "선택한 플랫폼에 맞는 명령어로 실제 규칙을 조회합니다 (아래 '규칙 가져오는 방법' 참고).",
   '조회 결과를 그대로 복사해 붙여넣거나, 파일로 저장해 업로드합니다. 환경 컨텍스트(선택)에 용도를 적으면 더 정확한 분석이 됩니다.',
-  '[AI로 감사 실행] 버튼을 클릭합니다.',
+  '[감사 실행] 버튼을 클릭합니다.',
   '발견 사항을 심각도 순으로 확인하고, 각 항목의 권장 조치를 반영합니다.',
   '수정된 정책 초안이 필요하면 결과 하단의 보안 정책 생성기 링크로 이동합니다.',
 ]
@@ -95,6 +105,7 @@ export default function FirewallAudit() {
   const [guide, setGuide] = useState(null)
   const [uploadedFileName, setUploadedFileName] = useState('')
   const [uploading, setUploading] = useState(false)
+  const [lengthError, setLengthError] = useState('')
   const fileInputRef = useRef(null)
 
   useEffect(() => {
@@ -134,6 +145,17 @@ export default function FirewallAudit() {
   const analyze = async (contentOverride) => {
     const body = contentOverride ?? content
     if (!body.trim()) return
+    if (body.length > MAX_CONTENT_CHARS) {
+      // 예전에는 이 검사 없이 바로 서버에 보냈다가 브라우저 기본 alert()로 "Content too long"만
+      // 뜨고 어떻게 줄여야 하는지 안내가 없었음 — 제출 전에 걸러서 구체적인 방법을 바로 보여준다.
+      setLengthError(
+        `내용이 너무 깁니다 (${body.length.toLocaleString()}자, 최대 ${MAX_CONTENT_CHARS.toLocaleString()}자) — ` +
+        '규칙이 많다면 프로필/그룹/방향(인바운드·아웃바운드)별로 나눠서 여러 번 감사하거나, Windows라면 위에 안내된 ' +
+        '더 간결한 PowerShell 명령을 netsh 대신 사용하세요.'
+      )
+      return
+    }
+    setLengthError('')
     setLoading(true)
     setResult(null)
     try {
@@ -252,12 +274,22 @@ export default function FirewallAudit() {
               </div>
               <textarea
                 value={content}
-                onChange={e => { setContent(e.target.value); setUploadedFileName('') }}
+                onChange={e => { setContent(e.target.value); setUploadedFileName(''); setLengthError('') }}
                 placeholder={PLACEHOLDERS[sourceType]}
                 rows={10}
-                className="w-full bg-slate-800 border border-slate-600 rounded-xl p-4 text-sm font-mono resize-none focus:outline-none focus:border-cyan-500 placeholder-slate-600"
+                className={`w-full bg-slate-800 border rounded-xl p-4 text-sm font-mono resize-none focus:outline-none placeholder-slate-600 ${
+                  content.length > MAX_CONTENT_CHARS ? 'border-red-500' : 'border-slate-600 focus:border-cyan-500'
+                }`}
               />
-              <p className="text-[10px] text-slate-600 mt-1">Word(.docx)/PDF/Excel 파일도 업로드하면 서버가 텍스트를 추출해 이 입력창에 채워줍니다 — 전송 전 내용을 확인·수정할 수 있습니다. 업로드 즉시 자동으로 감사가 실행됩니다.</p>
+              <div className="flex items-center justify-between mt-1">
+                <p className="text-[10px] text-slate-600">Word(.docx)/PDF/Excel 파일도 업로드하면 서버가 텍스트를 추출해 이 입력창에 채워줍니다 — 전송 전 내용을 확인·수정할 수 있습니다. 업로드 즉시 자동으로 감사가 실행됩니다.</p>
+                <p className={`text-[10px] shrink-0 ml-2 ${content.length > MAX_CONTENT_CHARS ? 'text-red-400 font-semibold' : content.length > MAX_CONTENT_CHARS * 0.8 ? 'text-amber-400' : 'text-slate-600'}`}>
+                  {content.length.toLocaleString()} / {MAX_CONTENT_CHARS.toLocaleString()}자
+                </p>
+              </div>
+              {lengthError && (
+                <p className="text-xs text-red-400 bg-red-950/30 border border-red-500/30 rounded-lg px-3 py-2 mt-1.5">{lengthError}</p>
+              )}
             </div>
 
             <div>
@@ -275,7 +307,7 @@ export default function FirewallAudit() {
               disabled={loading || !content.trim()}
               className="w-full py-3 bg-cyan-600 hover:bg-cyan-700 disabled:bg-slate-700 disabled:text-slate-500 rounded-xl font-semibold transition-colors"
             >
-              {loading ? '감사 중...' : 'AI로 감사 실행'}
+              {loading ? '감사 중...' : '감사 실행'}
             </button>
 
             {guide?.disclaimer && (

@@ -1,0 +1,12 @@
+[
+  {
+    "name": "execute_shell",
+    "description": "run a command",
+    "parameters": {"command": "string"}
+  },
+  {
+    "name": "read_file",
+    "description": "read a file",
+    "parameters": {"path": "string"}
+  }
+]

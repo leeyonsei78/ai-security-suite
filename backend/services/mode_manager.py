@@ -1,15 +1,20 @@
 """전 앱 공용 "실행 모드" 관리자 — 폐쇄망(인터넷 차단) 환경 지원을 위해 도입.
 
-AI 기반 앱(App 3 등)의 분석 백엔드를 4가지로 정의한다:
-  - cloud:   Claude Cloud API (기존 LIVE)
-  - local:   사내에 구성한 로컬 LLM (Ollama/vLLM/LM Studio 등 OpenAI 호환 서버)
-  - offline: 규칙/정규식 기반 결정론적 분석 엔진 — 네트워크 호출 전혀 없음(폐쇄망 기본값)
-  - mock:    기존 방식의 샘플/데모 데이터 — 실제 분석이 아니라 도구 사용법을 익히기 위한
-             학습용 모드로 명시적으로만 선택 가능(자동 감지 대상 아님)
+AI 기반 앱(App 3 등)의 분석 백엔드를 5가지로 정의한다:
+  - cloud:      외부 AI API (기존 LIVE) — Anthropic API를 API 키/크레딧으로 직접 호출
+  - local:      사내에 구성한 로컬 LLM (Ollama/vLLM/LM Studio 등 OpenAI 호환 서버)
+  - claude_cli: 이 PC에 로그인된 Claude Code CLI를 헤드리스로 호출 — API 크레딧이 아니라
+                Claude 구독 사용량으로 처리됨. cloud의 API 크레딧이 소진됐을 때 수동으로
+                전환해 쓰는 대안 경로(claude_cli_client.py 참고). 크레딧이 복구되면 다시
+                cloud나 자동 감지로 돌아가면 되므로 자동 감지 체인에는 넣지 않음(mock과
+                같은 방식 — 명시적으로 선택했을 때만 사용)
+  - offline:    규칙/정규식 기반 결정론적 분석 엔진 — 네트워크 호출 전혀 없음(폐쇄망 기본값)
+  - mock:       기존 방식의 샘플/데모 데이터 — 실제 분석이 아니라 도구 사용법을 익히기 위한
+                학습용 모드로 명시적으로만 선택 가능(자동 감지 대상 아님)
 
 우선순위(자동 감지, override 없을 때): cloud(설정+도달 가능) > local(설정+도달 가능) > offline.
-mock은 사용자가 명시적으로 선택했을 때만 쓰인다 — 실제 운영에서 조용히 "가짜 분석"으로
-빠지는 걸 막기 위함.
+mock과 claude_cli는 사용자가 명시적으로 선택했을 때만 쓰인다 — 실제 운영에서 조용히 "가짜
+분석"이나 "예상 밖의 과금 경로"로 빠지는 걸 막기 위함.
 
 CVE 조회(App 15)처럼 Claude를 아예 안 쓰고 외부 실시간 API(NVD 등)에만 의존하는 앱은
 `get_external_api_mode()`로 별도의 online/offline 축을 재사용한다(App 21 DNS 보안 점검 등
@@ -23,6 +28,8 @@ from pathlib import Path
 import httpx
 from dotenv import load_dotenv
 
+from services import claude_cli_client
+
 load_dotenv()
 
 _ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "").strip()
@@ -32,7 +39,7 @@ _LOCAL_LLM_API_KEY = os.getenv("LOCAL_LLM_API_KEY", "").strip()
 
 _OVERRIDES_PATH = Path(__file__).resolve().parent.parent / "data" / "mode_overrides.json"
 
-AI_MODES = ("cloud", "local", "offline", "mock")
+AI_MODES = ("cloud", "local", "claude_cli", "offline", "mock")
 
 _REACHABILITY_TTL = 30.0  # seconds — 매 요청마다 네트워크 체크하지 않도록 캐시
 _reachability_cache: dict[str, tuple[float, bool]] = {}
@@ -44,6 +51,10 @@ def has_cloud_key() -> bool:
 
 def has_local_llm_config() -> bool:
     return bool(_LOCAL_LLM_BASE_URL)
+
+
+def has_claude_cli() -> bool:
+    return claude_cli_client.has_claude_cli()
 
 
 def local_llm_info() -> dict:
@@ -126,11 +137,14 @@ async def get_ai_mode() -> str:
         return "mock"
     if override == "offline":
         return "offline"
+    if override == "claude_cli" and has_claude_cli():
+        return "claude_cli"
     if override == "cloud" and has_cloud_key():
         return "cloud"
     if override == "local" and has_local_llm_config():
         return "local"
     # override가 없거나(자동) 무효(예: cloud로 지정했는데 키가 없음) 하면 자동 감지로 폴백
+    # — claude_cli는 여기(자동 감지 체인)에 넣지 않는다: 항상 명시적으로 선택했을 때만 쓴다.
     if has_cloud_key() and await is_cloud_reachable():
         return "cloud"
     if has_local_llm_config() and await is_local_llm_reachable():
@@ -147,6 +161,7 @@ def set_ai_override(mode: str | None) -> None:
 async def get_ai_status() -> dict:
     cloud_configured = has_cloud_key()
     local_configured = has_local_llm_config()
+    claude_cli_configured = has_claude_cli()
     cloud_reachable = await is_cloud_reachable() if cloud_configured else False
     local_reachable = await is_local_llm_reachable() if local_configured else False
     effective = await get_ai_mode()
@@ -156,12 +171,18 @@ async def get_ai_status() -> dict:
         "override": get_override("ai"),
         "modes": {
             "cloud": {
-                "label": "Claude Cloud", "configured": cloud_configured, "reachable": cloud_reachable,
+                "label": "외부 AI API", "configured": cloud_configured, "reachable": cloud_reachable,
                 "selectable": cloud_configured,
             },
             "local": {
                 "label": "로컬 LLM", "configured": local_configured, "reachable": local_reachable,
                 "selectable": local_configured, "base_url": llm_info["base_url"], "model": llm_info["model"],
+            },
+            "claude_cli": {
+                # 로컬 subprocess 호출이라 네트워크 도달성 개념이 없음 — CLI가 설치돼 있으면
+                # configured/reachable 둘 다 true(실제 로그인 여부 등은 호출 시점에만 확인 가능).
+                "label": "Claude Code CLI (구독)", "configured": claude_cli_configured,
+                "reachable": claude_cli_configured, "selectable": claude_cli_configured,
             },
             "offline": {
                 "label": "오프라인 규칙 기반 (폐쇄망)", "configured": True, "reachable": True, "selectable": True,

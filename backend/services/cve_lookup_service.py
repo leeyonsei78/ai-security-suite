@@ -4,8 +4,10 @@
 항상 실제 외부 API(NVD)를 실시간으로 조회한다. NVD_API_KEY는 선택 사항이며, 없으면
 공개 레이트리밋(30초당 5건)이 적용되고 있으면(30초당 50건) 더 여유롭게 조회할 수 있다.
 """
+import asyncio
 import os
 import re
+from datetime import datetime, timedelta, timezone
 import httpx
 from dotenv import load_dotenv
 from services import mode_manager, cve_offline_store
@@ -17,6 +19,15 @@ _BASE_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
 _CVE_ID_RE = re.compile(r"^CVE-\d{4}-\d{4,}$", re.IGNORECASE)
 
 HAS_API_KEY = bool(_NVD_API_KEY)
+
+# "지금 최신 데이터 가져오기" — 사용자가 nvd.nist.gov에서 피드 파일을 직접 받아 올리지
+# 않아도, 이 앱이 직접 NVD REST API를 lastModStartDate/lastModEndDate로 조회해 최근
+# 수정된 CVE를 페이지네이션으로 전부 가져와 로컬 캐시에 적재한다. import_feed()가 쓰는
+# 것과 동일한 {"vulnerabilities": [{"cve": {...}}]} 응답 스키마를 그대로 재사용.
+_REFRESH_MAX_DAYS = 30  # NVD API 실제 한도(약 120일)보다 훨씬 보수적으로 잡아 한 번의
+                        # 요청이 과도하게 오래 걸리지 않게 함(수동 피드 가져오기는 더 넓은 범위용)
+_REFRESH_PAGE_SIZE = 2000  # NVD API 최대 페이지 크기
+_REFRESH_DELAY = 0.7 if HAS_API_KEY else 6.5  # App17 dependency_scan_service와 동일한 레이트리밋 대응 패턴
 
 
 async def get_network_mode() -> str:
@@ -150,3 +161,80 @@ async def search_cves(keyword: str, results_per_page: int = 10) -> dict:
         if r["description"] and len(r["description"]) > 220:
             r["description"] = r["description"][:220].rstrip() + "..."
     return {"results": results, "total_results": data.get("totalResults", len(results))}
+
+
+async def refresh_recent(days: int = 7) -> dict:
+    """최근 N일간 NVD에서 신규 등록/수정된 CVE를 전부 가져와 로컬 캐시에 적재한다 —
+    사용자가 피드 파일을 수동으로 받아 올리지 않아도, 이 앱이 직접 NVD API를 페이지네이션
+    호출해 최신화한다("피드 가져오기"는 여전히 더 넓은 과거 범위를 반입할 때 유용해 그대로
+    유지). 온라인일 때만 동작 — 오프라인이면 애초에 최신화할 데이터를 가져올 수 없다."""
+    days = max(1, min(days, _REFRESH_MAX_DAYS))
+
+    if await get_network_mode() == "offline":
+        return {
+            "error": "offline",
+            "message": "인터넷에 연결할 수 없어 최신화할 수 없습니다 — 온라인 상태에서 다시 시도하거나, 미리 받아둔 피드 파일을 [피드 가져오기]로 업로드하세요.",
+        }
+
+    end = datetime.now(timezone.utc)
+    start = end - timedelta(days=days)
+    date_fmt = "%Y-%m-%dT%H:%M:%S.000"
+    base_params = {
+        "lastModStartDate": start.strftime(date_fmt),
+        "lastModEndDate": end.strftime(date_fmt),
+        "resultsPerPage": _REFRESH_PAGE_SIZE,
+    }
+
+    imported = 0
+    total_results = 0
+    start_index = 0
+    pages = 0
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            while True:
+                resp = await client.get(
+                    _BASE_URL, params={**base_params, "startIndex": start_index}, headers=_headers()
+                )
+                if resp.status_code in (403, 429):
+                    return {
+                        "error": "rate_limited",
+                        "message": "NVD API 요청 한도를 초과했습니다. 잠시 후 다시 시도하거나 NVD_API_KEY를 설정하세요.",
+                        "imported": imported,
+                    }
+                if resp.status_code == 404:
+                    return {
+                        "error": "invalid_range",
+                        "message": f"요청한 기간({days}일)이 NVD API가 허용하는 범위를 벗어났습니다. 더 짧은 기간으로 다시 시도하세요.",
+                        "imported": imported,
+                    }
+                if resp.status_code != 200:
+                    return {"error": "upstream_error", "message": f"NVD API 오류 (HTTP {resp.status_code})", "imported": imported}
+
+                data = resp.json()
+                total_results = data.get("totalResults", 0)
+                vulns = data.get("vulnerabilities", [])
+                for v in vulns:
+                    cve = v.get("cve", {})
+                    cve_id = cve.get("id")
+                    if not cve_id:
+                        continue
+                    cve_offline_store.upsert(cve_id, _normalize(cve), source="refresh")
+                    imported += 1
+
+                pages += 1
+                start_index += len(vulns)
+                if not vulns or start_index >= total_results:
+                    break
+                await asyncio.sleep(_REFRESH_DELAY)
+    except httpx.TimeoutException:
+        return {"error": "timeout", "message": "NVD API 응답이 시간 내에 오지 않았습니다. 잠시 후 다시 시도하세요.", "imported": imported}
+    except httpx.HTTPError as e:
+        return {"error": "network", "message": f"NVD API 연결 실패: {e}", "imported": imported}
+
+    return {
+        "imported": imported,
+        "total_in_range": total_results,
+        "pages": pages,
+        "days": days,
+    }

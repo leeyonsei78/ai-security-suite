@@ -60,7 +60,7 @@ async def analyze_dependency(request: DependencyRequest):
 
     if entry.get("highest_severity") == "CRITICAL":
         summary = f"의존성 스캔에서 CRITICAL 등급 CVE 발견 ({request.manifest_type}, {entry['packages_scanned']}개 패키지 중)"
-        await notify.alert_if_critical(APP_DEP, True, "CRITICAL", summary, entry["id"])
+        await notify.alert_if_critical(APP_DEP, True, "CRITICAL", summary, entry["id"], entry)
 
     return entry
 
@@ -99,7 +99,7 @@ async def scan_network(request: NetworkRequest):
 
     if entry.get("highest_severity") == "CRITICAL":
         summary = f"네트워크 스캔에서 CRITICAL 등급 CVE 발견 (대상: {entry['target']}, 열린 포트 {len(entry['open_ports'])}개 중)"
-        await notify.alert_if_critical(APP_NET, True, "CRITICAL", summary, entry["id"])
+        await notify.alert_if_critical(APP_NET, True, "CRITICAL", summary, entry["id"], entry)
 
     return entry
 

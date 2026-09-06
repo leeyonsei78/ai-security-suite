@@ -13,7 +13,7 @@ import CopyButton from '../components/CopyButton'
 import { DEFAULT_ACCEPT as UPLOAD_ACCEPT } from '../components/FileUploadButton'
 
 const MODE_BADGE = {
-  cloud:   { icon: Cloud,        label: 'Claude Cloud로 분석됨', color: 'text-green-400',  bg: 'bg-green-500/10 border-green-500/30' },
+  cloud:   { icon: Cloud,        label: '외부 AI API로 분석됨', color: 'text-green-400',  bg: 'bg-green-500/10 border-green-500/30' },
   local:   { icon: Server,       label: '로컬 LLM으로 분석됨',    color: 'text-blue-400',   bg: 'bg-blue-500/10 border-blue-500/30' },
   offline: { icon: WifiOff,      label: '오프라인 규칙 기반으로 분석됨(폐쇄망)', color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/30' },
   mock:    { icon: FlaskConical, label: 'Mock 데모 데이터 (학습용, 실제 분석 아님)', color: 'text-slate-400', bg: 'bg-slate-500/10 border-slate-500/30' },
@@ -23,11 +23,17 @@ function ModeBanner({ result }) {
   if (!result?.mode) return null
   const cfg = MODE_BADGE[result.mode] ?? MODE_BADGE.offline
   const Icon = cfg.icon
+  // "(폐쇄망)"은 실제로 인터넷이 안 되는 경우를 위한 표현인데, fallback_reason이 있다는 건
+  // 인터넷은 되지만 AI 호출 자체가 실패(크레딧 소진 등)해서 대체됐다는 뜻이라 그대로 두면
+  // "내 네트워크가 문제"라고 오해할 수 있다 — 이 경우엔 라벨에서 그 표현을 바꿔준다.
+  const label = (result.mode === 'offline' && result.fallback_reason)
+    ? cfg.label.replace('(폐쇄망)', '(AI 호출 실패로 대체)')
+    : cfg.label
   return (
     <div className={`border rounded-xl p-3 flex items-start gap-2 ${cfg.bg}`}>
       <Icon size={14} className={`${cfg.color} shrink-0 mt-0.5`} />
       <div>
-        <p className={`text-xs font-semibold ${cfg.color}`}>{cfg.label}</p>
+        <p className={`text-xs font-semibold ${cfg.color}`}>{label}</p>
         {result.fallback_reason && <p className="text-xs text-slate-400 mt-1">{result.fallback_reason}</p>}
         {result.engine_note && <p className="text-xs text-slate-400 mt-1">{result.engine_note}</p>}
       </div>
@@ -423,7 +429,7 @@ function AuditTab() {
             rows={10}
             className="w-full bg-slate-800 border border-slate-600 rounded-xl p-4 text-sm font-mono resize-none focus:outline-none focus:border-cyan-500 placeholder-slate-600"
           />
-          <p className="text-[10px] text-slate-600 mt-1">위 명령어를 실행한 결과를 여기에 붙여넣고 [AI로 사건 재구성]을 누르거나, 결과를 텍스트 파일로 저장해 업로드하세요 — 업로드하면 자동으로 분석됩니다.</p>
+          <p className="text-[10px] text-slate-600 mt-1">위 명령어를 실행한 결과를 여기에 붙여넣고 [사건 재구성]을 누르거나, 결과를 텍스트 파일로 저장해 업로드하세요 — 업로드하면 자동으로 분석됩니다.</p>
         </div>
 
         <div>
@@ -441,7 +447,7 @@ function AuditTab() {
           disabled={loading || !content.trim()}
           className="w-full py-3 bg-cyan-600 hover:bg-cyan-700 disabled:bg-slate-700 disabled:text-slate-500 rounded-xl font-semibold transition-colors"
         >
-          {loading ? '분석 중...' : 'AI로 사건 재구성'}
+          {loading ? '분석 중...' : '사건 재구성'}
         </button>
 
         {guide?.disclaimer && <p className="text-[11px] text-slate-500 italic">{guide.disclaimer}</p>}
@@ -954,7 +960,7 @@ export default function Forensics() {
             <ShieldAlert className="text-cyan-400" size={26} /> 포렌식 실습·분석 센터
           </h1>
           <p className="text-slate-400 text-sm mt-1">
-            실제 파일로 연습하는 실습 랩, 조사 아티팩트를 AI로 감사하는 도구, 이 PC의 실제 증거를 수집하는 도구를 한 곳에 모았습니다.
+            실제 파일로 연습하는 실습 랩, 조사 아티팩트를 감사하는 도구, 이 PC의 실제 증거를 수집하는 도구를 한 곳에 모았습니다.
           </p>
         </div>
 

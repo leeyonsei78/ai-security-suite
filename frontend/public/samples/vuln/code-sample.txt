@@ -1,0 +1,11 @@
+import sqlite3
+
+def login(username, password):
+    db_pass = "admin1234"  # hardcoded
+    conn = sqlite3.connect("users.db")
+    query = f"SELECT * FROM users WHERE name='{username}' AND pw='{password}'"
+    cur = conn.execute(query)
+    return cur.fetchone()
+
+def show_search(query):
+    return f"<p>결과: {query}</p>"

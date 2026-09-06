@@ -20,7 +20,8 @@ ENGINE_DISCLAIMER = (
     "AI가 아니라 사전 정의된 패턴(반복된 인증 실패, SQLi/XSS 페이로드, 알려진 공격 도구 시그니처, "
     "인코딩된 PowerShell, 방화벽 차단 다건 등)과의 매칭 결과이므로 AI 분석보다 탐지 범위가 좁고 "
     "새롭거나 변형된 위협은 놓칠 수 있습니다. 인터넷 또는 로컬 LLM을 사용할 수 있게 되면 AI 모드로 "
-    "재분석하는 것을 권장합니다."
+    "재분석하는 것을 권장합니다. 실제 규칙 정의는 backend/services/log_offline_engine.py 파일에서 "
+    "확인·수정할 수 있습니다."
 )
 
 _SEV_RANK = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3, "INFO": 4}
@@ -133,7 +134,7 @@ def analyze_offline(log_content: str) -> dict:
             events.append(_mk(
                 idx, ts, "CRITICAL", "AWS IAM Privilege Escalation",
                 f"AWS IAM에서 와일드카드 권한(Action:*/Principal:*)이 포함된 정책 변경이 감지됐습니다: {decoded.strip()[:200]}",
-                None, "AWS IAM",
+                None, "AWS IAM (와일드카드 권한이 포함된 정책/역할)",
                 "해당 정책/역할을 즉시 검토하고, 필요 이상의 권한이 실제로 필요한지 확인하세요. 클라우드 IAM 정책 감사기(App 18)로 전체 계정을 점검하는 것을 권장합니다.",
             ))
             idx += 1
@@ -148,7 +149,7 @@ def analyze_offline(log_content: str) -> dict:
                     idx, ts, "CRITICAL" if port in ("22", "3389", "3306", "6379") else "HIGH",
                     "AWS Security Group Exposure",
                     f"AWS 보안그룹이 인터넷 전체(0.0.0.0/0)에 민감 포트 {port}({svc})를 허용하도록 변경됐습니다: {decoded.strip()[:200]}",
-                    None, "AWS 보안그룹",
+                    None, f"AWS 보안그룹 — 포트 {port}({svc}) 전체 공개(0.0.0.0/0)",
                     f"해당 보안그룹 규칙을 즉시 검토하고 출발지를 꼭 필요한 IP 대역으로 제한하세요({svc}는 특히 관리용 포트라 위험이 큽니다). 방화벽 정책 감사기(App 16)로 전체 규칙을 점검하는 것을 권장합니다.",
                 ))
                 idx += 1

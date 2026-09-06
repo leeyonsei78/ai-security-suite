@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, UploadFile, File
 from pydantic import BaseModel
-from services.cve_lookup_service import lookup_cve, search_cves, get_network_mode, HAS_API_KEY
+from services.cve_lookup_service import lookup_cve, search_cves, refresh_recent, get_network_mode, HAS_API_KEY
 from services import db, cve_offline_store, mode_manager
 
 router = APIRouter(prefix="/api/cve", tags=["cve-lookup"])
@@ -12,6 +12,8 @@ _ERROR_STATUS = {
     "invalid_query": 400,
     "not_found": 404,
     "offline_not_cached": 503,
+    "offline": 503,
+    "invalid_range": 400,
     "rate_limited": 429,
     "timeout": 504,
     "network": 502,
@@ -53,6 +55,14 @@ async def import_feed(file: UploadFile = File(...)):
         result = cve_offline_store.import_feed(raw)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    return result
+
+
+@router.post("/refresh")
+async def refresh(days: int = 7):
+    result = await refresh_recent(days)
+    if "error" in result:
+        raise HTTPException(status_code=_ERROR_STATUS.get(result["error"], 502), detail=result["message"])
     return result
 
 

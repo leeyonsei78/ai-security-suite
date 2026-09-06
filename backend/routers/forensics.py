@@ -83,7 +83,7 @@ async def analyze(request: AuditAnalyzeRequest):
     if entry.get("overall_severity") == "CRITICAL":
         top = next((f for f in entry.get("findings", []) if f.get("severity") == "CRITICAL"), None)
         summary = top["description"] if top else entry.get("summary", "")
-        await notify.alert_if_critical(AUDIT_APP_NAME, True, "CRITICAL", summary, entry["id"])
+        await notify.alert_if_critical(AUDIT_APP_NAME, True, "CRITICAL", summary, entry["id"], entry)
 
     return entry
 

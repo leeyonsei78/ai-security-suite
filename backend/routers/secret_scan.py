@@ -41,7 +41,7 @@ async def scan(request: ScanRequest):
     if entry.get("overall_risk") == "CRITICAL":
         top = next((f for f in entry.get("findings", []) if f.get("severity") == "CRITICAL"), None)
         summary = f"{top['pattern_label']} 발견 (line {top['line']})" if top else entry.get("summary", "")
-        await notify.alert_if_critical(APP_NAME, True, "CRITICAL", summary, entry["id"])
+        await notify.alert_if_critical(APP_NAME, True, "CRITICAL", summary, entry["id"], entry)
 
     return entry
 

@@ -4,7 +4,7 @@ import json
 from dotenv import load_dotenv
 from services.mock_data import generate_mock_analysis
 from services.log_offline_engine import analyze_offline
-from services import mode_manager, local_llm_client, usage_log
+from services import mode_manager, local_llm_client, claude_cli_client, usage_log
 
 load_dotenv()
 
@@ -51,6 +51,8 @@ def _real_analyze(log_content: str, backend: str = "cloud") -> dict:
 
     if backend == "local":
         text = local_llm_client.call_local_llm(SYSTEM_PROMPT, user_prompt, max_tokens=4096)
+    elif backend == "claude_cli":
+        text = claude_cli_client.call_claude_cli(SYSTEM_PROMPT, user_prompt)
     else:
         import anthropic
         client = anthropic.Anthropic(api_key=_api_key)
@@ -84,7 +86,7 @@ async def analyze_logs(log_content: str) -> dict:
 
     if mode == "mock":
         data = generate_mock_analysis(log_content)
-    elif mode in ("local", "cloud"):
+    elif mode in ("local", "cloud", "claude_cli"):
         loop = asyncio.get_event_loop()
         try:
             data = await loop.run_in_executor(None, _real_analyze, log_content, mode)
@@ -92,7 +94,8 @@ async def analyze_logs(log_content: str) -> dict:
             # 사전 도달성 체크를 통과했더라도 실제 호출 시점에 실패할 수 있다(타임아웃, 로컬
             # LLM 재시작 등) — 조용히 실패시키는 대신 오프라인 규칙 기반으로 폴백한다.
             data = analyze_offline(log_content)
-            data["fallback_reason"] = f"{'로컬 LLM' if mode == 'local' else 'Claude Cloud'} 호출 실패로 오프라인 규칙 기반 분석으로 대체됨: {e}"
+            backend_label = {"local": "로컬 LLM", "claude_cli": "Claude Code CLI"}.get(mode, "외부 AI API")
+            data["fallback_reason"] = f"{backend_label} 호출 실패로 오프라인 규칙 기반 분석으로 대체됨: {e}"
             mode = "offline"
     else:
         data = analyze_offline(log_content)

@@ -47,10 +47,11 @@ SOURCE_TYPES = [
     {
         "id": "windows_fw",
         "label": "Windows 방화벽",
-        "how_to_export": "PowerShell(관리자 권한) 또는 netsh 명령 결과를 붙여넣거나, 텍스트 파일로 저장해(`> rules.txt`) 업로드하세요. GUI의 '정책 내보내기'(.wfw)는 바이너리 형식이라 지원하지 않습니다.",
+        "how_to_export": "PowerShell(관리자 권한) 또는 netsh 명령 결과를 붙여넣거나, 텍스트 파일로 저장해(`> rules.txt`) 업로드하세요. GUI의 '정책 내보내기'(.wfw)는 바이너리 형식이라 지원하지 않습니다. ⚠️ netsh는 규칙 하나당 10줄 이상을 출력해 규칙이 많으면(200개 이상 흔함) 이 앱의 글자 수 제한(60,000자)을 쉽게 넘깁니다 — 먼저 위쪽의 PowerShell 명령(규칙당 한 줄, 훨씬 간결)을 사용하고, netsh를 꼭 써야 한다면 `dir=in`/`dir=out`으로 나눠서 여러 번 감사하세요.",
         "commands": [
             "Get-NetFirewallRule | Where-Object Enabled -eq True | Select-Object DisplayName,Direction,Action,Profile | Format-Table -AutoSize",
-            "netsh advfirewall firewall show rule name=all",
+            "netsh advfirewall firewall show rule name=all dir=in",
+            "netsh advfirewall firewall show rule name=all dir=out",
         ],
     },
     {

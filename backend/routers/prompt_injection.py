@@ -28,7 +28,7 @@ async def analyze(request: AnalyzeRequest):
     }
     entry["id"] = db.add_entry(APP_NAME, entry)
     await notify.alert_if_critical(
-        APP_NAME, entry.get("verdict") == "INJECTION", "INJECTION", entry.get("summary", ""), entry["id"]
+        APP_NAME, entry.get("verdict") == "INJECTION", "INJECTION", entry.get("summary", ""), entry["id"], entry
     )
     return entry
 

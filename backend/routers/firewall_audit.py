@@ -27,8 +27,15 @@ async def get_guide():
 async def analyze(request: AnalyzeRequest):
     if not request.content.strip():
         raise HTTPException(status_code=400, detail="Empty content")
-    if len(request.content) > 20000:
-        raise HTTPException(status_code=400, detail="Content too long (max 20,000 chars)")
+    if len(request.content) > 60000:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"내용이 너무 깁니다 ({len(request.content):,}자, 최대 60,000자) — "
+                "규칙이 많다면 프로필/그룹별로 나눠서 여러 번 감사하거나, "
+                "Windows라면 netsh 대신 더 간결한 PowerShell Format-Table 명령을 사용하세요."
+            ),
+        )
     if request.source_type not in VALID_SOURCE_TYPES:
         raise HTTPException(status_code=400, detail=f"Invalid source_type, must be one of {sorted(VALID_SOURCE_TYPES)}")
 
@@ -43,7 +50,7 @@ async def analyze(request: AnalyzeRequest):
     if entry.get("overall_risk") == "CRITICAL":
         top = next((f for f in entry.get("findings", []) if f.get("severity") == "CRITICAL"), None)
         summary = top["description"] if top else entry.get("summary", "")
-        await notify.alert_if_critical(APP_NAME, True, "CRITICAL", summary, entry["id"])
+        await notify.alert_if_critical(APP_NAME, True, "CRITICAL", summary, entry["id"], entry)
 
     return entry
 

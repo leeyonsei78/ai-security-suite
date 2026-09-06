@@ -64,7 +64,7 @@ async def analyze_phishing(content: str) -> dict:
             data = _real_analyze(content, backend=mode)
         except Exception as e:
             data = analyze_offline(content)
-            data["fallback_reason"] = f"{'로컬 LLM' if mode == 'local' else 'Claude Cloud'} 호출 실패로 오프라인 규칙 기반 분석으로 대체됨: {e}"
+            data["fallback_reason"] = f"{'로컬 LLM' if mode == 'local' else '외부 AI API'} 호출 실패로 오프라인 규칙 기반 분석으로 대체됨: {e}"
             mode = "offline"
     else:
         data = analyze_offline(content)

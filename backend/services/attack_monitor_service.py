@@ -4,7 +4,7 @@
 데모 환경이라 합성 로그를 생성해 분석 파이프라인을 시연한다. 이 모듈은 그와 달리
 **실제 Windows PC의 보안 신호**(로그온 실패 이벤트, Windows Defender 탐지,
 방화벽 로그, 새로 열린 리스닝 포트)를 PowerShell로 직접 조회해, App 1과 동일한
-analyze_logs() 파이프라인(Claude Cloud/로컬 LLM/오프라인 규칙 기반/Mock 4가지 실행
+analyze_logs() 파이프라인(외부 AI API/로컬 LLM/오프라인 규칙 기반/Mock 4가지 실행
 모드, mode_manager.py가 판별)에 태워 위협을 분류한다.
 
 ⚠️ Windows 전용(PowerShell 5.1 기준)이며, 방화벽 연결 로깅(LogAllowed/LogBlocked)은

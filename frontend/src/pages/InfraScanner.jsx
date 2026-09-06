@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import axios from 'axios'
 import {
-  Radar, Package, Network, Trash2, Download, AlertTriangle, ShieldAlert, ExternalLink,
+  Radar, Package, Network, Trash2, Download, AlertTriangle, ShieldAlert, ExternalLink, Info,
 } from 'lucide-react'
 import GuidePanel from '../components/GuidePanel'
 import SeverityBadge from '../components/SeverityBadge'
@@ -10,10 +10,17 @@ import FileUploadButton from '../components/FileUploadButton'
 
 const DEP_STEPS = [
   "매니페스트 형식을 선택합니다 (Python requirements.txt / Node.js package.json).",
-  '실제 매니페스트 내용을 붙여넣습니다 (한 번에 최대 8개 패키지까지 스캔됩니다).',
+  '실제 매니페스트 내용을 붙여넣거나, 아래 [예시 파일 다운로드]로 받은 파일을 그대로 업로드해 바로 테스트해볼 수 있습니다 (한 번에 최대 8개 패키지까지 스캔됩니다).',
   '[스캔 실행]을 클릭하면 각 패키지 이름+버전으로 NVD를 실시간 검색해 일치 가능성이 있는 CVE를 찾습니다.',
   "결과의 CVE를 클릭하면 'CVE 조회' 페이지에서 NVD 원본 데이터를 바로 확인할 수 있습니다.",
 ]
+
+// 실제로 알려진 취약점이 있는 버전으로 구성 — 다운로드해서 그대로 스캔하면 진짜 CVE가
+// 잡히는 것까지 확인함(flask 0.12/PyYAML 5.3.1 → CRITICAL, axios 0.18.0 → HIGH).
+const SAMPLE_FILES = {
+  pip: '/samples/infra-scan/requirements-sample.txt',
+  npm: '/samples/infra-scan/package-sample.json',
+}
 const NET_STEPS = [
   '스캔 대상(IP 또는 호스트명)을 입력합니다 — 사설망(10/8, 172.16/12, 192.168/16)과 로컬호스트만 지원됩니다.',
   "소유하거나 테스트 권한이 있는 대상임을 체크박스로 확인합니다.",
@@ -117,6 +124,15 @@ function DependencyTab({ guide }) {
             <p className="text-xs font-semibold text-slate-400">매니페스트 내용</p>
             <FileUploadButton onExtracted={(text) => { setContent(text); scan(text) }} />
           </div>
+          {SAMPLE_FILES[manifestType] && (
+            <a
+              href={SAMPLE_FILES[manifestType]}
+              download
+              className="inline-flex items-center gap-1.5 text-[11px] text-violet-400 hover:text-violet-300 underline underline-offset-2 mb-2"
+            >
+              <Download size={11} /> 예시 파일 다운로드 (실제 취약점이 있는 오래된 버전으로 구성 — 바로 업로드해서 테스트 가능)
+            </a>
+          )}
           <textarea
             value={content}
             onChange={e => setContent(e.target.value)}
@@ -357,6 +373,51 @@ export default function InfraScanner() {
             <Radar className="text-violet-400" size={26} /> 인프라 취약점 스캐너
           </h1>
           <p className="text-slate-400 text-sm mt-1">패키지 의존성과 실제 네트워크 대상을 대상으로 NVD 실시간 데이터 기반 취약점을 점검합니다.</p>
+        </div>
+
+        <div className="bg-violet-950/30 border border-violet-500/20 rounded-xl p-4 flex gap-3">
+          <Info className="text-violet-400 shrink-0 mt-0.5" size={18} />
+          <div className="text-sm text-slate-300 space-y-2">
+            <p>
+              <span className="font-semibold text-violet-300">이 페이지는 무엇을 하나요? </span>
+              완전히 다른 두 가지 대상을 점검합니다 — 내가 만든 프로젝트가 "가져다 쓰는" 외부
+              라이브러리에 알려진 취약점이 있는지(의존성 스캔), 그리고 실제로 네트워크에 떠 있는
+              서버·장비에 오래되거나 취약한 버전의 서비스가 돌고 있는지(네트워크 스캔). 둘 다 이미
+              알려진 취약점(CVE)을 미국 국가 취약점 데이터베이스(NVD)에서 실시간으로 찾아 대조하는
+              방식이고, 이 앱은 AI를 쓰지 않습니다 — NVD 공식 API를 직접 조회한 결과입니다.
+            </p>
+            <p>
+              <span className="font-semibold text-violet-300">"매니페스트"가 뭔가요? </span>
+              프로젝트가 사용하는 라이브러리(패키지) 이름과 버전을 적어둔 파일입니다 — Python은
+              <code className="mx-1 px-1 bg-slate-800 rounded text-violet-300">requirements.txt</code>,
+              Node.js/JavaScript는 <code className="mx-1 px-1 bg-slate-800 rounded text-violet-300">package.json</code>이
+              대표적입니다. 갖고 있는 프로젝트 폴더에서 이 파일을 열어 내용을 그대로 복사해 붙여넣거나,
+              파일 자체를 업로드하면 됩니다.
+            </p>
+            <p>
+              <span className="font-semibold text-violet-300">의존성(SCA) 스캔이란? </span>
+              SCA(Software Composition Analysis, 소프트웨어 구성 분석) — 매니페스트에 적힌 각
+              패키지+버전을 NVD에서 검색해, 그 버전에 이미 보고된 CVE가 있는지 찾습니다. 직접 작성한
+              코드가 아니라 "가져다 쓰는" 외부 라이브러리 자체의 위험을 점검하는 용도입니다 — 예를 들어
+              오래된 <code className="mx-1 px-1 bg-slate-800 rounded text-violet-300">flask==0.12</code>를
+              계속 쓰고 있다면 그 버전에 이미 알려진 취약점이 있는지 여기서 확인할 수 있습니다.
+            </p>
+            <p>
+              <span className="font-semibold text-violet-300">네트워크 라이브 스캔이란? </span>
+              매니페스트가 아니라 실제 살아있는 서버·장비(IP 주소나 호스트명)를 대상으로, 진짜 TCP
+              연결을 시도해 어떤 포트가 열려 있는지, 그 포트에서 어떤 서비스가 어떤 버전으로 도는지
+              확인한 뒤 그 버전에 알려진 CVE가 있는지 찾습니다. "코드가 뭘 쓰는지"가 아니라 "지금
+              실제로 뭐가 돌고 있는지"를 보는 것이라 관점이 다릅니다 — 예를 들어 사내 서버에 오래된
+              Redis가 외부에 노출돼 있는지 같은 경우를 찾을 때 씁니다.
+            </p>
+            <p>
+              <span className="font-semibold text-violet-300">둘 중 어느 걸 써야 하나요? </span>
+              개발 중인 프로젝트의 라이브러리 버전을 점검하고 싶다면 의존성(SCA) 스캔을, 실제로
+              네트워크에 떠 있는 서버·장비에 위험한 포트가 열려 있거나 오래된 서비스가 도는지 확인하고
+              싶다면 네트워크 라이브 스캔을 쓰세요. 서로 다른 공격 표면(코드가 의존하는 것 vs 실제로
+              노출된 것)을 점검하므로, 상황에 맞게 또는 둘 다 확인하는 것이 좋습니다.
+            </p>
+          </div>
         </div>
 
         <GuidePanel title="인프라 취약점 스캐너 사용 가이드" steps={tab === 'dependency' ? DEP_STEPS : NET_STEPS} tips={TIPS} />

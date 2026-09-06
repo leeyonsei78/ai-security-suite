@@ -46,7 +46,10 @@ _DELIM_SPOOF_RE = re.compile(
 )
 _ENCODING_RE = re.compile(r"base ?64", re.I)
 _HIDDEN_DIRECTIVE_RE = re.compile(
-    r"<!--.*?(AI|assistant|어시스턴트).{0,40}(방문|입력|안내|수행|하세요|해줘|해라).*?-->",
+    # .{0,40}이던 초기 버전은 자연스러운 한국어 문장("AI 어시스턴트에게: ...하라고 안내하세요")에서
+    # 대상 언급과 실제 지시 동사 사이 거리가 40자를 넘는 경우가 흔해 실제 은닉 지시문을 놓치는
+    # 것을 이 앱의 예시 파일(document-sample.txt)로 검증하다가 발견함 — 60자로 확장.
+    r"<!--.*?(AI|assistant|어시스턴트).{0,60}(방문|입력|안내|수행|하세요|해줘|해라).*?-->",
     re.I | re.S,
 )
 _ZERO_WIDTH_RE = re.compile("[​‌‍﻿]{3,}")

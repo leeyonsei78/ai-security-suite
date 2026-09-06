@@ -45,15 +45,23 @@ def add_entry(app: str, data: dict) -> int:
         return cur.lastrowid
 
 
+def _iso_utc(sqlite_datetime: str) -> str:
+    """SQLite의 datetime('now')는 'YYYY-MM-DD HH:MM:SS' 형태의 UTC 문자열을 반환한다
+    (타임존 표기가 없음) — 프론트에서 new Date(...)로 그대로 파싱하면 로컬 시간으로
+    잘못 해석되므로, 명확한 UTC ISO 8601('...T...Z')로 변환해 돌려준다."""
+    return sqlite_datetime.replace(" ", "T") + "Z"
+
+
 def get_history(app: str) -> list[dict]:
     with _lock:
         rows = _conn.execute(
-            "SELECT id, data FROM history WHERE app = ? ORDER BY id", (app,)
+            "SELECT id, data, created_at FROM history WHERE app = ? ORDER BY id", (app,)
         ).fetchall()
     entries = []
-    for row_id, data_json in rows:
+    for row_id, data_json, created_at in rows:
         entry = json.loads(data_json)
         entry["id"] = row_id
+        entry.setdefault("created_at", _iso_utc(created_at))
         entries.append(entry)
     return entries
 
@@ -61,12 +69,14 @@ def get_history(app: str) -> list[dict]:
 def get_entry(app: str, entry_id: int) -> dict | None:
     with _lock:
         row = _conn.execute(
-            "SELECT data FROM history WHERE app = ? AND id = ?", (app, entry_id)
+            "SELECT data, created_at FROM history WHERE app = ? AND id = ?", (app, entry_id)
         ).fetchone()
     if row is None:
         return None
-    entry = json.loads(row[0])
+    data_json, created_at = row
+    entry = json.loads(data_json)
     entry["id"] = entry_id
+    entry.setdefault("created_at", _iso_utc(created_at))
     return entry
 
 

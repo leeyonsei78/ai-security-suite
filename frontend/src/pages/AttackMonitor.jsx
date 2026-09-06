@@ -11,7 +11,7 @@ import StatCard from '../components/StatCard'
 import CopyButton from '../components/CopyButton'
 
 const MODE_BADGE = {
-  cloud:   { icon: Cloud,        label: 'Claude Cloud', color: 'text-green-400' },
+  cloud:   { icon: Cloud,        label: '외부 AI API', color: 'text-green-400' },
   local:   { icon: Server,       label: '로컬 LLM',      color: 'text-blue-400' },
   offline: { icon: WifiOff,      label: '오프라인 규칙 기반', color: 'text-amber-400' },
   mock:    { icon: FlaskConical, label: 'Mock 데모',      color: 'text-slate-400' },

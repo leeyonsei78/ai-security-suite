@@ -1,0 +1,11 @@
+Sep 5 09:12:01 web01 sshd[2841]: Accepted publickey for jsmith from 10.0.0.23 port 51422 ssh2
+Sep 5 09:15:44 web01 systemd: Started Session 118 of user jsmith.
+Sep 5 09:20:10 web01 cron[3310]: (root) CMD (/usr/local/bin/backup.sh)
+Sep 5 14:02:03 web01 sshd[5521]: Failed password for root from 203.0.113.77 port 44210 ssh2
+Sep 5 14:02:05 web01 sshd[5522]: Failed password for root from 203.0.113.77 port 44212 ssh2
+Sep 5 14:02:07 web01 sshd[5523]: Failed password for root from 203.0.113.77 port 44214 ssh2
+Sep 5 14:02:09 web01 sshd[5524]: Failed password for root from 203.0.113.77 port 44216 ssh2
+Sep 5 14:02:11 web01 sshd[5525]: Failed password for invalid user admin from 203.0.113.77 port 44218 ssh2
+Sep 5 14:02:44 web01 sshd[5530]: Accepted password for root from 203.0.113.77 port 44230 ssh2
+Sep 5 14:03:02 web01 sudo: root : TTY=pts/0 ; PWD=/root ; USER=root ; COMMAND=/bin/cat /etc/shadow
+Sep 5 14:05:19 web01 sshd[5599]: Failed password for guest from 45.33.32.156 port 33210 ssh2

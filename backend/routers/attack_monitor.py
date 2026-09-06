@@ -165,7 +165,7 @@ async def attack_monitor_ws(websocket: WebSocket):
             if mode in ("real", "aws"):
                 await notify.alert_if_critical(
                     app_name, result.get("threat_level") == "CRITICAL", "CRITICAL",
-                    result.get("summary", ""), result["id"],
+                    result.get("summary", ""), result["id"], result,
                 )
 
             await websocket.send_json({"type": "event", **result})

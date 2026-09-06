@@ -63,6 +63,74 @@ APP_LABELS = {
 
 ALERTS_APP = "alerts"
 
+# 알림에 "대상/권장 조치"를 붙이기 위한 best-effort 추출기 — 앱마다 결과 스키마가 완전히
+# 달라(App1 events/App16·18·20·24·25 findings/App4 IoC 결과 등) 여기서 스키마를 해석하지
+# 않는다는 원칙을 지키면서, 흔히 쓰이는 필드 이름 후보만 우선순위대로 찾아본다.
+# 이걸 알림 발생 시점에 스냅샷으로 저장해두는 이유: 원본 entry는 나중에(테스트 정리, 히스토리
+# 초기화 등으로) 삭제될 수 있는데, 알림 자체는 계속 남아있어 "원본을 찾을 수 없어 대응 방법도
+# 알 수 없는" 상황이 생길 수 있다 — 발생 시점에 찍어두면 원본이 사라져도 알림만으로 대응 가능.
+_TARGET_FIELDS = [
+    "target_label", "affected_resource", "affected", "resource", "target_host", "source_ip",
+    "ioc", "artifact_reference", "rule_reference", "target", "host", "domain", "context", "name",
+]
+_ACTION_FIELDS = ["remediation", "recommendation"]
+
+
+def _find_actionable_node(root, want_severity: str):
+    wanted = (want_severity or "").upper()
+    fallback = None
+
+    def visit(node, depth):
+        nonlocal fallback
+        if depth > 6 or node is None:
+            return None
+        if isinstance(node, list):
+            for item in node:
+                hit = visit(item, depth + 1)
+                if hit:
+                    return hit
+            return None
+        if isinstance(node, dict):
+            if node.get("remediation") or node.get("recommendation"):
+                sev = str(node.get("severity") or node.get("verdict") or "").upper()
+                if sev == wanted:
+                    return node
+                if fallback is None:
+                    fallback = node
+            for value in node.values():
+                hit = visit(value, depth + 1)
+                if hit:
+                    return hit
+        return None
+
+    return visit(root, 0) or fallback
+
+
+def _extract_field(node: dict | None, fields: list[str]) -> str | None:
+    if not node:
+        return None
+    for f in fields:
+        v = node.get(f)
+        if v:
+            return str(v)
+    return None
+
+
+def _snapshot_from_entry(entry: dict | None, severity_label: str) -> dict:
+    if not entry:
+        return {"target": None, "recommendation": None, "mode": None, "finding_description": None}
+    node = _find_actionable_node(entry, severity_label)
+    target = entry.get("target_label") or _extract_field(node, _TARGET_FIELDS)
+    description = str(node["description"]) if node and node.get("description") else None
+    return {
+        "target": target,
+        "recommendation": _extract_field(node, _ACTION_FIELDS),
+        # mode(cloud/local/offline/mock)를 함께 남겨 App22에서 "이건 학습용 Mock 데모인지,
+        # 실제 분석 결과인지"를 구분해 보여줄 수 있게 한다.
+        "mode": entry.get("mode"),
+        "finding_description": description,
+    }
+
 
 def _send_slack(title: str, message: str) -> dict:
     payload = json.dumps({"text": f"*{title}*\n{message}"}).encode("utf-8")
@@ -115,7 +183,9 @@ def _dispatch(title: str, message: str, payload: dict) -> dict:
     return result
 
 
-def send_alert(app: str, severity_label: str, summary: str, entry_id: int | None) -> dict:
+def send_alert(
+    app: str, severity_label: str, summary: str, entry_id: int | None, entry: dict | None = None
+) -> dict:
     label = APP_LABELS.get(app, app)
     title = f"[{severity_label}] {label}에서 위협 탐지"
     message = f"{summary}\n\n분석 ID: {entry_id if entry_id is not None else 'N/A'}"
@@ -147,6 +217,7 @@ def send_alert(app: str, severity_label: str, summary: str, entry_id: int | None
         "entry_id": entry_id,
         "dispatch": dispatch_result,
         "created_at": created_at,
+        **_snapshot_from_entry(entry, severity_label),
     }
     alert_id = db.add_entry(ALERTS_APP, alert)
     alert["id"] = alert_id
@@ -154,16 +225,21 @@ def send_alert(app: str, severity_label: str, summary: str, entry_id: int | None
 
 
 async def alert_if_critical(
-    app: str, is_critical: bool, severity_label: str, summary: str, entry_id: int | None
+    app: str, is_critical: bool, severity_label: str, summary: str, entry_id: int | None,
+    entry: dict | None = None,
 ) -> dict | None:
     """호출부가 이미 판정한 "이게 이 앱 기준 최고 심각도인가"만 받아 알림 발송을 담당한다.
     실제 전송(urllib/smtplib)은 블로킹 호출이라, 이를 async 라우트 안에서 그대로 기다리면
     이벤트 루프를 막는다 — 실시간 모니터링 WebSocket에서 이미 겪은 것과 같은 함정이라
-    run_in_executor로 스레드에 위임한다."""
+    run_in_executor로 스레드에 위임한다.
+
+    entry(호출부가 이미 만든 전체 결과 dict)를 넘기면 대상/권장 조치를 알림 자체에
+    스냅샷으로 남겨(App22 통합 리스크 대시보드에서 사용), 나중에 원본 히스토리가
+    삭제·초기화되어도 알림만으로 대응 내용을 계속 확인할 수 있다."""
     if not is_critical:
         return None
     loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, send_alert, app, severity_label, summary, entry_id)
+    return await loop.run_in_executor(None, send_alert, app, severity_label, summary, entry_id, entry)
 
 
 def get_alerts(limit: int = 50) -> list[dict]:
@@ -173,3 +249,16 @@ def get_alerts(limit: int = 50) -> list[dict]:
 
 def clear_alerts() -> None:
     db.clear_history(ALERTS_APP)
+
+
+def set_alert_resolved(alert_id: int, resolved: bool) -> dict | None:
+    """알림 하나를 처리완료/미해결로 표시한다 — "누적 CRITICAL"이 처리 여부와 무관하게
+    계속 쌓이기만 해서 실제 리스크 관리(뭐가 아직 안 끝났는지)에 못 쓴다는 지적에 대한
+    최소 기능. alerts 테이블의 JSON 블롭에 resolved/resolved_at을 더해 그대로 되쓴다."""
+    alert = db.get_entry(ALERTS_APP, alert_id)
+    if alert is None:
+        return None
+    alert["resolved"] = resolved
+    alert["resolved_at"] = datetime.now(timezone.utc).isoformat() if resolved else None
+    db.update_entry(ALERTS_APP, alert_id, alert)
+    return alert

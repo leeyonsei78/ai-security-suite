@@ -1,0 +1,22 @@
+# /etc/nginx/nginx.conf
+server {
+    listen 443 ssl;
+    server_name shop.example.com;
+    server_tokens on;
+    autoindex on;
+
+    ssl_certificate     /etc/ssl/certs/shop.example.com.crt;
+    ssl_certificate_key /etc/ssl/private/shop.example.com.key;
+    ssl_protocols       TLSv1 TLSv1.1 TLSv1.2;
+
+    location / {
+        root /var/www/html;
+    }
+}
+
+# /etc/ssh/sshd_config
+Port 22
+PermitRootLogin yes
+PasswordAuthentication yes
+X11Forwarding no
+MaxAuthTries 6

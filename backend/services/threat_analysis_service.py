@@ -82,9 +82,9 @@ _DOMAIN_MAP = {
 }
 
 _CHAT_OFFLINE_NOTICE = (
-    "이 기능은 AI 모드(Claude Cloud 또는 로컬 LLM)에서만 지원됩니다. 현재 모드: {mode_label} — "
+    "이 기능은 AI 모드(외부 AI API 또는 로컬 LLM)에서만 지원됩니다. 현재 모드: {mode_label} — "
     "NavBar에서 로컬 LLM이 설정되어 있다면 그쪽으로 전환하거나, 인터넷이 연결되면 자동으로 "
-    "Claude Cloud를 쓸 수 있습니다."
+    "외부 AI API를 쓸 수 있습니다."
 )
 _MODE_LABEL = {"offline": "오프라인 규칙 기반(폐쇄망)", "mock": "Mock 데모"}
 
@@ -123,7 +123,7 @@ async def analyze(analysis_type: str, input_data: str, context: str) -> dict:
             data = _real_analyze(analysis_type, input_data, context, backend=mode)
         except Exception as e:
             data = analyze_offline(analysis_type, input_data, context)
-            data["fallback_reason"] = f"{'로컬 LLM' if mode == 'local' else 'Claude Cloud'} 호출 실패로 오프라인 규칙 기반으로 대체됨: {e}"
+            data["fallback_reason"] = f"{'로컬 LLM' if mode == 'local' else '외부 AI API'} 호출 실패로 오프라인 규칙 기반으로 대체됨: {e}"
             mode = "offline"
     else:
         data = analyze_offline(analysis_type, input_data, context)
@@ -161,5 +161,5 @@ async def chat(analysis_type: str, summary: str, history: list[dict], message: s
         usage_log.log_usage("threat_analysis_chat", resp.usage, model="claude-sonnet-4-6")
         return resp.content[0].text
     except Exception as e:
-        backend_label = "로컬 LLM" if mode == "local" else "Claude Cloud"
+        backend_label = "로컬 LLM" if mode == "local" else "외부 AI API"
         return f"{backend_label} 응답 생성에 실패했습니다: {e}. 잠시 후 다시 시도하거나 다른 모드를 사용하세요."
