@@ -1,0 +1,22 @@
+[Unix/Linux 서버 - sshd_config]
+Port 22
+PermitRootLogin yes
+PasswordAuthentication yes
+
+[네트워크 장비 - 원격관리 서비스]
+현재 코어 스위치는 SSH 대신 Telnet 서비스로 원격 관리가 이루어지고 있음. VTY 라인에 ACL 미적용.
+
+[클라우드 - 보안그룹 web-sg]
+Inbound Rule: 22/tcp, Source: 0.0.0.0/0
+Inbound Rule: 3389/tcp, Source: 0.0.0.0/0
+
+[애플리케이션 설정 - config.py]
+DB_PASSWORD = "P@ssw0rd2024!"
+AWS_SECRET_ACCESS_KEY = "wJalrXUtnFEMI9K7MDENG8bPxRfiCYzT4kM2p1Q"
+
+[서비스 배너]
+220 (vsFTPd 2.3.4)
+Apache/2.2.15 (Unix)
+
+[관리 현황]
+정보보호 정책 문서, 출입통제 절차, CCTV 운영 현황은 별도로 확인되지 않았음.

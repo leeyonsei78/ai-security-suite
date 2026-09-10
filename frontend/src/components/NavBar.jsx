@@ -92,11 +92,12 @@ const groups = [
     ],
   },
   {
-    key: 'finance-compliance',
-    label: '금융 컴플라이언스',
+    key: 'compliance',
+    label: '컴플라이언스',
     icon: Landmark,
     links: [
       { to: '/fsi-csp-audit', icon: Landmark, label: '금융보안원 클라우드 CSP 평가' },
+      { to: '/kese-kit', icon: ShieldCheck, label: 'KISA 보안 가이드라인 종합 점검' },
     ],
   },
 ]

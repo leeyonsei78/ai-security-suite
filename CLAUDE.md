@@ -31,6 +31,7 @@ Claude AI를 활용한 보안 분석 도구 모음.
 | 23 | 실시간 공격 모니터링 & 대응 센터 | ✅ 완료 |
 | 24 | 금융보안원 클라우드 CSP 평가 | ✅ 완료 |
 | 25 | 포렌식 실습·분석 센터 | ✅ 완료 |
+| 26 | KISA 보안 가이드라인 종합 점검 (KESE-KIT) | ✅ 완료 |
 
 ---
 
@@ -573,6 +574,18 @@ App 16(방화벽 정책 감사기)·App 18(IAM 정책 감사기)와 완전히 �
   - **아티팩트 감사기 탭**: 기존에 이미 있던 `why`(왜 수집하나요) + `variants[].where`(어디서 실행하나요) + 샘플 파일이 사실상 "점검 목적"과 "수집처"는 커버하고 있었으나 "의미"(이 아티팩트가 정확히 뭔지) 한 줄이 빠져 있었음 — `forensics_audit_guide.py`의 7개 아티팩트 유형 전부에 `meaning` 필드 추가, "왜 수집하나요?" 박스 위에 "의미" 섹션으로 노출(기존 "왜 수집하나요?"는 "왜 수집하나요? (점검 목적)"으로 라벨 보강)
   - 신규 필드(`meaning`/`learning_point`) 전부 `/api/forensics/audit/guide`·`/api/forensics/lab/challenges` 실제 호출로 존재 확인, `npm run build` 성공, 백엔드 재기동 후 검증
 
+### App 26: KISA 보안 가이드라인 종합 점검 (KESE-KIT) `/kese-kit`
+사용자가 GitHub의 `cdppcorp/KESE-KIT`(KISA Enhanced Security Evaluation Kit — KISA 공개 가이드라인 기반 오픈소스 Claude Code 플러그인, MIT License, `/kesekit-start` 등 슬래시 명령으로 CII/AI보안/로봇보안/우주보안/시큐어코딩/제로트러스트/SW공급망 7개 영역을 점검하는 도구) 스킬을 "내 프로그램에 반영해달라"고 요청 — AskUserQuestion으로 확인한 결과 ① Claude Code 플러그인 설치가 아니라 AI Security Suite 웹앱에 새 기능으로 구현 ② 7개 영역 전부(하나씩 선별하지 않음)를 선택. App 24(금융보안원 CSP 평가)가 이미 "평가 유형 여러 개를 한 앱에서 선택"하는 패턴(`ASSESSMENT_TYPES` 딕셔너리 + 유형별 domains/issue_type)을 쓰고 있어, 7개 영역마다 별도 앱을 만드는 대신 그 패턴을 7개 유형으로 확장한 단일 앱으로 구현(App 16/18/20/24의 4파일 구성 — `*_service.py`/`mock_*.py`/`*_guide.py`/`*_offline_engine.py` — 을 그대로 복제).
+- **출처 고지**: KESE-KIT 저장소가 공개한 "지원 가이드라인" 표(분야명·항목 수·참조 표준)만 참고했고, 560여 개(CII)/421여 개(제로트러스트)/103여 개(로봇) 등 세부 항목 원문 전체는 담고 있지 않음(원문 PDF는 이 세션에서 읽지 않음) — App 24가 금융보안원 자료에 대해 쓴 것과 동일한 "공식 절차를 대체하지 않는 보조 점검 도구" 고지 원칙을 그대로 적용(`DISCLAIMER`, 결과·리포트에 항상 노출)
+- **평가 유형 7종**: `cii`(주요정보통신기반시설 기술적 12개 시스템+관리적 14개 영역+물리적, 560+항목) / `ai_security`(AI 개발자·서비스제공자·이용자 3개 생명주기, ~104항목 — App 12 AI 모델 감사가 OWASP LLM Top10 관점의 런타임 설계 감사라면 이쪽은 KISA 기준 AI 개발·운영 생명주기 전반) / `robot_security`(SSDF/IEC 62443/EU CRA·RED 기반 11개 카테고리, ~103항목) / `space_security`(CMMC/K-RMF/NIS2 기반 12개 분야, 53항목) / `secure_coding`(KISA JS/Python 시큐어코딩 가이드 7개 카테고리, 46항목 — App 3 취약점 스캐너의 코드 분석과 달리 KISA 고유 카테고리 체계로 분류) / `zero_trust`(제로트러스트 가이드라인 2.0/NIST SP 800-207 기반 8개 핵심요소+OT/ICS, ~421항목, 4단계 성숙도) / `supply_chain`(SW 공급망 보안 가이드라인 기반 5단계, 29항목 — App 17 인프라 취약점 스캐너의 CVE 매칭과 달리 SBOM 작성·서명·검증 프로세스 자체의 성숙도를 점검)
+- **issue_type 10종 신규 설계**(App16 9종/App18 6종/App20 6종/App24 9종/App25 6종과도 안 겹치는 독자 taxonomy, 7개 영역 전체에 공통 적용): `access_control_gap`·`network_segmentation_gap`·`encryption_key_gap`·`logging_monitoring_gap`·`patch_hardening_gap`·`secure_coding_flaw`·`supply_chain_gap`·`incident_resilience_gap`·`governance_policy_gap`·`physical_personnel_gap`
+- **제로트러스트 전용 `maturity_level` 필드**: 다른 6개 유형과 스키마를 통일하면서도(별도 API 분기 없이), `zero_trust` 유형일 때만 AI가 각 발견 사항에 성숙도(기존/초기/향상/최적화)를 선택적으로 채워 결과 카드에 보라색 배지로 표시 — 스키마 자체는 공용, 필드 유무로만 분기
+- **오프라인 엔진**: 7개 유형 각각 3~6개의 정규식/키워드 검사(총 28개) — 하드코딩 시크릿은 App 19 `secret_scanner_service`를, `secure_coding` 유형의 SQLi/XSS/eval/약한 해시 정규식은 App 3 `vuln_offline_engine`의 검증된 정규식을 그대로 import해 재사용(중복 구현 안 함). 7개 유형 전부 스크래치패드에서 직접 실행해 CRITICAL/HIGH/MEDIUM/LOW가 고르게 섞인 유의미한 탐지 결과가 나오는 것을 확인(cii 5건/ai_security 5건/robot_security 2건/space_security 4건/secure_coding 7건/zero_trust 5건/supply_chain 4건)
+- **예시 파일 7종**: `frontend/public/samples/kese-kit/`에 유형별 샘플 신규 작성 — 오프라인 엔진의 정규식/키워드 검사를 실제로 통과하는지 먼저 검증한 뒤 작성함(짐작으로 작성하지 않음). **⚠️ 작성 중 발견한 정규식 함정**: `secret_scanner_service`의 `_GENERIC_ASSIGNMENT_RE`가 `\bapi_key\b`처럼 단어 경계를 요구하는데, `DB_PASSWORD`/`OPENAI_API_KEY`/`NPM_TOKEN`처럼 언더스코어로 접두어가 붙은 변수명은 언더스코어가 `\w`라 경계가 생기지 않아 매칭되지 않음(`OPENAI_API_KEY`의 `API_KEY` 앞에 `\b`가 없음) — `API_KEY`/`TOKEN`처럼 접두어 없이 단독으로 시작하는 변수명으로 바꿔 해결. AWS 시크릿 키 샘플은 공식 예시 값(`...EXAMPLEKEY`)을 그대로 쓰면 시크릿 스캐너의 placeholder 필터(`example` 포함 시 제외)에 걸려 탐지되지 않는다는 점도 확인해 실제 키 형식만 흉내 낸 무작위 문자열로 교체
+- 알림 시스템(`notify.APP_LABELS`에 `kese_kit_audit` 추가, 19번째 탐지형 앱)과 App 22 통합 리스크 대시보드는 기존 설계(APP_LABELS 순회)상 자동 편입되지만, **App 22 프론트의 `APP_ROUTES` 매핑은 하드코딩이라 자동 편입되지 않는다는 점을 App 22 섹션에서 이미 경고해뒀던 대로** 실제로 빠져있어 직접 추가함(안 했다면 "앱별 현황"에서 이 앱 CRITICAL 행 클릭 시 홈으로 이동하는, App 23/24/25 때 실제로 발생했던 것과 동일한 회귀가 재발했을 것)
+- NavBar의 "금융 컴플라이언스" 그룹을 "컴플라이언스"로 개명하고 이 앱을 그 안에 추가(App 24와 나란히 배치) — 이 앱은 금융권 한정이 아니라 KISA 공개 가이드라인 전반을 다루므로 그룹명을 넓힘
+- 백엔드는 `/guide`(7개 유형 전부 응답 확인)·`/analyze`(오프라인 모드로 cii/secure_coding 실제 HTTP 호출, CRITICAL 판정 확인)·CRITICAL 알림 발생(App22 대시보드에 자동 편입 확인)·Markdown 리포트 다운로드까지 curl로 end-to-end 검증, `npm run build` 성공, 예시 파일 7종 모두 `dist/samples/kese-kit/`에 포함 확인. 테스트로 쌓인 히스토리는 신규 앱이라 전체 삭제해도 기존 데이터 손실이 없어 `DELETE /api/kese-kit/history`로 정리(알림 로그는 다른 앱들과 같은 공용 테이블이라 관행대로 그대로 둠). 이 세션은 Chrome 확장이 연결되지 않아 실제 브라우저 렌더링은 사용자 확인 필요
+
 ### 테스트 레인지 (`test-range/`)
 App 6/16/17을 실제 대상으로 테스트해볼 수 있는 로컬 전용 Docker Compose 스택 — "취약한 사이트/네트워크/서버/방화벽을 구성할 방법이 있는지 검토해달라"는 요청으로 신설. App 9(Pwn Lab)이 이미 Docker를 요구하므로 새 의존성은 아님. 전부 검증된 공식 이미지(또는 그 위의 커스텀 Dockerfile)만 사용.
 - **juice-shop** (`bkimminich/juice-shop`, 공식) — 포트 3000, App 6 대상
@@ -609,8 +622,8 @@ App 6/16/17을 실제 대상으로 테스트해볼 수 있는 로컬 전용 Dock
   - **검증**: 실제 Word(.docx, 문단+표 포함)/PDF(reportlab으로 생성)/Excel(.xlsx, 다중 셀) 테스트 파일을 만들어 추출 → App3(취약점 스캐너)·App2(피싱 탐지기)의 실제 분석 엔드포인트까지 이어지는 전체 파이프라인을 curl로 end-to-end 검증(Word 문서에 담긴 nmap 결과에서 vsftpd 백도어를 실제로 탐지, 피싱 이메일 텍스트를 SUSPICIOUS로 정확히 판정). `npm run build` 성공, 16개 페이지의 override-파라미터 패턴 일관성을 grep으로 재확인.
 - **사용 가이드**: 모든 페이지에 접이식 GuidePanel 포함
 - **네비게이션 바**: 전체 메뉴 + AI 실행 모드 배지(클릭해서 전환). **메뉴 구조 재편**(2026-09-06, "서버/네트워크/클라우드/보안장비/모의해킹/취약점분석/사고대응/포렌식 축으로 다시 고민해달라"는 요청): 기존 5그룹(탐지·분석/대응·생성/실습·CTF/조회/금융컴플라이언스)이 워크플로우 단계 기준이라 "탐지·분석" 하나에 15개 앱이 몰려 있던 것을, "대상"(서버/네트워크·보안장비/클라우드)과 "기능"(취약점분석/모의해킹/사고대응·포렌식)이라는 서로 다른 두 축이 섞여 있었다는 점을 짚고 8그룹(공통/서버/네트워크·보안장비/클라우드/취약점분석/모의해킹/사고대응·포렌식/금융 컴플라이언스)으로 재편. 대상이 뚜렷한 앱은 대상 축 그룹으로, IoC 분석기·CVE 조회처럼 대상이 없거나 방화벽 감사기처럼 여러 대상(네트워크+보안장비+클라우드)에 걸치는 도구는 "공통"/"취약점분석"으로 분리해 억지 분류를 피함. 폐쇄망/인터넷망 구분은 메뉴 축으로 만들지 않기로 함 — 이미 ModeSelector가 앱별 실행 모드를 런타임 배지로 보여주므로 메뉴까지 쪼개면 중복·불일치 우려가 있어, 대신 태생적으로 외부 인터넷이 필수인 3개 앱(CVE 조회/DNS 보안 점검/인프라 취약점 스캐너)에만 메뉴 항목 옆 🌐 배지(툴팁: "외부 인터넷 연결 필요")를 추가. `NavBar.jsx`의 `groups` 배열 재구성 + `requiresInternet` 플래그로 구현.
-- **히스토리 SQLite 영속화**: App 1(대시보드·실시간 모니터링 포함)/2/3/4/5/6/7/8/11/12/14/15/16/17/18/19/20/21/23(실제 모드만, `attack_monitor`)/24/25(`forensics_artifact_audit`/`forensics_collection`)의 분석 이력·상담 세션이 `backend/data/history.db`(SQLite, gitignore 대상)에 저장되어 서버 재시작에도 유지됨. 앱마다 저장 형태(단순 이력 리스트 vs 채팅 세션)가 달라도 `backend/services/db.py`의 범용 `app` 구분 단일 테이블(JSON 블롭)로 통일 처리 — `add_entry`/`get_history`/`get_entry`/`update_entry`/`clear_history` 5개 함수로 기존 `history: list[dict]`/`sessions: dict[int, dict]` 패턴을 그대로 대체함. **CTF/모의해킹 연습용 앱(App 9 Pwn/Reverse, App 10 Web CTF 아레나, App 13 모의 해킹 랩, App 25의 '실습 랩' 탭)은 서버 재시작 시 초기화되는 것이 의도된 동작이고, App 22(통합 리스크 대시보드)는 자체 결과가 없는 순수 집계 페이지, App 23의 시뮬레이션(데모) 탭 결과(`attack_monitor_demo`)는 별도 앱 이름으로는 저장되지만 실제 공격 이력이 아니라는 성격상 알림·App 22 집계 대상에서는 제외**됨
-- **알림 시스템**: 탐지형 앱 18개(대시보드·실시간모니터링/피싱/취약점/IoC/웹스캐너/인젝션탐지/모델감사/방화벽 정책 감사기/인프라 취약점 스캐너 의존성·네트워크/클라우드 IAM 정책 감사기/시크릿 스캐너/컨테이너·Dockerfile 감사기/DNS·이메일 보안 점검/실시간 공격 모니터링 & 대응 센터 실제 모드·AWS 샌드박스 모드/금융보안원 클라우드 CSP 평가/포렌식 아티팩트 감사기)가 각 앱 기준 최고 심각도(CRITICAL/MALICIOUS/INJECTION)로 판정하면 자동으로 Slack/이메일 알림을 시도함. `SLACK_WEBHOOK_URL` 또는 `SMTP_*`(`.env.example` 참고) 미설정 시 자동 Mock 모드로 동작 — 실제 전송 없이 알림 로그만 기록(다른 앱들의 Mock/Live 패턴과 동일). 알림 로그는 NavBar 우측 종(🔔) 아이콘 드롭다운에서 확인·삭제 가능(`GET/DELETE /api/alerts`, 20초 폴링). 상담형 앱(인시던트/위협분석)과 생성형 앱(정책생성기, 피싱 모의훈련 생성기)은 "위협 판정"이 아니라 대상에서 제외. CVE 조회(App 15)는 Claude AI 자체를 쓰지 않는 순수 조회 도구라 마찬가지로 제외, App 22(통합 리스크 대시보드)도 판정을 내리지 않는 집계 페이지라 제외. `backend/services/notify.py`, `backend/routers/alerts.py`. **n8n Push 연동** (2026-09-05): `N8N_WEBHOOK_URL` 환경변수를 설정하면 CRITICAL 알림 시 Slack/이메일과 별도로 구조화된 JSON(`{app, app_label, severity, summary, entry_id, created_at}`)을 n8n의 Webhook 트리거로도 전송 — 사람이 읽는 Slack/이메일 알림과 달리 n8n 쪽에서 그대로 조건 분기·필드 매핑해 Jira 티켓 생성 등 임의의 후속 자동화로 이어붙일 수 있음. Slack/SMTP 중 아무것도 없어도 `N8N_WEBHOOK_URL`만 있으면 Mock 모드에서 벗어남(`IS_MOCK`이 세 채널 중 하나라도 설정되면 false). 받는 쪽 예시 워크플로우는 `n8n-workflows/push-alert-webhook-receiver.json`(Webhook → 메시지 포맷 → Slack, 실제로는 Slack 자리에 원하는 자동화를 붙이면 됨) — `docs/n8n-integration.md` "8. n8n Push 연동" 참고. ⚠️ 알림 발송(urllib/smtplib)은 블로킹 호출이라 async 라우트에서 직접 기다리면 안 됨 — 실시간 모니터링 WebSocket에서 이미 겪은 함정과 같은 유형이라 `alert_if_critical()`이 내부적으로 `run_in_executor`로 스레드 위임함. 원래 7개 앱에서 Mock 데이터 조합으로 실제 CRITICAL을 트리거해 alerts 카운트 증가·비-CRITICAL 시 미증가·서버 재시작 후 유지까지 curl로 검증 완료(App 16/17/18/19/20/21은 각 앱 섹션에서 별도 검증)
+- **히스토리 SQLite 영속화**: App 1(대시보드·실시간 모니터링 포함)/2/3/4/5/6/7/8/11/12/14/15/16/17/18/19/20/21/23(실제 모드만, `attack_monitor`)/24/25(`forensics_artifact_audit`/`forensics_collection`)/26(`kese_kit_audit`)의 분석 이력·상담 세션이 `backend/data/history.db`(SQLite, gitignore 대상)에 저장되어 서버 재시작에도 유지됨. 앱마다 저장 형태(단순 이력 리스트 vs 채팅 세션)가 달라도 `backend/services/db.py`의 범용 `app` 구분 단일 테이블(JSON 블롭)로 통일 처리 — `add_entry`/`get_history`/`get_entry`/`update_entry`/`clear_history` 5개 함수로 기존 `history: list[dict]`/`sessions: dict[int, dict]` 패턴을 그대로 대체함. **CTF/모의해킹 연습용 앱(App 9 Pwn/Reverse, App 10 Web CTF 아레나, App 13 모의 해킹 랩, App 25의 '실습 랩' 탭)은 서버 재시작 시 초기화되는 것이 의도된 동작이고, App 22(통합 리스크 대시보드)는 자체 결과가 없는 순수 집계 페이지, App 23의 시뮬레이션(데모) 탭 결과(`attack_monitor_demo`)는 별도 앱 이름으로는 저장되지만 실제 공격 이력이 아니라는 성격상 알림·App 22 집계 대상에서는 제외**됨
+- **알림 시스템**: 탐지형 앱 19개(대시보드·실시간모니터링/피싱/취약점/IoC/웹스캐너/인젝션탐지/모델감사/방화벽 정책 감사기/인프라 취약점 스캐너 의존성·네트워크/클라우드 IAM 정책 감사기/시크릿 스캐너/컨테이너·Dockerfile 감사기/DNS·이메일 보안 점검/실시간 공격 모니터링 & 대응 센터 실제 모드·AWS 샌드박스 모드/금융보안원 클라우드 CSP 평가/포렌식 아티팩트 감사기/KISA 보안 가이드라인 종합 점검(KESE-KIT))가 각 앱 기준 최고 심각도(CRITICAL/MALICIOUS/INJECTION)로 판정하면 자동으로 Slack/이메일 알림을 시도함. `SLACK_WEBHOOK_URL` 또는 `SMTP_*`(`.env.example` 참고) 미설정 시 자동 Mock 모드로 동작 — 실제 전송 없이 알림 로그만 기록(다른 앱들의 Mock/Live 패턴과 동일). 알림 로그는 NavBar 우측 종(🔔) 아이콘 드롭다운에서 확인·삭제 가능(`GET/DELETE /api/alerts`, 20초 폴링). 상담형 앱(인시던트/위협분석)과 생성형 앱(정책생성기, 피싱 모의훈련 생성기)은 "위협 판정"이 아니라 대상에서 제외. CVE 조회(App 15)는 Claude AI 자체를 쓰지 않는 순수 조회 도구라 마찬가지로 제외, App 22(통합 리스크 대시보드)도 판정을 내리지 않는 집계 페이지라 제외. `backend/services/notify.py`, `backend/routers/alerts.py`. **n8n Push 연동** (2026-09-05): `N8N_WEBHOOK_URL` 환경변수를 설정하면 CRITICAL 알림 시 Slack/이메일과 별도로 구조화된 JSON(`{app, app_label, severity, summary, entry_id, created_at}`)을 n8n의 Webhook 트리거로도 전송 — 사람이 읽는 Slack/이메일 알림과 달리 n8n 쪽에서 그대로 조건 분기·필드 매핑해 Jira 티켓 생성 등 임의의 후속 자동화로 이어붙일 수 있음. Slack/SMTP 중 아무것도 없어도 `N8N_WEBHOOK_URL`만 있으면 Mock 모드에서 벗어남(`IS_MOCK`이 세 채널 중 하나라도 설정되면 false). 받는 쪽 예시 워크플로우는 `n8n-workflows/push-alert-webhook-receiver.json`(Webhook → 메시지 포맷 → Slack, 실제로는 Slack 자리에 원하는 자동화를 붙이면 됨) — `docs/n8n-integration.md` "8. n8n Push 연동" 참고. ⚠️ 알림 발송(urllib/smtplib)은 블로킹 호출이라 async 라우트에서 직접 기다리면 안 됨 — 실시간 모니터링 WebSocket에서 이미 겪은 함정과 같은 유형이라 `alert_if_critical()`이 내부적으로 `run_in_executor`로 스레드 위임함. 원래 7개 앱에서 Mock 데이터 조합으로 실제 CRITICAL을 트리거해 alerts 카운트 증가·비-CRITICAL 시 미증가·서버 재시작 후 유지까지 curl로 검증 완료(App 16/17/18/19/20/21은 각 앱 섹션에서 별도 검증)
 - **n8n 자동화 연동**: 모든 앱이 이미 REST API(`/api/*`)로 노출돼 있어 n8n의 HTTP Request 노드가 코드 수정 없이 그대로 호출 가능. `docs/n8n-integration.md`에 연동 방법 + 자동화용 엔드포인트 요약, `n8n-workflows/`에 바로 Import 가능한 예제 워크플로우 5개(알림 폴링→Slack, CVE 일일 감시→Slack, IoC 일괄분석 Webhook, App 23 리포트→Slack, App 23→Notion 누적) 제공. 이와 함께 백엔드를 로컬 밖으로 노출하는 경우를 대비해 선택적 API 키 인증(`API_KEY` 환경변수, 미설정 시 기존과 동일하게 인증 없음)을 `backend/services/auth.py` + `main.py`(`/api/*` 라우터 전체에 `Depends`)로 추가 — `/api/mode`는 헬스체크 목적으로 예외. `API_KEY` 미설정/오설정/정설정 3가지 케이스와 IoC 분석·alerts 응답 필드가 예제 워크플로우 가정과 일치하는지 curl로 검증 완료. CVE 검색 예제는 이 세션 네트워크 제한으로 NVD 실호출까지는 못 했으나 `cve_lookup_service.search_cves()` 응답 스키마 확인으로 대체함. ⚠️ `API_KEY`를 켜면 프론트엔드 요청도 헤더가 없어 401을 받게 되므로(가이드에 고지), n8n 전용으로 켜거나 프론트 프록시에 헤더 주입을 추가해야 함(미착수)
 - **n8n Slack 알림 채널 마이그레이션** (2026-09-04, 사용자의 실제 로컬 n8n 인스턴스 `localhost:5678` 대상 작업): 기존에 예제 워크플로우들이 사용자의 다른 용도 채널 `자동-매매`로 Slack 알림을 보내고 있어, 전용 채널 `#ai-security-suite`(신규 생성)로 이전함.
   - `alerts-polling-to-slack` → n8n에 기존에 Import돼 있던 워크플로우의 Slack 노드 채널만 교체
@@ -647,6 +660,7 @@ App 6/16/17을 실제 대상으로 테스트해볼 수 있는 로컬 전용 Dock
 - [x] **실시간 공격 모니터링 & 대응 센터**: App 23 (`/attack-monitor`)로 구현됨 — "외부 공격을 계속 모니터링하고 대응하는 프로그램" 요청으로 신설, Roadmap 사전 목록에는 없던 앱(App 13/18처럼 세션 중 요청으로 추가된 사례). App 1의 데모용 합성 로그 한계를 넘어 이 PC의 실제 Windows 보안 신호를 모니터링하고, 탐지에 그치지 않고 이벤트별 대응 제안까지 제공하는 이 프로젝트 최초의 "탐지+대응" 결합 앱
 - [x] **금융보안원 클라우드 CSP 평가**: App 24 (`/fsi-csp-audit`)로 구현됨 — "n8n/Slack/Notion 연동 + 금융보안원 CSP 평가 앱 추가"라는 한 요청의 세 번째 항목으로 신설, 사용자 지시대로 기존 메뉴 그룹과 분리된 새 상단 메뉴 그룹("금융 컴플라이언스")으로 구성. Roadmap 사전 목록에 없던 앱이자, 이 프로젝트 최초로 특정 국내 규제기관(금융보안원)의 공개 프레임워크 구조를 WebSearch/WebFetch로 조사해 반영한 앱
 - [x] **포렌식 실습·분석 센터**: App 25 (`/forensics`)로 구현됨 — 메뉴를 8개 도메인/기능 그룹으로 재편하는 과정에서 "사고대응·포렌식" 그룹에 포렌식 전용 앱이 없다는 공백을 발견해 신설. Roadmap 사전 목록에 없던 앱이자, "실습 랩/아티팩트 감사기/증거 수집 도구" 세 방향을 사용자가 하나의 앱으로 조합해달라고 선택한 첫 사례(App 9/16/23의 세 가지 서로 다른 패턴을 포렌식 도메인에 재조합)
+- [x] **KISA 보안 가이드라인 종합 점검 (KESE-KIT)**: App 26 (`/kese-kit`)로 구현됨 — "github.com/cdppcorp/KESE-KIT 스킬을 가져와서 반영해달라"는 요청으로 신설. KESE-KIT은 KISA 공개 가이드라인 기반 오픈소스 Claude Code 플러그인(7개 영역: CII/AI보안/로봇보안/우주보안/시큐어코딩/제로트러스트/SW공급망)인데, AskUserQuestion으로 "플러그인 설치가 아니라 웹앱 기능으로, 7개 영역 전부"를 확인받아 App 24(금융보안원 CSP 평가)의 "평가 유형 여러 개를 한 앱에서 선택" 패턴을 7개로 확장해 구현. Roadmap 사전 목록에 없던 앱이자, 외부 오픈소스 프로젝트의 분류 체계를 가져와 반영한 첫 사례
 
 ### 외부 자동화 연동
 - [x] **n8n 연동 (Pull: n8n → 이 앱)**: 위 "공통 기능"의 n8n 자동화 연동 항목, `docs/n8n-integration.md` 참고
@@ -706,7 +720,8 @@ test_AI_security/
 │   │   ├── attack_monitor.py  ← App 23 (/exposure, /ws?mode=real|simulate, /history, /report/{id})
 │   │   ├── fsi_csp_audit.py   ← App 24 (+ /guide, /report/{id})
 │   │   ├── extract.py         ← 공용 파일 업로드→텍스트 추출 (POST /api/extract-text, Word/PDF/Excel/텍스트)
-│   │   └── forensics.py       ← App 25 (/lab/*, /audit/*, /collection/*)
+│   │   ├── forensics.py       ← App 25 (/lab/*, /audit/*, /collection/*)
+│   │   └── kese_kit.py        ← App 26 (+ /guide, /report/{id})
 │   └── services/
 │       ├── claude_service.py  ← App 1 (+ log_offline_engine.py 폐쇄망 규칙 기반 로그 분석)
 │       ├── mock_data.py
@@ -744,7 +759,8 @@ test_AI_security/
 │       ├── fsi_csp_audit_service.py / mock_fsi_csp_audit.py / fsi_csp_audit_guide.py / fsi_csp_audit_offline_engine.py  ← App 24
 │       ├── forensics_lab.py  ← App 25 '실습 랩' 탭 (SQLite/pcap/ZIP 실제 파일 생성, AI 미사용)
 │       ├── forensics_audit_service.py / mock_forensics_audit.py / forensics_audit_guide.py / forensics_audit_offline_engine.py  ← App 25 '아티팩트 감사기' 탭
-│       └── forensics_collection_service.py  ← App 25 '증거 수집 도구' 탭 (PowerShell 실제 수집 + chain of custody, AI 미사용)
+│       ├── forensics_collection_service.py  ← App 25 '증거 수집 도구' 탭 (PowerShell 실제 수집 + chain of custody, AI 미사용)
+│       └── kese_kit_service.py / mock_kese_kit.py / kese_kit_guide.py / kese_kit_offline_engine.py  ← App 26
 └── frontend/
     ├── package.json
     └── src/
@@ -784,7 +800,8 @@ test_AI_security/
             ├── RiskDashboard.jsx
             ├── AttackMonitor.jsx
             ├── FsiCspAudit.jsx
-            └── Forensics.jsx
+            ├── Forensics.jsx
+            └── KeseKit.jsx
 ```
 
 ## 실행 방법
@@ -814,7 +831,7 @@ npm run dev
 
 | 페이지/기능 | 추가로 필요한 것 |
 |---|---|
-| `/vuln`, `/web-arena`, `/policy`, `/model-audit`, `/pentest-lab`, `/phishing-sim`, `/firewall-audit`, `/iam-audit`, `/secret-scan`, `/container-audit`, `/risk-dashboard` | 없음 — 서버 두 개만 켜면 바로 테스트 가능 |
+| `/vuln`, `/web-arena`, `/policy`, `/model-audit`, `/pentest-lab`, `/phishing-sim`, `/firewall-audit`, `/iam-audit`, `/secret-scan`, `/container-audit`, `/risk-dashboard`, `/kese-kit` | 없음 — 서버 두 개만 켜면 바로 테스트 가능 |
 | `/forensics`의 "실습 랩" 탭 | 챌린지 다운로드/flag 검증 자체는 서버 두 개만 켜면 바로 가능. 분석에 Python(이미 필요) 외 pcap 챌린지는 Wireshark(권장, 없어도 PowerShell로 대체 가능), 카빙 챌린지는 정석대로 하려면 binwalk(선택, 없어도 확장자만 바꿔 열면 됨) |
 | `/forensics`의 "증거 수집 도구" 탭 — 이 PC(Windows) | Windows + PowerShell 필수(App 23과 동일). Prefetch 파일 목록 조회는 관리자 권한이 필요할 수 있음(없으면 chain of custody에 실패로 기록됨) |
 | `/forensics`의 "증거 수집 도구" 탭 — 원격 SSH(Linux/macOS/네트워크 장비) | `backend/requirements.txt`의 `paramiko`(pip install 대상 — 서버 재시작 필요). 대상 시스템에 SSH 접속 가능해야 하고, 네트워크 장비는 명령 1개만 자동 실행되므로 실패 시 아티팩트 감사기 가이드의 수동 명령 사용 |
@@ -869,6 +886,7 @@ API 키 없으면 Mock 모드로 자동 동작. 알림 관련 변수도 하나�
 
 ## 대기 중인 작업
 
+- App 26(KISA 보안 가이드라인 종합 점검, KESE-KIT)의 실제 브라우저 렌더링 — 이 세션은 Chrome 확장이 연결되지 않아 백엔드 curl(`/guide`·`/analyze` 오프라인 모드 cii/secure_coding·CRITICAL 알림·리포트)과 `npm run build`로만 검증함. 7개 평가 유형 버튼 전환, 예시 파일 다운로드 링크, 제로트러스트 `maturity_level` 배지 렌더링은 사용자가 브라우저에서 직접 확인 필요
 - App 25(포렌식 실습·분석 센터)의 실제 브라우저 렌더링 — **완료** (2026-09-06, Chrome 확장 연결 후 Claude in Chrome으로 3탭 전부 end-to-end 확인. App 25 섹션의 "실제 브라우저 검증 완료" 참고)
 - App 25 증거 수집 도구의 SSH 원격 수집·클라우드 CLI 수집 실제 성공 경로(happy path) 검증 — 이 세션 환경에 SSH 서버(WSL Ubuntu 설치 중)나 클라우드 CLI(aws/az/gcloud 전부 미설치)가 없어 연결 실패 경로(타임아웃, CLI 미설치)만 실제 브라우저에서까지 확인함. 사용자가 실제 Linux/macOS 서버(SSH) 또는 인증된 클라우드 CLI 환경에서 "연결 테스트"·"지금 수집"으로 성공 경로 확인 필요. 네트워크 장비(Cisco/Fortinet/Palo Alto/Juniper) SSH 자동 수집은 실제 장비가 없어 전혀 검증하지 못했고, 장비 펌웨어에 따라 아예 동작하지 않을 수 있음(App 25 섹션의 "SSH 원격 수집 + 클라우드 CLI 수집" 참고)
 - App 23 원격 대상 모니터링(WinRM)의 실제 원격 PC 대상 end-to-end 검증 — 이 세션 환경에 WinRM이 설정된 두 번째 PC가 없어 코드 레벨(연결 실패 두 경로+특수문자 자격증명 이스케이프)까지만 검증함. 사용자가 실제 대상 PC에서 `Enable-PSRemoting -Force` 실행 후 앱에서 "연결 테스트"로 확인 필요. 상세는 App 23 섹션의 "원격 대상 모니터링 (WinRM)" 참고

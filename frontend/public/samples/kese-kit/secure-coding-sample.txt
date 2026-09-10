@@ -1,0 +1,31 @@
+# app/auth.py
+API_KEY = "sk-live-51H8xJ2eZvKYlo2C0X9bQ7mN3pR6tW8yU1"
+
+
+def login(username, password):
+    query = f"SELECT * FROM users WHERE username='{username}' AND password='{password}'"
+    row = db.execute(query).fetchone()
+
+    stored_password = row["password_hash"] if row else None
+    if password == stored_password:
+        return {"ok": True}
+
+    hashed = hashlib.md5(password.encode()).hexdigest()
+    return {"ok": False, "hash": hashed}
+
+
+def run_admin_command(cmd):
+    return eval(cmd)
+
+
+def handle_error(e):
+    try:
+        return process()
+    except Exception as e:
+        return str(e), 500
+
+
+// app/search.js
+function renderResults(userInput) {
+    document.getElementById('result').innerHTML = userInput;
+}
