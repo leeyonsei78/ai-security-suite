@@ -17,6 +17,30 @@ const MODE_BADGE = {
   mock:    { icon: FlaskConical, label: 'Mock 데모 데이터 (학습용, 실제 분석 아님)', color: 'text-slate-400', bg: 'bg-slate-500/10 border-slate-500/30' },
 }
 
+// 백엔드 kese_kit_offline_engine.py의 _ASSESSMENT_TYPE_SIGNATURES와 동일한 목록 유지 —
+// 평가 유형을 잘못 고르면 findings 개수는 비슷해도 내용이 완전히 엉뚱해지므로(예: CII 텍스트를
+// AI 보안으로 분석하면 "학습 데이터 언급 없음" 같은 무관한 항목이 나옴) 제출 전에 미리 알려준다.
+const ASSESSMENT_TYPE_SIGNATURES = {
+  cii: [/기반시설|SCADA|\bICS\b|국가\s*안보|PermitRootLogin|sshd_config|vsftpd|nginx\.conf/i],
+  ai_security: [/AI\s*모델|학습\s*데이터|추론|\bLLM\b|프롬프트|적대적\s*예제|모델\s*드리프트/i],
+  robot_security: [/로봇|액추에이터|\bRTOS\b|로보틱스|\brobot\b/i],
+  space_security: [/위성|지상국|궤도|우주|원격측정|telemetry|ground\s*station/i],
+  secure_coding: [/SELECT\s+.+\bFROM\b/i, /<script[\s>]/i, /\b(eval|exec)\s*\(/i, /hashlib\.(md5|sha1)\(|\bmd5\(/i],
+  zero_trust: [/제로트러스트|zero\s*trust|마이크로\s*세그먼트|지속적\s*검증|least\s*privilege/i],
+  supply_chain: [/SBOM|공급망\s*보안|빌드\s*파이프라인|타사\s*라이브러리|dependency\s*scan/i],
+}
+
+function detectAssessmentTypeMismatch(assessmentType, content) {
+  if (!content?.trim()) return null
+  const own = ASSESSMENT_TYPE_SIGNATURES[assessmentType] ?? []
+  if (own.some(rx => rx.test(content))) return null
+  for (const [otherType, patterns] of Object.entries(ASSESSMENT_TYPE_SIGNATURES)) {
+    if (otherType === assessmentType) continue
+    if (patterns.some(rx => rx.test(content))) return otherType
+  }
+  return null
+}
+
 const TYPE_ORDER = ['cii', 'ai_security', 'robot_security', 'space_security', 'secure_coding', 'zero_trust', 'supply_chain']
 const TYPE_ICONS = {
   cii: Building2,
@@ -287,6 +311,28 @@ export default function KeseKit() {
                 className="w-full bg-slate-800 border border-slate-600 rounded-xl p-4 text-sm font-mono resize-none focus:outline-none focus:border-teal-500 placeholder-slate-600"
               />
               <p className="text-[10px] text-slate-600 mt-1">{meta?.input_hint}</p>
+              {(() => {
+                const mismatchType = detectAssessmentTypeMismatch(assessmentType, content)
+                if (!mismatchType) return null
+                const currentLabel = guide?.assessment_types?.[assessmentType]?.label ?? assessmentType
+                const suggestedLabel = guide?.assessment_types?.[mismatchType]?.label ?? mismatchType
+                return (
+                  <div className="mt-2 bg-amber-950/30 border border-amber-500/30 rounded-xl p-3 flex items-start gap-2">
+                    <AlertTriangle size={14} className="text-amber-400 shrink-0 mt-0.5" />
+                    <div className="text-xs text-amber-200 leading-relaxed">
+                      선택된 평가 유형은 <b>{currentLabel}</b>인데 내용은 <b>{suggestedLabel}</b>에 더 가까워 보입니다 —
+                      유형을 잘못 고르면 findings 개수는 비슷해도 내용이 실제 문제와 무관해질 수 있습니다.{' '}
+                      <button
+                        type="button"
+                        onClick={() => setAssessmentType(mismatchType)}
+                        className="underline font-semibold hover:text-amber-100"
+                      >
+                        유형을 '{suggestedLabel}'(으)로 변경
+                      </button>
+                    </div>
+                  </div>
+                )
+              })()}
             </div>
 
             <div>

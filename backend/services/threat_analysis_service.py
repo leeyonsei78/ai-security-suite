@@ -88,9 +88,17 @@ _CHAT_OFFLINE_NOTICE = (
 )
 _MODE_LABEL = {"offline": "오프라인 규칙 기반(폐쇄망)", "mock": "Mock 데모"}
 
+_TYPE_MISMATCH_NOTE = """
+
+If the given data clearly looks like a different kind of artifact than what this analysis type expects
+(e.g. this is the "forensics" analyzer but the data is obviously malware sample behavior, or vice versa),
+say so plainly in Korean at the start of the summary (e.g. "⚠️ 선택하신 분석 유형(포렌식 아티팩트)과
+입력 내용(악성코드 분석으로 보임)이 일치하지 않는 것 같습니다 — 유형을 다시 확인하세요.") before
+proceeding with the analysis for the given type."""
+
 
 def _real_analyze(analysis_type: str, input_data: str, context: str, backend: str = "cloud") -> dict:
-    prompt = _PROMPTS.get(analysis_type, _PROMPTS["malware"])
+    prompt = _PROMPTS.get(analysis_type, _PROMPTS["malware"]) + _TYPE_MISMATCH_NOTE
     user_content = f"Context: {context}\n\nSample/Artifact Data:\n{input_data}" if context else f"Sample/Artifact Data:\n{input_data}"
 
     if backend == "local":

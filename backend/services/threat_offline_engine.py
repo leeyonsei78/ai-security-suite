@@ -242,10 +242,59 @@ _ANALYZERS = {
     "threat_intel": _analyze_threat_intel,
 }
 
+# 4개 분석 유형이 서로 완전히 다른 분석기로 매핑되어 있어, 유형을 잘못 선택하면 대부분의
+# 탐지가 조용히 누락된다 — 실제로 프로세스 인젝션+C2+인코딩된 PowerShell이 담긴 악성코드
+# 설명을 "포렌식"으로 잘못 선택해 분석하면 MITRE 기법 3건이 0건, threat_level이 HIGH에서
+# LOW로 떨어지는(실제로는 위험한데 안전하다고 오인하게 만드는) 것을 실측으로 확인함.
+_ANALYSIS_TYPE_LABELS = {
+    "malware": "악성코드 분석", "forensics": "포렌식 아티팩트", "memory": "메모리 포렌식", "threat_intel": "위협 인텔리전스",
+}
+_ANALYSIS_TYPE_SIGNATURES = {
+    "malware": (
+        r"malware|trojan|ransomware|backdoor|악성코드|트로이|랜섬웨어|백도어",
+        r"keylog|키로깅|clipboard|클립보드|screen\s*capture|화면\s*캡처",
+        r"\bc2\b|command\s*and\s*control|payload|dropper",
+    ),
+    "forensics": (
+        r"\beventid\s*\d+", r"이벤트\s*로그", r"prefetch", r"레지스트리\s*키", r"브라우저\s*히스토리|browser\s*history",
+    ),
+    "memory": (
+        r"\bpslist\b", r"\bpstree\b", r"\bnetscan\b", r"\bvolatility\b", r"\bmalfind\b", r"\bdlllist\b",
+    ),
+    "threat_intel": (
+        r"\bioc\b", r"\bttp\b", r"threat\s*actor|위협\s*행위자", r"\bapt\d*\b", r"campaign|캠페인", r"\bosint\b",
+    ),
+}
+_ANALYSIS_TYPE_SIGNATURES_RE = {
+    t: [re.compile(p, re.I) for p in pats] for t, pats in _ANALYSIS_TYPE_SIGNATURES.items()
+}
+
+
+def _detect_analysis_type_mismatch(text: str, analysis_type: str) -> str | None:
+    if not text.strip():
+        return None
+    own_patterns = _ANALYSIS_TYPE_SIGNATURES_RE.get(analysis_type, [])
+    if any(p.search(text) for p in own_patterns):
+        return None
+    for other_type, patterns in _ANALYSIS_TYPE_SIGNATURES_RE.items():
+        if other_type == analysis_type:
+            continue
+        if any(p.search(text) for p in patterns):
+            return (
+                f"⚠️ 선택하신 분석 유형은 '{_ANALYSIS_TYPE_LABELS.get(analysis_type, analysis_type)}'인데, "
+                f"입력 내용은 '{_ANALYSIS_TYPE_LABELS.get(other_type, other_type)}'처럼 보입니다 — "
+                "유형을 잘못 선택하면 대부분의 탐지 규칙이 실행되지 않아 실제 위협을 놓칠 수 있습니다. "
+                "유형을 다시 확인하세요."
+            )
+    return None
+
 
 def analyze_offline(analysis_type: str, input_data: str, context: str) -> dict:
     analyzer = _ANALYZERS.get(analysis_type, _analyze_malware)
     text = f"{context}\n{input_data}" if context else input_data
     result = analyzer(text)
+    mismatch_warning = _detect_analysis_type_mismatch(text, analysis_type)
+    if mismatch_warning:
+        result["summary"] = f"{mismatch_warning} {result.get('summary', '')}"
     result["engine_note"] = ENGINE_DISCLAIMER
     return result

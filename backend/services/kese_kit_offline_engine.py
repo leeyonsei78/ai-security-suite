@@ -196,10 +196,57 @@ _CHECKERS = {
     "supply_chain": _check_supply_chain,
 }
 
+# 7개 평가 유형이 서로 완전히 다른 검사기로 매핑되어 있는데, 이 앱의 검사는 대부분 "특정
+# 키워드가 없으면 미비로 표시"하는 방식이라(App3/7/12처럼 아예 탐지가 0건이 되는 게 아니라)
+# 유형을 잘못 고르면 findings 개수는 비슷하게 나오지만 내용이 완전히 엉뚱해진다 — 실제로
+# SSH root 로그인 허용+Telnet+0.0.0.0/0 노출이 담긴 CII 텍스트를 "ai_security"로 잘못 선택해
+# 분석하면 "학습 데이터 검증 언급 없음" 같은 무관한 항목 4건이 나오고 실제 CRITICAL 노출은
+# 전혀 언급되지 않으며 위험도가 MEDIUM으로 낮게 나오는 것을 실측으로 확인함 — 조용히 틀린
+# 결과라 오히려 findings가 0건인 경우보다 알아채기 어렵다.
+_ASSESSMENT_TYPE_LABELS = {
+    "cii": "주요정보통신기반시설(CII)", "ai_security": "AI 보안", "robot_security": "로봇 보안",
+    "space_security": "우주 보안", "secure_coding": "시큐어코딩", "zero_trust": "제로트러스트",
+    "supply_chain": "SW 공급망 보안",
+}
+_ASSESSMENT_TYPE_SIGNATURES = {
+    "cii": (r"기반시설|SCADA|\bICS\b|국가\s*안보|PermitRootLogin|sshd_config|vsftpd|nginx\.conf",),
+    "ai_security": (r"AI\s*모델|학습\s*데이터|추론|\bLLM\b|프롬프트|적대적\s*예제|모델\s*드리프트",),
+    "robot_security": (r"로봇|액추에이터|\bRTOS\b|로보틱스|\brobot\b",),
+    "space_security": (r"위성|지상국|궤도|우주|원격측정|telemetry|ground\s*station",),
+    "zero_trust": (r"제로트러스트|zero\s*trust|마이크로\s*세그먼트|지속적\s*검증|least\s*privilege",),
+    "supply_chain": (r"SBOM|공급망\s*보안|빌드\s*파이프라인|타사\s*라이브러리|dependency\s*scan",),
+}
+_ASSESSMENT_TYPE_SIGNATURES_RE = {
+    t: [re.compile(p, re.I) for p in pats] for t, pats in _ASSESSMENT_TYPE_SIGNATURES.items()
+}
+# secure_coding은 이미 컴파일된 정규식(App3 vuln_offline_engine에서 그대로 가져온 것)을 재사용 —
+# .pattern으로 문자열만 뽑아 다시 컴파일하면 원본 플래그가 소실될 수 있어 객체를 그대로 쓴다.
+_ASSESSMENT_TYPE_SIGNATURES_RE["secure_coding"] = [_SQL_FSTRING_RE, _SQL_CONCAT_RE, _XSS_RE, _EVAL_EXEC_RE, _WEAK_HASH_RE]
+
+
+def _detect_assessment_type_mismatch(content: str, assessment_type: str) -> str | None:
+    if not content.strip():
+        return None
+    own_patterns = _ASSESSMENT_TYPE_SIGNATURES_RE.get(assessment_type, [])
+    if any(p.search(content) for p in own_patterns):
+        return None
+    for other_type, patterns in _ASSESSMENT_TYPE_SIGNATURES_RE.items():
+        if other_type == assessment_type:
+            continue
+        if any(p.search(content) for p in patterns):
+            return (
+                f"⚠️ 선택하신 평가 유형은 '{_ASSESSMENT_TYPE_LABELS.get(assessment_type, assessment_type)}'인데, "
+                f"내용은 '{_ASSESSMENT_TYPE_LABELS.get(other_type, other_type)}'에 더 가까워 보입니다 — "
+                "유형을 잘못 선택하면 findings 개수는 비슷해도 내용이 실제 문제와 무관해질 수 있습니다. "
+                "유형을 다시 확인하세요."
+            )
+    return None
+
 
 def analyze_offline(assessment_type: str, content: str, context: str) -> dict:
     checker = _CHECKERS.get(assessment_type, _check_cii)
     findings = checker(content)
+    mismatch_warning = _detect_assessment_type_mismatch(content, assessment_type)
 
     if not findings:
         summary = "규칙 기반 오프라인 분석에서 사전 정의된 위험 키워드/패턴이 발견되지 않았습니다. 이 엔진이 모르는 문제는 놓칠 수 있습니다."
@@ -216,6 +263,9 @@ def analyze_offline(assessment_type: str, content: str, context: str) -> dict:
         else:
             summary = f"규칙 기반 오프라인 분석에서 총 {len(findings)}건의 개선 사항이 발견됐습니다."
             overall_risk = "MEDIUM"
+
+    if mismatch_warning:
+        summary = f"{mismatch_warning} {summary}"
 
     return {
         "summary": summary,

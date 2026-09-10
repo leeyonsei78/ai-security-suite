@@ -56,6 +56,13 @@ Respond ONLY with valid JSON in this exact structure:
 
 Risk score guide: 80-100 critical, 60-79 high, 30-59 medium, 0-29 low.
 Sort findings by severity (CRITICAL first).
+
+If the given "input_type" clearly does not match the actual shape of the content (e.g. input_type is
+"tools" but the content is obviously a natural-language system prompt, or vice versa), say so plainly
+in Korean at the start of the summary (e.g. "⚠️ 선택하신 입력 유형(도구 정의)과 실제 내용(시스템
+프롬프트로 보임)이 일치하지 않는 것 같습니다 — 입력 유형을 다시 확인하세요.") before proceeding
+with the audit for the given input_type.
+
 Respond in Korean for all natural-language fields."""
 
 

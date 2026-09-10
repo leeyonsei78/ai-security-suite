@@ -35,6 +35,25 @@ const INPUT_TYPES = [
   { id: 'tools', icon: Wrench, label: '도구(Function calling) 정의' },
 ]
 
+// 백엔드 model_audit_offline_engine.py의 _INPUT_TYPE_SIGNATURES와 동일한 목록 유지 —
+// 입력 유형을 잘못 고르면 대부분의 탐지 규칙이 조용히 안 돌아가므로, 제출 전에 미리 알려준다.
+const INPUT_TYPE_SIGNATURES = {
+  system_prompt: [/you\s+are\b/i, /당신은/, /너는\s/, /역할\s*[:：]/, /assistant\b/i, /시스템\s*프롬프트/],
+  config: [/"?(?:rate_limit|max_tokens|temperature|api_key)"?\s*[:=]/i, /"model"\s*:/],
+  tools: [/"parameters"\s*:/, /"function"\s*:/, /"name"\s*:\s*"[^"]*(shell|exec|command|read_?file|transfer|send_?email)/i],
+}
+
+function detectInputTypeMismatch(inputType, content) {
+  if (!content?.trim()) return null
+  const own = INPUT_TYPE_SIGNATURES[inputType] ?? []
+  if (own.some(rx => rx.test(content))) return null
+  for (const [otherType, patterns] of Object.entries(INPUT_TYPE_SIGNATURES)) {
+    if (otherType === inputType) continue
+    if (patterns.some(rx => rx.test(content))) return otherType
+  }
+  return null
+}
+
 const INPUT_TYPE_INFO = {
   system_prompt: {
     meaning: 'AI 챗봇/에이전트에게 대화 시작 시 주어지는 "역할 지시문"입니다 — 사용자에게는 보이지 않지만 모델의 답변 방식·제약을 규정하는 숨겨진 지침입니다.',
@@ -229,6 +248,29 @@ export default function ModelAudit() {
               rows={14}
               className="w-full bg-slate-800 border border-slate-600 rounded-xl p-4 text-sm font-mono resize-none focus:outline-none focus:border-violet-500 placeholder-slate-600"
             />
+
+            {(() => {
+              const mismatchType = detectInputTypeMismatch(inputType, content)
+              if (!mismatchType) return null
+              const currentLabel = INPUT_TYPES.find(t => t.id === inputType)?.label ?? inputType
+              const suggestedLabel = INPUT_TYPES.find(t => t.id === mismatchType)?.label ?? mismatchType
+              return (
+                <div className="bg-amber-950/30 border border-amber-500/30 rounded-xl p-3 flex items-start gap-2">
+                  <AlertTriangle size={14} className="text-amber-400 shrink-0 mt-0.5" />
+                  <div className="text-xs text-amber-200 leading-relaxed">
+                    선택된 입력 유형은 <b>{currentLabel}</b>인데 내용은 <b>{suggestedLabel}</b>처럼 보입니다 —
+                    유형을 잘못 고르면 대부분의 탐지 규칙이 실행되지 않아 실제 문제를 놓칠 수 있습니다.{' '}
+                    <button
+                      type="button"
+                      onClick={() => setInputType(mismatchType)}
+                      className="underline font-semibold hover:text-amber-100"
+                    >
+                      유형을 '{suggestedLabel}'(으)로 변경
+                    </button>
+                  </div>
+                </div>
+              )
+            })()}
 
             <button
               onClick={() => analyze()}

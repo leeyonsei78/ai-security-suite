@@ -242,10 +242,43 @@ def _audit_tools(content: str) -> tuple[list[dict], dict]:
 
 _AUDITORS = {"system_prompt": _audit_system_prompt, "config": _audit_config, "tools": _audit_tools}
 
+# 3개 입력 유형이 서로 다른 감사기로 매핑되어 있어, 유형을 잘못 선택하면 대부분의 탐지 규칙이
+# 조용히 누락된다(내부 URL+Stripe 키가 담긴 시스템 프롬프트를 "도구 정의"로 잘못 선택해 분석하면
+# 3건 중 2건이 사라지는 것을 실측으로 확인함) — App 3/7과 동일한 유형의 안전장치.
+_INPUT_TYPE_LABELS = {"system_prompt": "시스템 프롬프트", "config": "API·앱 설정", "tools": "도구 정의"}
+_INPUT_TYPE_SIGNATURES = {
+    "system_prompt": (r"you\s+are\b|당신은|너는\s|역할\s*[:：]|assistant\b|시스템\s*프롬프트",),
+    "config": (r'"?(?:rate_limit|max_tokens|temperature|api_key)"?\s*[:=]', r'"model"\s*:'),
+    "tools": (r'"parameters"\s*:', r'"function"\s*:', r'"name"\s*:\s*"[^"]*(shell|exec|command|read_?file|transfer|send_?email)'),
+}
+_INPUT_TYPE_SIGNATURES_RE = {
+    t: [re.compile(p, re.I) for p in pats] for t, pats in _INPUT_TYPE_SIGNATURES.items()
+}
+
+
+def _detect_input_type_mismatch(content: str, input_type: str) -> str | None:
+    if not content.strip():
+        return None
+    own_patterns = _INPUT_TYPE_SIGNATURES_RE.get(input_type, [])
+    if any(p.search(content) for p in own_patterns):
+        return None
+    for other_type, patterns in _INPUT_TYPE_SIGNATURES_RE.items():
+        if other_type == input_type:
+            continue
+        if any(p.search(content) for p in patterns):
+            return (
+                f"⚠️ 선택하신 입력 유형은 '{_INPUT_TYPE_LABELS.get(input_type, input_type)}'인데, "
+                f"내용은 '{_INPUT_TYPE_LABELS.get(other_type, other_type)}'처럼 보입니다 — "
+                "입력 유형을 잘못 선택하면 대부분의 탐지 규칙이 실행되지 않아 실제 문제를 놓칠 수 있습니다. "
+                "유형을 다시 확인하세요."
+            )
+    return None
+
 
 def analyze_offline(content: str, input_type: str = "system_prompt") -> dict:
     auditor = _AUDITORS.get(input_type, _audit_system_prompt)
     findings, exposure = auditor(content)
+    mismatch_warning = _detect_input_type_mismatch(content, input_type)
 
     findings.sort(key=lambda f: _SEV_RANK.get(f["severity"], 9))
     for i, f in enumerate(findings, start=1):
@@ -272,6 +305,8 @@ def analyze_offline(content: str, input_type: str = "system_prompt") -> dict:
         if counts["CRITICAL"] else
         f"규칙 기반 오프라인 분석에서 총 {len(findings)}건의 사항이 발견됐습니다."
     )
+    if mismatch_warning:
+        summary = f"{mismatch_warning} {summary}"
 
     return {
         "risk_score": risk_score,

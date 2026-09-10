@@ -376,10 +376,47 @@ _ANALYZERS = {
     "memory": _analyze_memory,
 }
 
+# 4개 입력 유형이 서로 완전히 다른 분석기로 매핑되어 있어(포트 스캔 결과에는 코드 분석기의
+# SQLi/XSS 정규식이 전혀 매칭되지 않는 식), 유형을 잘못 선택하면 경고 없이 대부분의 탐지가
+# 조용히 누락된다 — 실제로 vsftpd 백도어가 담긴 nmap 결과를 "코드"로 잘못 선택해 분석하면
+# 3건 중 2건(포트 관련 탐지)이 그냥 사라지는 것을 실측으로 확인함. 붙여넣은 텍스트가 선택한
+# 유형과 다른 형식처럼 보이면 최소한 경고라도 하기 위한 안전장치.
+_INPUT_TYPE_LABELS = {"portscan": "포트 스캔", "config": "설정 파일", "code": "코드", "memory": "메모리 덤프"}
+_INPUT_TYPE_SIGNATURES = {
+    "portscan": (r"\bnmap\b", r"PORT\s+STATE\s+SERVICE", r"\d{1,5}/(?:tcp|udp)\s+(?:open|closed|filtered)"),
+    "config": (r"\bserver\s*\{", r"^\s*Listen\s+\d", r"PermitRootLogin", r"^\s*location\s+/", r"^\s*\w+\s+\w+;\s*$"),
+    "code": (r"\bdef\s+\w+\s*\(", r"\bfunction\s+\w+\s*\(", r"^\s*(?:import|from)\s+\w", r"SELECT\s+.+\bFROM\b",
+              r"<script[\s>]", r"\bclass\s+\w+"),
+    "memory": (r"\bEPROCESS\b", r"\bpslist\b", r"\bPPID\b", r"\bvolatility\b", r"\bcmdline\b"),
+}
+_INPUT_TYPE_SIGNATURES_RE = {
+    t: [re.compile(p, re.I | re.M) for p in pats] for t, pats in _INPUT_TYPE_SIGNATURES.items()
+}
+
+
+def _detect_input_type_mismatch(content: str, input_type: str) -> str | None:
+    if not content.strip():
+        return None
+    own_patterns = _INPUT_TYPE_SIGNATURES_RE.get(input_type, [])
+    if any(p.search(content) for p in own_patterns):
+        return None  # 선택한 유형 자체를 시사하는 신호가 있으면 불일치로 보지 않음
+    for other_type, patterns in _INPUT_TYPE_SIGNATURES_RE.items():
+        if other_type == input_type:
+            continue
+        if any(p.search(content) for p in patterns):
+            return (
+                f"⚠️ 선택하신 입력 유형은 '{_INPUT_TYPE_LABELS.get(input_type, input_type)}'인데, "
+                f"붙여넣으신 내용은 '{_INPUT_TYPE_LABELS.get(other_type, other_type)}'처럼 보입니다 — "
+                "입력 유형을 잘못 선택하면 대부분의 탐지 규칙이 실행되지 않아 실제 문제를 놓칠 수 있습니다. "
+                "유형을 다시 확인하세요."
+            )
+    return None
+
 
 def analyze_offline(content: str, input_type: str) -> dict:
     analyzer = _ANALYZERS.get(input_type, _analyze_config)
     vulns = analyzer(content)
+    mismatch_warning = _detect_input_type_mismatch(content, input_type)
 
     vulns.sort(key=lambda v: _SEV_RANK.get(v["severity"], 9))
     for i, v in enumerate(vulns, start=1):
@@ -390,9 +427,13 @@ def analyze_offline(content: str, input_type: str) -> dict:
         if v["severity"] in counts:
             counts[v["severity"]] += 1
 
+    summary = _summary_text(vulns, counts)
+    if mismatch_warning:
+        summary = f"{mismatch_warning} {summary}"
+
     return {
         "risk_score": _risk_score(vulns),
-        "summary": _summary_text(vulns, counts),
+        "summary": summary,
         "vulnerabilities": vulns,
         "personal_data_exposure": _pii_exposure(content, vulns),
         "engine_note": ENGINE_DISCLAIMER,

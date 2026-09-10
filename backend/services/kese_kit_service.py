@@ -54,8 +54,15 @@ Respond ONLY with valid JSON in this exact structure:
 Only flag real issues actually inferable from the given content — do not invent problems not supported by
 the input. If the input looks reasonably sound for the given domains, return few findings and a low
 overall_risk. For the secure_coding assessment type specifically, treat the input as source code and look
-for concrete code-level vulnerabilities rather than policy gaps. Respond in Korean for all natural-language
-fields."""
+for concrete code-level vulnerabilities rather than policy gaps.
+
+If the given assessment type clearly does not match what the content is actually about (e.g. assessment
+type is "AI 보안" but the content is obviously about generic server/network hardening with no AI-specific
+angle, or vice versa), say so plainly in Korean at the start of the summary (e.g. "⚠️ 선택하신 평가
+유형(AI 보안)과 실제 내용(일반 서버/네트워크 점검으로 보임)이 일치하지 않는 것 같습니다 — 평가
+유형을 다시 확인하세요.") before proceeding with the review for the given assessment type.
+
+Respond in Korean for all natural-language fields."""
 
 
 def _real_analyze(assessment_type: str, content: str, context: str, backend: str = "cloud") -> dict:

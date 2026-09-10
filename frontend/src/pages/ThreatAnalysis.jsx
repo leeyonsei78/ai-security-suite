@@ -151,6 +151,26 @@ C2 도메인: update-service.net, cdn-delivery.net
   },
 ]
 
+// 백엔드 threat_offline_engine.py의 _ANALYSIS_TYPE_SIGNATURES와 동일한 목록 유지 —
+// 분석 유형을 잘못 고르면 대부분의 탐지 규칙이 조용히 안 돌아가므로, 제출 전에 미리 알려준다.
+const ANALYSIS_TYPE_SIGNATURES = {
+  malware: [/malware|trojan|ransomware|backdoor|악성코드|트로이|랜섬웨어|백도어/i, /keylog|키로깅|clipboard|클립보드|screen\s*capture|화면\s*캡처/i, /\bc2\b|command\s*and\s*control|payload|dropper/i],
+  forensics: [/\beventid\s*\d+/i, /이벤트\s*로그/, /prefetch/i, /레지스트리\s*키/, /브라우저\s*히스토리|browser\s*history/i],
+  memory: [/\bpslist\b/i, /\bpstree\b/i, /\bnetscan\b/i, /\bvolatility\b/i, /\bmalfind\b/i, /\bdlllist\b/i],
+  threat_intel: [/\bioc\b/i, /\bttp\b/i, /threat\s*actor|위협\s*행위자/i, /\bapt\d*\b/i, /campaign|캠페인/i, /\bosint\b/i],
+}
+
+function detectAnalysisTypeMismatch(analysisType, text) {
+  if (!text?.trim()) return null
+  const own = ANALYSIS_TYPE_SIGNATURES[analysisType] ?? []
+  if (own.some(rx => rx.test(text))) return null
+  for (const [otherType, patterns] of Object.entries(ANALYSIS_TYPE_SIGNATURES)) {
+    if (otherType === analysisType) continue
+    if (patterns.some(rx => rx.test(text))) return otherType
+  }
+  return null
+}
+
 const THREAT_COLORS = {
   CRITICAL: 'border-red-500 bg-red-500/10 text-red-400',
   HIGH:     'border-orange-500 bg-orange-500/10 text-orange-400',
@@ -673,6 +693,28 @@ export default function ThreatAnalysis() {
                 rows={12}
                 className="w-full bg-slate-800 border border-slate-600 rounded-xl p-4 text-sm font-mono resize-none focus:outline-none focus:border-violet-500 placeholder-slate-600"
               />
+              {(() => {
+                const mismatchType = detectAnalysisTypeMismatch(analysisType, inputData)
+                if (!mismatchType) return null
+                const currentLabel = ANALYSIS_TYPES.find(t => t.id === analysisType)?.label ?? analysisType
+                const suggestedLabel = ANALYSIS_TYPES.find(t => t.id === mismatchType)?.label ?? mismatchType
+                return (
+                  <div className="mt-2 bg-amber-950/30 border border-amber-500/30 rounded-xl p-3 flex items-start gap-2">
+                    <AlertTriangle size={14} className="text-amber-400 shrink-0 mt-0.5" />
+                    <div className="text-xs text-amber-200 leading-relaxed">
+                      선택된 분석 유형은 <b>{currentLabel}</b>인데 입력 내용은 <b>{suggestedLabel}</b>처럼 보입니다 —
+                      유형을 잘못 고르면 대부분의 탐지 규칙이 실행되지 않아 실제 위협을 놓칠 수 있습니다.{' '}
+                      <button
+                        type="button"
+                        onClick={() => setAnalysisType(mismatchType)}
+                        className="underline font-semibold hover:text-amber-100"
+                      >
+                        유형을 '{suggestedLabel}'(으)로 변경
+                      </button>
+                    </div>
+                  </div>
+                )
+              })()}
             </div>
 
             <button
