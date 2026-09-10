@@ -189,10 +189,30 @@ export default function PhishingSimGenerator() {
               </div>
             </div>
 
+            {(() => {
+              const currentDiff = difficulties.find(d => d.id === difficulty)
+              return currentDiff?.meaning ? (
+                <div className="bg-amber-950/20 border border-amber-500/20 rounded-xl p-3 text-xs">
+                  <span className="font-semibold text-amber-300">의미·활용법: </span>
+                  <span className="text-slate-300">{currentDiff.meaning}</span>
+                </div>
+              ) : null
+            })()}
+
             <div>
               <div className="flex items-center justify-between mb-2">
                 <p className="text-xs font-semibold text-slate-400">조직 컨텍스트 (선택)</p>
                 <FileUploadButton onExtracted={(text) => { setContext(text); generate(text) }} />
+              </div>
+              <div className="bg-blue-950/20 border border-blue-500/20 rounded-xl p-3 text-xs text-slate-300 mb-2 leading-relaxed">
+                여기에 조직명이나 상황(업종, 규모, 최근 이슈 등)을 적으면 생성되는 이메일에 반영을 시도합니다 —
+                단, 반영되는 정도는 <b className="text-blue-300">실행 중인 AI 모드</b>에 따라 다릅니다.
+                <ul className="list-disc list-inside mt-1.5 space-y-0.5">
+                  <li><b>외부 AI API / 로컬 LLM 모드</b>: 입력한 내용 전체를 이해해 이메일을 새로 작성합니다.</li>
+                  <li><b>오프라인 모드(폐쇄망/AI 호출 실패)</b>: 텍스트에서 조직명만 찾아 예시 회사명(ACME)을 그 이름으로 바꿔 넣을 뿐, 나머지 내용(업종·규모 등)은 반영되지 않습니다.</li>
+                  <li><b>Mock 모드</b>: 입력해도 결과에 전혀 반영되지 않습니다(고정된 데모 예시).</li>
+                </ul>
+                현재 어느 모드로 생성됐는지는 결과 생성 후 상단 배지에서 확인할 수 있습니다.
               </div>
               <textarea
                 value={context}

@@ -29,7 +29,13 @@ Respond ONLY with valid JSON:
 }
 
 Include 5-6 phases: 즉시조치 → 조사 → 봉쇄 → 제거 → 복구 → 사후조치.
-Be specific and actionable for the given incident type and severity."""
+Be specific and actionable for the given incident type and severity.
+
+If the free-text description clearly describes a different kind of incident than the given
+incident type (e.g. incident type is "phishing" but the description describes a ransomware
+infection), say so plainly at the start of the summary in Korean (e.g. "⚠️ 선택하신 유형(피싱
+공격)과 상황 설명(랜섬웨어로 보임)이 일치하지 않는 것 같습니다 — 유형 선택을 다시 확인하세요.")
+before proceeding with the plan for the given incident type."""
 
 CHAT_PROMPT = """You are an expert incident response consultant.
 The user is dealing with a {incident_type} security incident (severity: {severity}).

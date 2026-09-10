@@ -49,6 +49,31 @@ const INCIDENT_TYPES = [
   { id: 'insider_threat',  label: '내부자 위협',    emoji: '🕵️', desc: '직원·계약자의 악의적 행위' },
 ]
 
+// 상황 설명에서 선택한 유형과 다른 유형을 강하게 시사하는 키워드를 찾기 위한 것 —
+// 백엔드 incident_offline_engine.py의 _TYPE_KEYWORDS와 동일한 목록을 유지한다.
+// 카드를 잘못 클릭한 채 전혀 다른 상황을 적어 넣어도 아무 경고 없이 생성되던 문제를 막기 위해,
+// 대응 계획 생성 버튼을 누르기 전(오프라인 모드가 아니어도) 바로 알려준다.
+const TYPE_KEYWORDS = {
+  ransomware:     ['랜섬웨어', '몸값', '암호화', '랜섬노트', '복호화 요구'],
+  data_breach:    ['데이터 유출', '정보 유출', '유출됐', '유출되었', '탈취', '다크웹'],
+  ddos:           ['ddos', '디도스', '트래픽 폭주', '서비스 거부', '가용성 장애'],
+  phishing:       ['피싱', '스미싱', '스피어피싱'],
+  malware:        ['악성코드', '바이러스', '트로이목마', '스파이웨어', '멀웨어'],
+  insider_threat: ['내부자', '퇴사자', '내부 직원'],
+}
+
+function detectTypeMismatch(incidentType, description) {
+  if (!description?.trim()) return null
+  const lowered = description.toLowerCase()
+  const ownKeywords = TYPE_KEYWORDS[incidentType] ?? []
+  if (ownKeywords.some(k => lowered.includes(k.toLowerCase()))) return null
+  for (const [otherType, keywords] of Object.entries(TYPE_KEYWORDS)) {
+    if (otherType === incidentType) continue
+    if (keywords.some(k => lowered.includes(k.toLowerCase()))) return otherType
+  }
+  return null
+}
+
 const SEVERITIES = [
   { id: 'CRITICAL', label: 'Critical', color: 'border-red-500 text-red-400 bg-red-500/10' },
   { id: 'HIGH',     label: 'High',     color: 'border-orange-500 text-orange-400 bg-orange-500/10' },
@@ -266,6 +291,28 @@ export default function IncidentResponse() {
                 rows={7}
                 className="w-full bg-slate-800 border border-slate-600 rounded-xl p-4 text-sm resize-none focus:outline-none focus:border-red-500 placeholder-slate-600"
               />
+              {(() => {
+                const mismatchType = detectTypeMismatch(incidentType, description)
+                if (!mismatchType) return null
+                const currentLabel = INCIDENT_TYPES.find(t => t.id === incidentType)?.label ?? incidentType
+                const suggestedLabel = INCIDENT_TYPES.find(t => t.id === mismatchType)?.label ?? mismatchType
+                return (
+                  <div className="mt-2 bg-amber-950/30 border border-amber-500/30 rounded-xl p-3 flex items-start gap-2">
+                    <AlertTriangle size={14} className="text-amber-400 shrink-0 mt-0.5" />
+                    <div className="text-xs text-amber-200 leading-relaxed">
+                      선택된 유형은 <b>{currentLabel}</b>인데 상황 설명은 <b>{suggestedLabel}</b>처럼 보입니다 —
+                      유형 카드를 잘못 클릭하지 않았는지 확인하세요.{' '}
+                      <button
+                        type="button"
+                        onClick={() => setIncidentType(mismatchType)}
+                        className="underline font-semibold hover:text-amber-100"
+                      >
+                        유형을 '{suggestedLabel}'(으)로 변경
+                      </button>
+                    </div>
+                  </div>
+                )
+              })()}
             </div>
 
             <button

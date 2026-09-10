@@ -21,6 +21,42 @@ _SCALE_KEYWORDS = {
     "대규모": ("전사", "전체", "모든", "대량", "수백", "수천"),
 }
 
+# 사고 유형은 카드 클릭(incident_type)으로만 결정되고 대응 계획(플레이북)도 그 값만 보고 고정되어,
+# 사용자가 카드를 잘못 클릭한 채 상황 설명에 완전히 다른 유형을 적어도(예: "피싱 공격" 카드를 선택한
+# 채 "랜섬웨어 감염"이라고 입력) 아무 경고 없이 엉뚱한 체크리스트가 그대로 나가는 실제 문제가 있었음
+# — 상황 설명에서 다른 유형을 강하게 시사하는 키워드를 찾아 경고하는 최소한의 안전장치.
+_TYPE_LABELS = {
+    "ransomware": "랜섬웨어", "data_breach": "데이터 유출", "ddos": "DDoS 공격",
+    "phishing": "피싱 공격", "malware": "악성코드", "insider_threat": "내부자 위협",
+}
+_TYPE_KEYWORDS = {
+    "ransomware": ("랜섬웨어", "몸값", "암호화", "랜섬노트", "복호화 요구"),
+    "data_breach": ("데이터 유출", "정보 유출", "유출됐", "유출되었", "탈취", "다크웹"),
+    "ddos": ("ddos", "디도스", "트래픽 폭주", "서비스 거부", "가용성 장애"),
+    "phishing": ("피싱", "스미싱", "스피어피싱"),
+    "malware": ("악성코드", "바이러스", "트로이목마", "스파이웨어", "멀웨어"),
+    "insider_threat": ("내부자", "퇴사자", "내부 직원"),
+}
+
+
+def _detect_type_mismatch(incident_type: str, description: str) -> str | None:
+    if not description:
+        return None
+    lowered = description.lower()
+    own_keywords = _TYPE_KEYWORDS.get(incident_type, ())
+    if any(k.lower() in lowered for k in own_keywords):
+        return None  # 선택한 유형 자체를 시사하는 키워드가 있으면 불일치로 보지 않음
+    for other_type, keywords in _TYPE_KEYWORDS.items():
+        if other_type == incident_type:
+            continue
+        if any(k.lower() in lowered for k in keywords):
+            return (
+                f"⚠️ 선택하신 사고 유형은 '{_TYPE_LABELS.get(incident_type, incident_type)}'인데, "
+                f"상황 설명은 '{_TYPE_LABELS.get(other_type, other_type)}'을(를) 가리키는 것처럼 보입니다 — "
+                "카드를 잘못 선택하지 않았는지 확인하세요. 아래 체크리스트는 현재 선택된 유형 기준으로 생성됩니다."
+            )
+    return None
+
 ENGINE_DISCLAIMER = (
     "이 대응 계획은 네트워크 연결 없이 동작하는 사전 정의된 실전 IR(사고 대응) 베스트 프랙티스 "
     "플레이북입니다 — AI가 이 사고의 세부 정황을 새로 분석해 작성한 것이 아니라, 사고 유형별 "
@@ -34,6 +70,9 @@ def analyze_offline(incident_type: str, severity: str, description: str) -> dict
     sev_note = _SEVERITY_NOTE.get((severity or "").upper(), "")
 
     notes = []
+    mismatch_note = _detect_type_mismatch(incident_type, description)
+    if mismatch_note:
+        notes.append(mismatch_note)
     if description and any(k in description for k in _PII_KEYWORDS):
         notes.append(
             "입력하신 설명에 개인정보 관련 키워드가 포함되어 있습니다 — 개인정보보호법상 신고·통지 "

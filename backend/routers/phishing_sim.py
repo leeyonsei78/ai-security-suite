@@ -2,7 +2,8 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 from services.phishing_sim_service import (
-    generate_phishing_sim, generate_markdown_report, SCENARIO_LABELS, SCENARIO_MEANINGS, DIFFICULTY_LABELS,
+    generate_phishing_sim, generate_markdown_report, SCENARIO_LABELS, SCENARIO_MEANINGS,
+    DIFFICULTY_LABELS, DIFFICULTY_MEANINGS,
 )
 from services import db
 
@@ -24,7 +25,7 @@ class GenerateRequest(BaseModel):
 async def get_scenarios():
     return {
         "scenarios": [{"id": k, "label": v, "meaning": SCENARIO_MEANINGS.get(k, "")} for k, v in SCENARIO_LABELS.items()],
-        "difficulties": [{"id": k, "label": v} for k, v in DIFFICULTY_LABELS.items()],
+        "difficulties": [{"id": k, "label": v, "meaning": DIFFICULTY_MEANINGS.get(k, "")} for k, v in DIFFICULTY_LABELS.items()],
     }
 
 
