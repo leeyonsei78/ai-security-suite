@@ -863,6 +863,17 @@ npm run dev
 | `/vuln`(App 3)을 인터넷 없이(폐쇄망) 실제 AI 분석까지 쓰고 싶을 때 | 사내에 Ollama 등 OpenAI 호환 로컬 LLM 서버를 두고 `.env`에 `LOCAL_LLM_BASE_URL`/`LOCAL_LLM_MODEL` 설정 — 없어도 오프라인 규칙 기반 분석(`vuln_offline_engine.py`)으로 자동 전환되어 완전히 인터넷 없이 동작함(NavBar 모드 배지로 확인) |
 | `/cve-lookup`(App 15)을 폐쇄망에서 쓰고 싶을 때 | 인터넷이 되는 동안 조회했던 CVE는 자동으로 로컬 캐시에 남아 폐쇄망에서도 조회 가능. 더 많은 데이터가 필요하면 인터넷 되는 환경에서 NVD 공식 데이터 피드(nvd.nist.gov/vuln/data-feeds)를 받아 승인된 절차로 반입 후 페이지의 [피드 가져오기]로 업로드 |
 
+### 외부(원격 PC)에서 시연하기 (2026-09-10)
+
+로컬에서만 돌던 앱을 외부에서 시연할 수 있도록 이 세션에서 실제로 구성·검증함 — 다음에 이어서 할 때 참고.
+
+- **ngrok 터널링**: 이 PC에 ngrok이 winget으로 이미 설치돼 있음(`Ngrok.Ngrok`). 계정별 최소 버전 요구사항 때문에 `ngrok update`로 최신화 필요할 수 있음(이 세션에서 3.3.1→3.39.11로 업데이트함). `ngrok config add-authtoken <토큰>`으로 인증 설정(ngrok.com 무료 가입 필요) 후 `ngrok http 5180`으로 프론트엔드를 외부에 노출 — 백엔드(`/api/*`)는 Vite 프록시를 거쳐 자동으로 같이 열림.
+  - **⚠️ 실제 겪은 막힘**: Vite 5.4+ 개발 서버가 ngrok 같은 외부 도메인의 Host 헤더를 기본 차단함("Blocked request") — `frontend/vite.config.js`의 `server`에 `allowedHosts: true` 추가로 해결(이미 반영됨, 프론트 재시작 필요). 시연 전용 설정이라 필요 없어지면 되돌려도 되지만, 다음 시연 때 또 필요하므로 일단 유지.
+  - ngrok URL은 무료 플랜 특성상 터널을 껐다 켜면 매번 바뀜 — 재사용하려면 유료 플랜의 고정 도메인 필요.
+- **AnyDesk (원격 PC에서 이 PC 조작)**: winget으로 설치(`AnyDesk.AnyDesk` — `Ngrok.Ngrok`처럼 ID를 정확히 지정해야 함, `AnyDeskSoftwareGmbH.AnyDesk`는 존재하지 않는 ID였음). 이 PC의 AnyDesk 주소(ID)는 **1217880678**. 무단 액세스(비밀번호로 승인 없이 접속) 설정은 **관리자 권한이 필요해 CLI(`--set-password`)로는 실패**함 — GUI(설정→보안→접근→"무단 액세스 활성화"→UAC 승인→비밀번호 입력)로 설정 완료함. 비밀번호 값 자체는 보안상 이 문서·메모리에 기록하지 않음(필요시 GUI에서 재확인).
+- **화면공유(Zoom) vs 원격조작(AnyDesk) 구분**: 웹 앱(브라우저로 보는 26개 앱 전부)은 ngrok URL만 있으면 원격 PC 브라우저에서 바로 보임 — 별도 설정 불필요. 반면 `/pwn-lab`의 실제 `docker run`/컴파일/gdb 같은 **터미널 작업은 이 PC에서만 실행 가능**(Docker/이미지/파일이 로컬에 있으므로) — 원격 PC에서 진행하려면 AnyDesk로 이 PC를 직접 원격 조작해야 함(원격 PC 자체의 로컬 터미널에서는 안 됨). Zoom 화면공유는 이 PC 화면을 그대로 보여주는 용도로 병행.
+- **Pwn Lab 3개 챌린지 재검증 완료**(`C:\test_AI_security\pwnlab-workspace\`, git 추적 제외 — `.gitignore`에 `pwnlab-workspace/` 추가함): ret2win(offset=72, `PWN{r3t2w1n_st4ck_sm4sh1ng_101}`), ret2system(offset=72, pop_rdi_ret=0x4011f8/ret=0x40101a/cmd=0x404080/system@plt=0x4010a0, `PWN{r3t2sy5tem_ropp1ng_w1th_style}`), fmtstr(`%31$lx`, secret=`deadbeefcafebabe`, `PWN{f0rm4t_str1ng_1nf0_l34k}`) — 2026-08-25에 처음 검증했던 값과 동일하게 재현됨(툴체인 안 바뀜). Reverse(crackme/keygen/antidebug) 3종과 Misc 3종은 이번엔 재검증 안 함 — 다음 세션에서 필요하면 이어서.
+
 ## 환경 변수 (.env)
 
 ```
@@ -899,6 +910,7 @@ API 키 없으면 Mock 모드로 자동 동작. 알림 관련 변수도 하나�
 
 ## 대기 중인 작업
 
+- **외부 시연 준비 — 진행 중, 다음 세션에서 이어서** (2026-09-10): ngrok 터널·AnyDesk 원격조작·Zoom 화면공유 조합으로 외부 PC 대상 시연 환경을 구성 중. 완료된 것: ngrok 설치+인증+`vite.config.js` allowedHosts 수정, AnyDesk 설치+무단액세스 비밀번호 설정(ID 1217880678), Pwn Lab 3개 챌린지(ret2win/ret2system/fmtstr) 재검증. 남은 것: 실제 원격 PC에서 AnyDesk로 접속해 Docker 컴파일까지 end-to-end로 끝까지 성공하는지 확인(이 세션에서는 사용자가 원격 세션 안에서 명령어를 실행하는 것까지만 진행), 필요하면 Reverse(crackme/keygen/antidebug)·Misc 3종도 마저 재검증. 상세는 위 "실행 방법"의 "외부(원격 PC)에서 시연하기" 참고. **재개 시 확인할 것**: ngrok 터널·백엔드·프론트엔드가 여전히 켜져 있는지 먼저 `netstat`으로 확인(PC 재부팅됐으면 전부 재기동 필요) — ngrok URL은 재시작 시 바뀜.
 - App 26(KISA 보안 가이드라인 종합 점검, KESE-KIT)의 실제 브라우저 렌더링 — 이 세션은 Chrome 확장이 연결되지 않아 백엔드 curl(`/guide`·`/analyze` 오프라인 모드 cii/secure_coding·CRITICAL 알림·리포트)과 `npm run build`로만 검증함. 7개 평가 유형 버튼 전환, 예시 파일 다운로드 링크, 제로트러스트 `maturity_level` 배지 렌더링은 사용자가 브라우저에서 직접 확인 필요
 - App 25(포렌식 실습·분석 센터)의 실제 브라우저 렌더링 — **완료** (2026-09-06, Chrome 확장 연결 후 Claude in Chrome으로 3탭 전부 end-to-end 확인. App 25 섹션의 "실제 브라우저 검증 완료" 참고)
 - App 25 증거 수집 도구의 SSH 원격 수집·클라우드 CLI 수집 실제 성공 경로(happy path) 검증 — 이 세션 환경에 SSH 서버(WSL Ubuntu 설치 중)나 클라우드 CLI(aws/az/gcloud 전부 미설치)가 없어 연결 실패 경로(타임아웃, CLI 미설치)만 실제 브라우저에서까지 확인함. 사용자가 실제 Linux/macOS 서버(SSH) 또는 인증된 클라우드 CLI 환경에서 "연결 테스트"·"지금 수집"으로 성공 경로 확인 필요. 네트워크 장비(Cisco/Fortinet/Palo Alto/Juniper) SSH 자동 수집은 실제 장비가 없어 전혀 검증하지 못했고, 장비 펌웨어에 따라 아예 동작하지 않을 수 있음(App 25 섹션의 "SSH 원격 수집 + 클라우드 CLI 수집" 참고)

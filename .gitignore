@@ -30,6 +30,13 @@ backend/data/
 *access token*
 *.token
 
+# Local tunneling (ngrok demo sessions)
+ngrok_log.txt
+
+# Pwn Lab demo scratch workspace (compiled binaries + downloaded challenge sources,
+# not project source — regenerated on demand via the app's own API)
+pwnlab-workspace/
+
 # OS
 .DS_Store
 Thumbs.db
