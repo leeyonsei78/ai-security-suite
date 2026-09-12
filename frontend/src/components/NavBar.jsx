@@ -5,7 +5,7 @@ import {
   Shield, Mail, ShieldAlert, Search, Siren, Globe, FlaskConical, Syringe, Cpu, Swords,
   ScrollText, BrainCircuit, ShieldCheck, Bell, Trash2, Send, Database, ShieldQuestion, Radar,
   KeyRound, ScanSearch, Container, MailCheck, Gauge, ChevronDown, Zap, Landmark,
-  LayoutGrid, Server, Network, Cloud, Fingerprint,
+  LayoutGrid, Server, Network, Cloud, Fingerprint, Router,
 } from 'lucide-react'
 import ModeSelector from './ModeSelector'
 
@@ -25,6 +25,7 @@ const groups = [
     links: [
       { to: '/', icon: Shield, label: '보안 대시보드' },
       { to: '/risk-dashboard', icon: Gauge, label: '통합 리스크 대시보드' },
+      { to: '/devices', icon: Router, label: '장비 관리 & 자동 점검' },
       { to: '/cve-lookup', icon: Database, label: 'CVE 조회', requiresInternet: true },
       { to: '/ioc', icon: Search, label: 'IoC 분석기' },
       { to: '/phishing', icon: Mail, label: '피싱 탐지기' },

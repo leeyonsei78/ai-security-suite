@@ -32,8 +32,17 @@ from routers.fsi_csp_audit import router as fsi_csp_audit_router
 from routers.extract import router as extract_router
 from routers.forensics import router as forensics_router
 from routers.kese_kit import router as kese_kit_router
+from routers.devices import router as devices_router
+from services import device_scheduler
 
 app = FastAPI(title="AI Security Suite", version="1.0.0")
+
+
+@app.on_event("startup")
+async def _start_device_scheduler():
+    # 장비 관리(신규) — 등록된 장비를 각자 설정된 주기로 자동 수집·분석하는 백그라운드
+    # 루프를 앱 시작과 함께 띄운다. services/device_scheduler.py 참고.
+    device_scheduler.start_background_loop()
 
 app.add_middleware(
     CORSMiddleware,
@@ -80,6 +89,7 @@ app.include_router(fsi_csp_audit_router, dependencies=_authed)
 app.include_router(extract_router, dependencies=_authed)
 app.include_router(forensics_router, dependencies=_authed)
 app.include_router(kese_kit_router, dependencies=_authed)
+app.include_router(devices_router, dependencies=_authed)
 
 
 @app.get("/")

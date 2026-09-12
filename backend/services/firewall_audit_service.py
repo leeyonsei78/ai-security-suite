@@ -1,3 +1,4 @@
+import asyncio
 import os
 import json
 from dotenv import load_dotenv
@@ -126,8 +127,14 @@ async def analyze_firewall(source_type: str, content: str, context: str) -> dict
     if mode == "mock":
         data = generate_mock_audit(source_type, content, context)
     elif mode in ("local", "cloud"):
+        # _real_analyze()는 동기(블로킹) 네트워크 호출이라 그대로 await 경로에서 실행하면
+        # 이 프로세스의 단일 이벤트 루프를 그 시간만큼 통째로 막는다 — App 27 장비 관리의
+        # 스케줄러가 여러 장비를 연달아 분석할 때 이 문제가 실제로 드러났다(로컬 LLM 호출이
+        # 겹치는 동안 서버 전체가 다른 요청에 응답하지 못함). claude_service.analyze_logs()가
+        # 이미 쓰는 것과 동일하게 run_in_executor로 스레드에 위임한다.
+        loop = asyncio.get_event_loop()
         try:
-            data = _real_analyze(source_type, content, context, backend=mode)
+            data = await loop.run_in_executor(None, _real_analyze, source_type, content, context, mode)
         except Exception as e:
             data = analyze_offline(source_type, content, context)
             data["fallback_reason"] = f"{'로컬 LLM' if mode == 'local' else '외부 AI API'} 호출 실패로 오프라인 규칙 기반 분석으로 대체됨: {e}"

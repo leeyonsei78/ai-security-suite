@@ -1,3 +1,4 @@
+import asyncio
 import os
 import json
 from dotenv import load_dotenv
@@ -114,8 +115,11 @@ async def analyze_iam(source_type: str, content: str, context: str) -> dict:
     if mode == "mock":
         data = generate_mock_audit(source_type, content, context)
     elif mode in ("local", "cloud"):
+        # firewall_audit_service.analyze_firewall()와 동일한 이유로 run_in_executor 사용
+        # — 동기 네트워크 호출을 그대로 await하면 이벤트 루프 전체가 막힌다.
+        loop = asyncio.get_event_loop()
         try:
-            data = _real_analyze(source_type, content, context, backend=mode)
+            data = await loop.run_in_executor(None, _real_analyze, source_type, content, context, mode)
         except Exception as e:
             data = analyze_offline(source_type, content, context)
             data["fallback_reason"] = f"{'로컬 LLM' if mode == 'local' else '외부 AI API'} 호출 실패로 오프라인 규칙 기반 분석으로 대체됨: {e}"

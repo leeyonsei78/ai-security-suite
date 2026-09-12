@@ -136,7 +136,7 @@ const APP_ROUTES = {
   secret_scan: '/secret-scan', container_audit: '/container-audit', dns_security: '/dns-security',
   attack_monitor: '/attack-monitor', attack_monitor_aws: '/attack-monitor',
   fsi_csp_audit: '/fsi-csp-audit', forensics_artifact_audit: '/forensics',
-  kese_kit_audit: '/kese-kit',
+  kese_kit_audit: '/kese-kit', device_monitor: '/devices',
 }
 
 const BAR_COLORS = ['#f87171', '#fb923c', '#fbbf24', '#a3e635', '#38bdf8']

@@ -26,6 +26,7 @@ import AttackMonitor from './pages/AttackMonitor'
 import FsiCspAudit from './pages/FsiCspAudit'
 import Forensics from './pages/Forensics'
 import KeseKit from './pages/KeseKit'
+import DeviceManagement from './pages/DeviceManagement'
 
 export default function App() {
   return (
@@ -58,6 +59,7 @@ export default function App() {
         <Route path="/fsi-csp-audit" element={<FsiCspAudit />} />
         <Route path="/forensics" element={<Forensics />} />
         <Route path="/kese-kit" element={<KeseKit />} />
+        <Route path="/devices" element={<DeviceManagement />} />
       </Routes>
     </BrowserRouter>
   )

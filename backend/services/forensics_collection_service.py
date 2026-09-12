@@ -37,6 +37,7 @@ Prefetch)이 감사 정책 활성화 또는 관리자 권한을 요구할 수 �
 """
 
 import hashlib
+import io
 import json
 import subprocess
 from datetime import datetime, timedelta, timezone
@@ -286,39 +287,61 @@ def _sha256_of(obj) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
-def _ssh_connect(host: str, port: int, username: str, password: str, timeout: float = 8) -> paramiko.SSHClient:
+def _load_private_key(pem_text: str) -> paramiko.PKey:
+    """PEM 텍스트(RSA/Ed25519/ECDSA 어떤 형식인지 모를 때)에서 paramiko 키 객체를 만든다
+    — AWS EC2가 발급하는 .pem 키 페어(대개 RSA 또는 ED25519)를 그대로 붙여넣어 쓸 수 있게
+    하기 위해 지원하는 키 타입을 순서대로 시도한다."""
+    last_error: Exception | None = None
+    for key_cls in (paramiko.Ed25519Key, paramiko.RSAKey, paramiko.ECDSAKey):
+        try:
+            return key_cls.from_private_key(io.StringIO(pem_text))
+        except Exception as e:
+            last_error = e
+    raise ValueError(f"개인키를 파싱할 수 없습니다(RSA/Ed25519/ECDSA 모두 실패): {last_error}")
+
+
+def _ssh_connect(
+    host: str, port: int, username: str, password: str | None, timeout: float = 8,
+    pkey: paramiko.PKey | None = None,
+) -> paramiko.SSHClient:
     """편의를 위해 최초 접속 시 호스트 키를 자동 등록한다(TOFU) — 이 도구가 전제하는
     "조사관이 이미 신뢰하는 내부망/조사 대상"에는 실용적인 타협이지만, 신뢰할 수 없는
-    네트워크를 넘나드는 운영 환경에는 적합하지 않다(known_hosts 사전 등록 권장)."""
+    네트워크를 넘나드는 운영 환경에는 적합하지 않다(known_hosts 사전 등록 권장).
+
+    pkey가 주어지면 비밀번호 대신 키 기반 인증을 쓴다 — AWS EC2 등 클라우드 VM은
+    기본적으로 비밀번호 인증이 꺼져 있고 키 페어만 허용하는 경우가 대부분이라 필요."""
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     client.connect(
-        host, port=port, username=username, password=password,
+        host, port=port, username=username, password=None if pkey else password, pkey=pkey,
         timeout=timeout, banner_timeout=timeout, auth_timeout=timeout, look_for_keys=False, allow_agent=False,
     )
     return client
 
 
-def check_ssh_connection(host: str, port: int, username: str, password: str) -> dict:
+def check_ssh_connection(host: str, port: int, username: str, password: str | None, pkey: paramiko.PKey | None = None) -> dict:
     """본격 수집 전 연결 가능 여부만 확인 — App 23의 check_remote_connection(WinRM)과
     동일한 목적. 블로킹 호출이므로 라우터에서 run_in_executor로 위임해야 한다."""
     try:
-        client = _ssh_connect(host, port, username, password)
+        client = _ssh_connect(host, port, username, password, pkey=pkey)
         client.close()
         return {"ok": True, "message": f"{host}:{port} SSH 연결 및 인증에 성공했습니다."}
     except paramiko.AuthenticationException:
-        return {"ok": False, "error": "인증 실패 — 사용자명 또는 비밀번호를 확인하세요."}
+        return {"ok": False, "error": "인증 실패 — 사용자명/비밀번호(또는 개인키)를 확인하세요."}
     except (paramiko.SSHException, OSError, TimeoutError) as e:
         return {"ok": False, "error": f"연결 실패 — 호스트/포트가 맞는지, SSH 서비스(22번 포트 등)가 열려 있는지 확인하세요: {e}"}
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
 
-def _run_ssh_commands(host: str, port: int, username: str, password: str, commands: list[str], timeout: float = 15) -> dict:
+def _run_ssh_commands(
+    host: str, port: int, username: str, password: str | None, commands: list[str], timeout: float = 15,
+    pkey: paramiko.PKey | None = None,
+) -> dict:
     try:
-        client = _ssh_connect(host, port, username, password, timeout=timeout)
+        client = _ssh_connect(host, port, username, password, timeout=timeout, pkey=pkey)
     except paramiko.AuthenticationException:
-        return {"ok": False, "error": "인증 실패 — 사용자명 또는 비밀번호를 확인하세요."}
+        return {"ok": False, "error": "인증 실패 — 사용자명/비밀번호(또는 개인키)를 확인하세요."}
     except (paramiko.SSHException, OSError, TimeoutError) as e:
         return {"ok": False, "error": f"연결 실패 — 호스트/포트가 맞는지, SSH 서비스가 열려 있는지 확인하세요: {e}"}
     except Exception as e:

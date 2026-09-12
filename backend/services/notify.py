@@ -60,6 +60,7 @@ APP_LABELS = {
     "fsi_csp_audit": "금융보안원 클라우드 CSP 평가",
     "forensics_artifact_audit": "포렌식 아티팩트 감사기",
     "kese_kit_audit": "KISA 보안 가이드라인 종합 점검 (KESE-KIT)",
+    "device_monitor": "장비 관리 자동 점검 (등록 장비)",
 }
 
 ALERTS_APP = "alerts"

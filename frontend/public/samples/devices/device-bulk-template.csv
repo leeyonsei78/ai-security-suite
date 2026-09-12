@@ -1,0 +1,5 @@
+name,device_type,vendor,analyzer,host,port,username,password,context,interval_minutes,enabled
+본사 방화벽,network_device,cisco_ios,firewall_audit,10.0.0.1,22,admin,changeme123,본사 코어 방화벽,60,TRUE
+운영 리눅스 서버,linux_host,,firewall_audit,10.0.0.10,22,ubuntu,changeme123,운영 웹서버,360,TRUE
+이 PC (로컬),windows_host,,log_analysis,,,,,,60,TRUE
+운영 AWS 계정,aws_account,,iam_audit,prod,,,,운영 AWS 계정 IAM 점검,1440,TRUE

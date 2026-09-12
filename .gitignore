@@ -33,6 +33,11 @@ backend/data/
 # Local tunneling (ngrok demo sessions)
 ngrok_log.txt
 
+# Dev server scratch logs (background test runs during sessions)
+backend/uvicorn_test*.log
+backend/uvicorn_local*.log
+frontend/vite_test.log
+
 # Pwn Lab demo scratch workspace (compiled binaries + downloaded challenge sources,
 # not project source — regenerated on demand via the app's own API)
 pwnlab-workspace/
