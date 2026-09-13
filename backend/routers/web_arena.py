@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from services import web_arena
@@ -88,6 +88,50 @@ class SstiRenderRequest(BaseModel):
 @router.post("/ssti/render")
 async def ssti_render(request: SstiRenderRequest):
     return web_arena.ssti_render(request.template)
+
+
+class BflaLoginRequest(BaseModel):
+    username: str
+
+
+@router.post("/bfla/login")
+async def bfla_login(request: BflaLoginRequest):
+    if not request.username.strip():
+        raise HTTPException(status_code=400, detail="username is required")
+    return web_arena.bfla_login(request.username.strip())
+
+
+class BflaDeleteRequest(BaseModel):
+    token: str
+    target_username: str
+
+
+@router.post("/bfla/delete-user")
+async def bfla_delete_user(request: BflaDeleteRequest):
+    return web_arena.bfla_delete_user(request.token, request.target_username)
+
+
+@router.post("/massassign/register")
+async def massassign_register(request: Request):
+    # 일부러 고정된 Pydantic 스키마를 쓰지 않는다: 실제 Mass Assignment 취약점은 서버가 "어떤 필드가
+    # 들어올지 미리 정해두지 않고" 클라이언트가 보낸 JSON을 그대로 받아들이는 데서 생기기 때문에,
+    # username 외에 어떤 필드가 오든(role, is_admin 등) 그대로 전달되는 상황을 재현해야 한다.
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="유효한 JSON이 아닙니다.")
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="유효한 JSON 객체가 아닙니다.")
+    username = str(body.get("username", "")).strip()
+    if not username:
+        raise HTTPException(status_code=400, detail="username is required")
+    extra_fields = {k: v for k, v in body.items() if k != "username"}
+    return web_arena.massassign_register(username, extra_fields)
+
+
+@router.get("/massassign/profile")
+async def massassign_profile(username: str = ""):
+    return web_arena.massassign_profile(username)
 
 
 class VerifyRequest(BaseModel):

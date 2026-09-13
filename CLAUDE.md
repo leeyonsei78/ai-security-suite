@@ -33,6 +33,8 @@ Claude AI를 활용한 보안 분석 도구 모음.
 | 25 | 포렌식 실습·분석 센터 | ✅ 완료 |
 | 26 | KISA 보안 가이드라인 종합 점검 (KESE-KIT) | ✅ 완료 |
 | 27 | 장비 관리 & 자동 점검 (SIEM 연동) | ✅ 완료 |
+| 28 | 화이트해커 연습 허브 | ✅ 완료 |
+| 29 | AD/Kerberos 공격 실습 | ✅ 완료 |
 
 ---
 
@@ -660,6 +662,100 @@ App 16(방화벽 정책 감사기)·App 18(IAM 정책 감사기)와 완전히 �
 
 - **뒷정리**: 테스트로 만든 EC2 인스턴스 2대는 terminate, 키 페어는 삭제(비용 없음 확인, `aws ec2 describe-instances`로 `terminated` 상태 재확인). 보안그룹 5개는 계속 테스트 픽스처로 남겨둠(무료, `ai-security-suite-test` 태그로 식별 가능). App 27 device 레지스트리에는 실증 목적의 실계정 감사 장비(`real AWS sandbox account`)와 로컬 PC 로그 분석 장비(`로컬 LLM 테스트용 PC`) 2건만 남기고 EC2 대상 테스트 장비·중복 등록은 삭제.
 
+### App 28: 화이트해커 연습 허브 `/white-hat-hub`
+"정보보안팀이 방어 역량을 기르기 위해 공격 기법을 직접 실습할 수 있는 메뉴를 만들어달라"는 사용자 요청으로 신설.
+착수 전 확인해보니 App 9(Pwn/Reverse/Misc)·App 10(Web CTF 아레나)·App 13(모의 해킹 랩)·App 25의 "실습 랩" 탭에
+이미 상당한 실습 콘텐츠가 있었음 — AskUserQuestion으로 방향을 확인한 결과 사용자가 "①통합 허브 메뉴 신설 +
+②새 공격 기법 영역 추가 + ③기존 모듈에 시나리오 추가"를 모두 선택해 세 가지를 함께 진행함.
+- **새 분석 로직을 만들지 않는 순수 집계 페이지** — App 22(통합 리스크 대시보드)와 같은 설계 원칙: 각 실습
+  모듈의 실제 데이터(챌린지/스테이지 목록)를 직접 import해서 개수를 세므로, 각 모듈에 챌린지가 추가돼도
+  이 페이지를 손대지 않아도 자동으로 반영됨(App 22 섹션에서 지적된 "하드코딩된 목록은 새 항목 추가 시
+  누락되기 쉽다"는 교훈을 적용해, 개수 집계만큼은 정적 상수 대신 실제 import로 계산)
+- **추천 학습 경로(curriculum)**: 5단계로 정리 — ①웹 해킹(Web CTF 아레나, 설치 불필요) → ②모의 해킹 체이닝
+  (모의 해킹 랩) → ③시스템 해킹(Pwn/Reverse/Misc 실습실) → ④AD/Kerberos 공격(App 29, 신규) → ⑤포렌식
+  관점으로 되짚기(포렌식 실습 랩). 각 단계에 "왜 이 순서인지" 설명과 해당 모듈로 바로 이동하는 링크 포함
+- **모듈 카드**: 5개 모듈(웹 해킹/모의해킹 체이닝/시스템 해킹/네트워크·AD 해킹/포렌식) 각각 의미·난이도
+  범위·챌린지 수·필요 환경(Docker/WSL 필요 여부 등)을 카드로 표시, [바로가기] 링크로 실제 페이지 이동
+- **개인 진행 상황 체크**: 모듈별로 "완료로 표시" 체크박스 — 서버에 저장하지 않고 `localStorage`에만 저장
+  (다른 실습 앱들이 서버 재시작 시 초기화되는 것과 같은 원칙 — 개인 진행 상황도 가볍게, 서버 상태를
+  늘리지 않는 방향을 택함)
+- **안전 고지**: 이 허브에 모인 모든 실습이 로컬 가상 대상이며, 배운 기법을 승인 없는 실제 시스템에 쓰면
+  안 된다는 안내(`SAFETY_NOTICE`)를 상단에 상시 노출 — App 13 ROE_NOTICE와 같은 수준의 문구
+- `backend/services/whitehat_hub_service.py`(`GET /api/whitehat-hub/catalog` 단일 엔드포인트), `backend/routers/whitehat_hub.py`
+- 실제로 5개 모듈 전부의 챌린지 개수(총 34개)가 정확히 집계되는 것을 curl로 확인, `npm run build` 성공
+
+### App 29: AD/Kerberos 공격 실습 `/ad-attack-lab`
+App 28 신설과 같은 세션에서 "새 공격 기법 영역 추가" 요청에 대한 답으로 착수 — 실제 기업 침해사고의
+대다수가 거쳐가는 Active Directory 공격 기법을 다루는 것이 정보보안팀에 가장 실전 가치가 높다고 판단해
+우선 선택함(무선 해킹·소셜 엔지니어링 등 다른 후보는 이번 세션에서는 미착수, 필요 시 추후 추가 가능).
+- App 9(Pwn/Reverse)·App 10(Web CTF)·App 13(모의 해킹 랩)과 같은 방식 — 실제 Windows Server/Samba AD를
+  띄우지 않고도(무겁고 준비가 오래 걸림) 실제 공격 흐름과 판정 로직을 그대로 재현하는 로컬 시뮬레이터.
+  Kerberos 프로토콜 자체(암호화 통신)를 구현하지는 않되, "취약한 속성을 가진 계정을 실제로 찾아 악용해야만
+  진행되는" 판정 로직은 실제로 구현함
+- 가상 도메인 CORP.LOCAL, 계정 5개(j.kim=Domain Admin/svc_backup=SPN 보유+잘못 부여된 복제 권한/
+  svc_scan=사전인증 비활성화/alice·bob=일반 사용자)
+- **1단계 정찰**: `GET /api/ad-attack-lab/recon?query=all|spn|preauth` — LDAP 계정 열거를 흉내낸 텍스트 응답
+- **2단계 Kerberoasting**: `POST /kerberoast {spn}` → svc_backup의 TGS 티켓(가짜 해시) 획득 → `POST /crack
+  {account, password_guess}`로 오프라인 크랙(프론트에 "워드리스트로 자동 크랙" 버튼도 제공 — 서버가
+  제공하는 커스텀 워드리스트를 순회하며 hashcat 무차별 대입을 흉내냄)
+- **3단계 (추가 실습, 선택) AS-REP Roasting**: `POST /asrep-roast {username}` — svc_scan처럼 사전인증이
+  꺼진 계정을 대상으로 한 별도 기법. 최종 flag 획득에는 필수가 아니지만 Kerberoasting과는 다른 공격
+  표면(SPN 없이도 가능)을 연습하기 위해 포함
+- **4단계 DCSync**: `POST /dcsync {username, password}` — 2단계에서 크랙한 svc_backup 자격증명으로 시도.
+  이 계정에 원래 도메인 컨트롤러만 가져야 할 복제 권한이 실수로 부여되어 있어, 도메인 전체 자격증명
+  해시(krbtgt/Administrator)를 덤프하고 최종 flag 획득. 복제 권한이 없는 계정(alice 등)으로 시도하면
+  인증은 성공해도 권한 부족으로 명확히 실패하도록 구현해 "권한 오용"이라는 핵심 개념이 드러나게 함
+  (`recon → kerberoast → crack → dcsync` 전체를 실제로 curl/Python으로 end-to-end 검증 완료, alice로
+  시도 시 권한 부족 에러도 확인)
+- 각 단계에 `meaning`/`situation`/`hints`/`remediation`(요약+구체적 조치 목록) 필드 — App 13과 동일한 패턴.
+  DCSync remediation은 "복제 권한을 도메인 컨트롤러와 명시적으로 승인된 소수 계정에만 남길 것"을 핵심으로 명시
+- 워드리스트(`GET /wordlist`, 회사명+계절+연도 패턴의 커스터마이즈 워드리스트 — 실무에서도 흔한 서비스
+  계정 비밀번호 패턴)와 전체 흐름 Python 익스플로잇 템플릿(`GET /exploit-template`, 실제로는 Impacket의
+  GetUserSPNs.py/secretsdump.py/hashcat에 해당하는 개념적 흐름을 로컬 API로 재현) 다운로드 제공
+- `backend/services/ad_attack_lab.py`, `backend/routers/ad_attack_lab.py`. Pwn Lab/Web CTF 아레나/모의
+  해킹 랩과 동일한 스코프 결정으로 `history.db`에 저장하지 않음(서버 재시작 시 초기화되는 CTF 연습용 데이터)
+- recon→kerberoast→crack(자동 워드리스트 포함)→dcsync→verify 전체 체인과 AS-REP Roasting 보너스 단계,
+  권한 없는 계정으로의 DCSync 실패 케이스까지 Python 직접 호출 + curl(HTTP) 양쪽으로 end-to-end 검증 완료,
+  `npm run build` 성공
+
+### Web CTF 아레나(App 10) 확장 — OWASP API Top 10 챌린지 2종 추가 (BFLA·Mass Assignment)
+App 28/29와 같은 세션의 "기존 모듈에 시나리오 추가" 요청에 대한 답 — 기존 6개 챌린지(SQLi/IDOR/XSS/SSRF/
+JWT/SSTI)가 대체로 OWASP Top 10(웹 애플리케이션) 계열이라, API 특화 취약점(OWASP API Top 10) 2종을 추가해
+API 보안까지 커버 범위를 넓힘.
+- **BFLA(Broken Function Level Authorization, API5:2023)**: `POST /bfla/login {username}` — 항상
+  role=user로만 세션 발급 → `POST /bfla/delete-user {token, target_username}` — 서버가 "로그인했는지"만
+  확인하고 "관리자인지"는 검증하지 않아, 일반 사용자 토큰으로 관리자 전용 기능(사용자 삭제)을 그대로
+  호출할 수 있음
+- **Mass Assignment**: `POST /massassign/register` — 일부러 고정 Pydantic 스키마 대신 `Request.json()`으로
+  임의 필드를 그대로 받아 사용자 객체에 병합(`profile.update(extra_fields)`) → `role: admin`을 함께 보내면
+  가입하면서 스스로 관리자가 됨 → `GET /massassign/profile?username=...`으로 확인
+- `web_arena.py`의 `CHALLENGE_META`/`FLAGS`에 추가, 프론트(`WebArena.jsx`)에 `BflaChallenge`/
+  `MassAssignmentChallenge` 컴포넌트 신규(기존 6개 챌린지와 동일한 카드 UI 패턴)
+- 두 챌린지 모두 Python 직접 호출 + curl(HTTP)로 공격 성공 경로와 정상 경로(권한 없음/필드 미포함 시
+  flag 없음) 양쪽 검증 완료, `npm run build` 성공
+
+### 모의 해킹 랩(App 13) 확장 — 체인 3 추가 (파일 업로드 → 웹셸 → 취약한 서비스 바이너리 권한으로 SYSTEM 획득)
+같은 세션의 "기존 모듈에 시나리오 추가" 요청 — 기존 체인 1(경로 조작+세션 위조, Linux 계열)·체인 2
+(커맨드 인젝션+SUID, Linux 권한 상승)과 겹치지 않는 **Windows 계열** 초기 침투·권한 상승 기법으로 차별화.
+- **정찰**: `GET /chain3/recon/scan?target=10.10.3.0/24` → appsrv01.corp.local(Windows, IIS) 발견
+- **초기 침투 (검증되지 않은 파일 업로드)**: `POST /chain3/upload {filename, content}` — 확장자를
+  블랙리스트(exe/bat/cmd/com/scr/msi)로만 차단해, 목록에 없는 `.aspx` 같은 확장자로 웹셸을 그대로
+  업로드 가능. `content`에 `RunCommand(...)` 같은 실행 마커가 있어야 "웹셸"로 인식되도록 해 아무 텍스트나
+  올려서는 진행이 안 되게 막음
+- **권한 상승 (취약한 서비스 바이너리 권한)**: `POST /chain3/execute {filename, cmd}`(같은 웹셸 채널) —
+  `icacls`로 SYSTEM 서비스(ReportingSvc)의 실행 파일에 `BUILTIN\Users` 쓰기 권한이 있는 것을 발견 →
+  `copy payload.exe "...\ReportSvc.exe"`로 바이너리 교체 → `sc stop`/`sc start`로 서비스 재시작 → 교체된
+  프로그램이 SYSTEM 권한으로 실행되며 flag 노출. 체인 2와 동일하게 실제 OS 명령을 실행하지 않는 작은
+  시뮬레이터(`_run_simulated_command_c3`)로 안전하게 구현(whoami/icacls/sc qc/copy/sc stop·start만 인식)
+- remediation에 "Unquoted Service Path"라는 자매 취약점도 함께 언급해 확장 학습 유도
+- `pentest_lab.py`에 `CHAIN3_STAGES`/`CHAIN3_FLAG`/`recon_scan_chain3`/`chain3_upload`/`chain3_execute`/
+  `EXPLOIT_TEMPLATE_CHAIN3` 추가, `verify_flag()`가 3개 체인 모두 인식하도록 확장. 프론트(`PentestLab.jsx`)에
+  `Chain3Panel` 신규(기존 `StageCard`/`ResponseBox`/`ProgressStepper` 재사용) — 체인 탭은 API가 반환하는
+  `CHAINS` 배열을 그대로 순회해 렌더링하므로 프론트 쪽 탭 목록은 하드코딩 없이 자동으로 3개가 됨
+- 정찰→업로드(차단 확장자 거부 확인)→비-웹셸 콘텐츠 거부 확인→실제 웹셸 업로드→whoami→icacls→sc qc→
+  copy→sc stop→sc start→flag→verify 전체를 Python 직접 호출 + curl(HTTP)로 end-to-end 검증 완료,
+  `npm run build` 성공
+
 ### 테스트 레인지 (`test-range/`)
 App 6/16/17을 실제 대상으로 테스트해볼 수 있는 로컬 전용 Docker Compose 스택 — "취약한 사이트/네트워크/서버/방화벽을 구성할 방법이 있는지 검토해달라"는 요청으로 신설. App 9(Pwn Lab)이 이미 Docker를 요구하므로 새 의존성은 아님. 전부 검증된 공식 이미지(또는 그 위의 커스텀 Dockerfile)만 사용.
 - **juice-shop** (`bkimminich/juice-shop`, 공식) — 포트 3000, App 6 대상
@@ -737,6 +833,7 @@ App 6/16/17을 실제 대상으로 테스트해볼 수 있는 로컬 전용 Dock
 - [x] **포렌식 실습·분석 센터**: App 25 (`/forensics`)로 구현됨 — 메뉴를 8개 도메인/기능 그룹으로 재편하는 과정에서 "사고대응·포렌식" 그룹에 포렌식 전용 앱이 없다는 공백을 발견해 신설. Roadmap 사전 목록에 없던 앱이자, "실습 랩/아티팩트 감사기/증거 수집 도구" 세 방향을 사용자가 하나의 앱으로 조합해달라고 선택한 첫 사례(App 9/16/23의 세 가지 서로 다른 패턴을 포렌식 도메인에 재조합)
 - [x] **KISA 보안 가이드라인 종합 점검 (KESE-KIT)**: App 26 (`/kese-kit`)로 구현됨 — "github.com/cdppcorp/KESE-KIT 스킬을 가져와서 반영해달라"는 요청으로 신설. KESE-KIT은 KISA 공개 가이드라인 기반 오픈소스 Claude Code 플러그인(7개 영역: CII/AI보안/로봇보안/우주보안/시큐어코딩/제로트러스트/SW공급망)인데, AskUserQuestion으로 "플러그인 설치가 아니라 웹앱 기능으로, 7개 영역 전부"를 확인받아 App 24(금융보안원 CSP 평가)의 "평가 유형 여러 개를 한 앱에서 선택" 패턴을 7개로 확장해 구현. Roadmap 사전 목록에 없던 앱이자, 외부 오픈소스 프로젝트의 분류 체계를 가져와 반영한 첫 사례
 - [x] **장비 관리 & 자동 점검 (SIEM 연동)**: App 27 (`/devices`)로 구현됨 — "SIEM 장비처럼 방화벽/스위치 등에 API 호출해 자동으로 정보를 수집·분석하고 문제 발생 시 알림을 주도록 발전시켜달라, 장비 등록/수집 주기 관리 화면도 추가해달라"는 요청으로 신설. Roadmap 사전 목록에 없던 앱이자, 이 프로젝트 최초로 "등록해두면 사람 개입 없이 주기적으로 자동 실행"되는 앱(그 전까지는 App 23의 실시간 모니터링도 화면을 열어둬야 동작했음). 새 분석 로직 없이 App 1/16/18/23/25의 기존 수집·분석 엔진만 재사용해 "주기적 자동 반복" 계층만 새로 얹었다. 같은 세션 후속 요청으로 CSV/Excel 파일 하나로 여러 장비를 한 번에 등록하는 기능과 예시 템플릿 파일 다운로드도 추가됨
+- [x] **화이트해커 연습 허브 + AD/Kerberos 공격 실습**: App 28(`/white-hat-hub`)·App 29(`/ad-attack-lab`)로 구현됨 — "정보보안팀이 방어 역량을 기르기 위해 공격 기법을 직접 실습하는 메뉴를 만들어달라"는 요청으로 신설. 착수 전 App 9/10/13/25에 이미 실습 콘텐츠가 상당히 있음을 확인하고 AskUserQuestion으로 방향을 물어 "①통합 허브 신설 + ②새 공격 기법 영역 추가 + ③기존 모듈에 시나리오 추가"를 한 번에 진행하기로 함. App 28은 새 분석 로직 없이 기존 5개 실습 모듈을 학습 경로로 묶는 순수 집계 페이지(App 22와 같은 설계 원칙), App 29는 실제 기업 침해사고에서 가장 흔한 AD 공격 흐름(Kerberoasting→AS-REP Roasting→DCSync 권한 오용)을 로컬 시뮬레이터로 재현한 신규 실습 모듈. 같은 세션에 Web CTF 아레나(App 10)에 OWASP API Top 10 챌린지 2종(BFLA·Mass Assignment), 모의 해킹 랩(App 13)에 Windows 계열 체인 3(파일 업로드→웹셸→취약한 서비스 바이너리 권한으로 SYSTEM 획득)도 함께 추가함
 
 ### 외부 자동화 연동
 - [x] **n8n 연동 (Pull: n8n → 이 앱)**: 위 "공통 기능"의 n8n 자동화 연동 항목, `docs/n8n-integration.md` 참고
@@ -807,7 +904,9 @@ test_AI_security/
 │   │   ├── extract.py         ← 공용 파일 업로드→텍스트 추출 (POST /api/extract-text, Word/PDF/Excel/텍스트)
 │   │   ├── forensics.py       ← App 25 (/lab/*, /audit/*, /collection/*)
 │   │   ├── kese_kit.py        ← App 26 (+ /guide, /report/{id})
-│   │   └── devices.py         ← App 27 (/meta, CRUD, /bulk-upload, /{id}/test-connection, /{id}/collect-now, /{id}/history)
+│   │   ├── devices.py         ← App 27 (/meta, CRUD, /bulk-upload, /{id}/test-connection, /{id}/collect-now, /{id}/history)
+│   │   ├── ad_attack_lab.py   ← App 29 (/stages, /recon, /kerberoast, /asrep-roast, /crack, /dcsync, /verify, /wordlist, /exploit-template)
+│   │   └── whitehat_hub.py    ← App 28 (/catalog 단일 엔드포인트)
 │   └── services/
 │       ├── claude_service.py  ← App 1 (+ log_offline_engine.py 폐쇄망 규칙 기반 로그 분석)
 │       ├── mock_data.py
@@ -851,7 +950,9 @@ test_AI_security/
 │       ├── device_store.py    ← App 27 장비 등록 정보 SQLite 저장소(devices 테이블, db.py와 별개)
 │       ├── device_collector.py ← App 27 장비 유형별 수집(SSH/클라우드 CLI/PowerShell) — App 23/25 재사용
 │       ├── device_scheduler.py ← App 27 주기적 자동 수집·분석 백그라운드 루프 (main.py startup에서 시작)
-│       └── device_bulk_import.py ← App 27 CSV/Excel 장비 일괄 등록 파싱
+│       ├── device_bulk_import.py ← App 27 CSV/Excel 장비 일괄 등록 파싱
+│       ├── ad_attack_lab.py   ← App 29 (가상 AD 도메인 시뮬레이터, AI 미사용, history.db 미사용)
+│       └── whitehat_hub_service.py ← App 28 (실습 모듈 5종 집계 — 새 분석 로직 없음)
 └── frontend/
     ├── package.json
     └── src/
@@ -893,7 +994,9 @@ test_AI_security/
             ├── FsiCspAudit.jsx
             ├── Forensics.jsx
             ├── KeseKit.jsx
-            └── DeviceManagement.jsx
+            ├── DeviceManagement.jsx
+            ├── WhiteHatHub.jsx
+            └── AdAttackLab.jsx
 ```
 
 ## 실행 방법
@@ -923,7 +1026,7 @@ npm run dev
 
 | 페이지/기능 | 추가로 필요한 것 |
 |---|---|
-| `/vuln`, `/web-arena`, `/policy`, `/model-audit`, `/pentest-lab`, `/phishing-sim`, `/firewall-audit`, `/iam-audit`, `/secret-scan`, `/container-audit`, `/risk-dashboard`, `/kese-kit` | 없음 — 서버 두 개만 켜면 바로 테스트 가능 |
+| `/vuln`, `/web-arena`, `/policy`, `/model-audit`, `/pentest-lab`, `/phishing-sim`, `/firewall-audit`, `/iam-audit`, `/secret-scan`, `/container-audit`, `/risk-dashboard`, `/kese-kit`, `/white-hat-hub`, `/ad-attack-lab` | 없음 — 서버 두 개만 켜면 바로 테스트 가능 |
 | `/forensics`의 "실습 랩" 탭 | 챌린지 다운로드/flag 검증 자체는 서버 두 개만 켜면 바로 가능. 분석에 Python(이미 필요) 외 pcap 챌린지는 Wireshark(권장, 없어도 PowerShell로 대체 가능), 카빙 챌린지는 정석대로 하려면 binwalk(선택, 없어도 확장자만 바꿔 열면 됨) |
 | `/forensics`의 "증거 수집 도구" 탭 — 이 PC(Windows) | Windows + PowerShell 필수(App 23과 동일). Prefetch 파일 목록 조회는 관리자 권한이 필요할 수 있음(없으면 chain of custody에 실패로 기록됨) |
 | `/forensics`의 "증거 수집 도구" 탭 — 원격 SSH(Linux/macOS/네트워크 장비) | `backend/requirements.txt`의 `paramiko`(pip install 대상 — 서버 재시작 필요). 대상 시스템에 SSH 접속 가능해야 하고, 네트워크 장비는 명령 1개만 자동 실행되므로 실패 시 아티팩트 감사기 가이드의 수동 명령 사용 |

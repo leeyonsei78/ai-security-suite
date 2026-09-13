@@ -24,6 +24,8 @@ FLAGS = {
     "ssrf": "WEB{ssrf_p1v0t_t0_1ntern4l_4p1}",
     "jwt": "WEB{jwt_w34k_secr3t_f0rg3d}",
     "ssti": "WEB{sst1_f0rm4t_str1ng_l34k}",
+    "bfla": "WEB{bfla_m1ss1ng_r0le_check_0n_funct10n}",
+    "massassign": "WEB{m4ss_4ss1gnm3nt_1s_4dm1n_n0w}",
 }
 
 CHALLENGE_META = [
@@ -105,6 +107,38 @@ CHALLENGE_META = [
             "이 서버는 Python의 str.format()을 사용자 입력에 그대로 적용합니다 — {key} 나 {key[subkey]} 형식으로 컨텍스트에 있는 아무 값이나 참조할 수 있습니다.",
             "컨텍스트에 user 말고 다른 키가 더 있을 수 있습니다. secret_config 같은 이름을 추측해서 넣어보세요.",
             "형식은 {바깥키[안쪽키]} 입니다 — 따옴표 없이 그대로 씁니다 (예: {secret_config[flag]}).",
+        ],
+    },
+    {
+        "id": "bfla",
+        "title": "BFLA: 관리자 전용 기능을 일반 사용자로 호출하기",
+        "difficulty": "중급",
+        "meaning": "BFLA(Broken Function Level Authorization, OWASP API Top 10 API5:2023) — 서버가 요청이 "
+                   "'인증되었는지'만 확인하고 호출자가 그 기능을 수행할 '권한(역할)'이 있는지는 검증하지 않아, "
+                   "일반 사용자가 관리자 전용 기능을 그대로 호출할 수 있는 취약점입니다.",
+        "situation": "사용자 삭제 기능은 관리자 화면에만 메뉴로 노출되어 있습니다. 하지만 서버의 실제 엔드포인트가 "
+                     "호출자의 역할까지 검증하는지는 별개의 문제입니다.",
+        "endpoint": "POST /api/web-arena/bfla/login { username } → POST /api/web-arena/bfla/delete-user { token, target_username }",
+        "hints": [
+            "일반 사용자 계정(예: bob)으로 로그인해 세션 토큰을 받으세요 — role은 항상 user로만 발급됩니다.",
+            "관리자 화면에만 노출되어야 할 delete-user 기능을 이 토큰으로 직접 호출해보세요.",
+            "프론트엔드 메뉴에 안 보인다고 해서 그 기능이 서버에서 막혀 있는 것은 아닙니다 — API를 직접 호출하면 어떻게 될까요?",
+        ],
+    },
+    {
+        "id": "massassign",
+        "title": "Mass Assignment: 가입하면서 스스로 관리자 되기",
+        "difficulty": "중급",
+        "meaning": "Mass Assignment — 서버가 클라이언트로부터 받은 JSON의 필드를 화이트리스트 없이 그대로 내부 "
+                   "객체에 병합하면, 클라이언트가 원래 지정할 수 없어야 할 필드(예: role, is_admin)까지 "
+                   "마음대로 채울 수 있는 취약점입니다. OWASP API Top 10의 '과도한 데이터 노출' 계열과도 짝을 이룹니다.",
+        "situation": "회원가입 API는 username만 받도록 설계된 것처럼 보이지만, 서버 코드는 요청 JSON에 담긴 "
+                     "필드를 검증 없이 그대로 사용자 객체에 반영합니다.",
+        "endpoint": "POST /api/web-arena/massassign/register { username, ...아무 필드나 추가 가능 } → GET /api/web-arena/massassign/profile?username=...",
+        "hints": [
+            "정상적인 가입은 username만 보내는 것입니다 — 먼저 그렇게 가입해서 프로필을 확인해보세요.",
+            "가입 요청 JSON에 username 말고 다른 필드를 추가로 넣으면 서버가 그 필드도 그대로 저장할까요?",
+            "role 이나 is_admin 같은 필드를 값 admin / true 로 함께 보내보세요.",
         ],
     },
 ]
@@ -298,6 +332,55 @@ def ssti_render(template: str) -> dict:
         return {"rendered": rendered}
     except Exception as e:
         return {"error": f"{type(e).__name__}: {e}"}
+
+
+# ---- BFLA (Broken Function Level Authorization) --------------------------
+
+BFLA_SESSIONS: dict[str, str] = {}
+
+
+def bfla_login(username: str) -> dict:
+    token = secrets.token_hex(8)
+    BFLA_SESSIONS[token] = username
+    return {"token": token, "username": username, "role": "user"}
+
+
+def bfla_delete_user(token: str, target_username: str) -> dict:
+    # 의도적 취약점: 이 함수는 '로그인했는지'만 확인하고 '호출자가 관리자인지'는 전혀 확인하지 않는다.
+    # OWASP API Top 10(API5:2023) Broken Function Level Authorization의 전형적인 예 — 프론트엔드가
+    # 이 메뉴를 관리자에게만 보여주더라도, 서버 자신이 권한을 검증하지 않으면 아무 의미가 없다.
+    username = BFLA_SESSIONS.get(token)
+    if not username:
+        return {"error": "유효하지 않은 세션입니다. 먼저 로그인하세요."}
+    return {
+        "success": True,
+        "message": f"'{username}'(role: user)이(가) 관리자 전용 기능인 delete-user를 호출해 "
+                   f"'{target_username}' 계정을 삭제했습니다.",
+        "flag": FLAGS["bfla"],
+    }
+
+
+# ---- Mass Assignment -------------------------------------------------------
+
+MASSASSIGN_USERS: dict[str, dict] = {}
+
+
+def massassign_register(username: str, extra_fields: dict) -> dict:
+    # 의도적 취약점: 클라이언트가 보낸 JSON 필드를 화이트리스트 없이 그대로 사용자 객체에 병합한다.
+    profile = {"username": username, "role": "user", "is_admin": False}
+    profile.update(extra_fields or {})
+    MASSASSIGN_USERS[username] = profile
+    return {"profile": profile}
+
+
+def massassign_profile(username: str) -> dict:
+    profile = MASSASSIGN_USERS.get(username)
+    if not profile:
+        return {"error": "사용자를 찾을 수 없습니다. 먼저 가입하세요."}
+    result = {"profile": profile}
+    if profile.get("is_admin") is True or profile.get("role") == "admin":
+        result["flag"] = FLAGS["massassign"]
+    return result
 
 
 # ---- 공유 스코어보드 (팀/친구와 같은 서버에 접속해 같이 연습할 때 사용) -----------

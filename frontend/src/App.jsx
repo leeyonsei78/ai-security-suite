@@ -27,6 +27,8 @@ import FsiCspAudit from './pages/FsiCspAudit'
 import Forensics from './pages/Forensics'
 import KeseKit from './pages/KeseKit'
 import DeviceManagement from './pages/DeviceManagement'
+import WhiteHatHub from './pages/WhiteHatHub'
+import AdAttackLab from './pages/AdAttackLab'
 
 export default function App() {
   return (
@@ -60,6 +62,8 @@ export default function App() {
         <Route path="/forensics" element={<Forensics />} />
         <Route path="/kese-kit" element={<KeseKit />} />
         <Route path="/devices" element={<DeviceManagement />} />
+        <Route path="/white-hat-hub" element={<WhiteHatHub />} />
+        <Route path="/ad-attack-lab" element={<AdAttackLab />} />
       </Routes>
     </BrowserRouter>
   )

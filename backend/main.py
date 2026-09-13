@@ -33,6 +33,8 @@ from routers.extract import router as extract_router
 from routers.forensics import router as forensics_router
 from routers.kese_kit import router as kese_kit_router
 from routers.devices import router as devices_router
+from routers.ad_attack_lab import router as ad_attack_lab_router
+from routers.whitehat_hub import router as whitehat_hub_router
 from services import device_scheduler
 
 app = FastAPI(title="AI Security Suite", version="1.0.0")
@@ -90,6 +92,8 @@ app.include_router(extract_router, dependencies=_authed)
 app.include_router(forensics_router, dependencies=_authed)
 app.include_router(kese_kit_router, dependencies=_authed)
 app.include_router(devices_router, dependencies=_authed)
+app.include_router(ad_attack_lab_router, dependencies=_authed)
+app.include_router(whitehat_hub_router, dependencies=_authed)
 
 
 @app.get("/")

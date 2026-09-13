@@ -3,7 +3,7 @@ import axios from 'axios'
 import {
   Swords, Timer, Play, Pause, RotateCcw, Trophy, Database, LockOpen, CodeXml,
   ChevronDown, ChevronUp, CheckCircle2, XCircle, KeyRound, AlertTriangle,
-  Network, Braces, Users, RefreshCw, Download,
+  Network, Braces, Users, RefreshCw, Download, UserX, Layers,
 } from 'lucide-react'
 import GuidePanel from '../components/GuidePanel'
 
@@ -48,7 +48,7 @@ const ARENA_STEPS = [
 const ARENA_TIPS = [
   '막히면 힌트를 하나씩 열어보세요.',
   '요청/응답은 실제 네트워크 요청입니다 — 브라우저 개발자도구의 Network 탭으로도 확인해보면 실전 감각을 더 기를 수 있습니다.',
-  '여기 있는 취약점(SQLi, IDOR, XSS, SSRF, JWT, SSTI)은 실무에서도 가장 흔하게 발견되는 유형입니다.',
+  '여기 있는 취약점(SQLi, IDOR, XSS, SSRF, JWT, SSTI, BFLA, Mass Assignment)은 실무·OWASP API Top 10에서도 가장 흔하게 발견되는 유형입니다.',
   '팀원과 함께 하려면: 호스트 PC에서 npm run dev -- --host 로 프론트를 실행하고, 방화벽에서 5180/8000 포트를 허용한 뒤 팀원에게 http://<호스트 IP>:5180/web-arena 를 공유하세요.',
 ]
 
@@ -136,6 +136,8 @@ const CHALLENGE_LABELS = {
   ssrf: { label: 'SSRF', icon: Network },
   jwt: { label: 'JWT 위조', icon: KeyRound },
   ssti: { label: 'SSTI', icon: Braces },
+  bfla: { label: 'BFLA', icon: UserX },
+  massassign: { label: 'Mass Assignment', icon: Layers },
 }
 
 function Scoreboard({ rows, totalCount, onRefresh }) {
@@ -549,6 +551,137 @@ function SstiChallenge({ meta, solved, onSolved, playerName }) {
   )
 }
 
+function BflaChallenge({ meta, solved, onSolved, playerName }) {
+  const [username, setUsername] = useState('bob')
+  const [token, setToken] = useState('')
+  const [targetUsername, setTargetUsername] = useState('alice')
+  const [resp, setResp] = useState(null)
+
+  const login = async () => {
+    const res = await axios.post('/api/web-arena/bfla/login', { username })
+    setToken(res.data.token)
+  }
+
+  const callDelete = async () => {
+    try {
+      const res = await axios.post('/api/web-arena/bfla/delete-user', { token, target_username: targetUsername })
+      setResp(res.data)
+    } catch (err) {
+      setResp(err.response?.data ?? { error: String(err) })
+    }
+  }
+
+  return (
+    <div className="bg-fuchsia-500/10 border border-fuchsia-500/30 rounded-xl p-5 space-y-4">
+      <div className="flex items-center gap-2">
+        <UserX size={18} className="text-fuchsia-400" />
+        <span className="text-xs font-bold text-fuchsia-400">{meta.difficulty}</span>
+      </div>
+      <p className="text-base font-bold text-slate-100">{meta.title}</p>
+      {meta.meaning && <p className="text-xs text-slate-400"><span className="font-semibold text-slate-300">의미: </span>{meta.meaning}</p>}
+      <p className="text-xs text-slate-300">{meta.situation}</p>
+      <p className="text-[11px] font-mono text-slate-500">{meta.endpoint}</p>
+
+      <div className="flex gap-2 items-end">
+        <div className="flex-1">
+          <label className="text-[11px] text-slate-400">username (일반 사용자로 로그인)</label>
+          <input value={username} onChange={e => setUsername(e.target.value)} className="w-full bg-slate-800 border border-slate-600 rounded-lg px-2 py-1.5 text-xs font-mono focus:outline-none focus:border-fuchsia-500" />
+        </div>
+        <button onClick={login} className="px-3 py-1.5 bg-fuchsia-700 hover:bg-fuchsia-800 rounded-lg text-xs font-semibold shrink-0">로그인</button>
+      </div>
+      {token && <p className="text-[11px] font-mono text-slate-400 break-all">token: {token}</p>}
+
+      <div className="flex gap-2 items-end">
+        <div className="flex-1">
+          <label className="text-[11px] text-slate-400">target_username (관리자 전용 기능의 대상)</label>
+          <input value={targetUsername} onChange={e => setTargetUsername(e.target.value)} className="w-full bg-slate-800 border border-slate-600 rounded-lg px-2 py-1.5 text-xs font-mono focus:outline-none focus:border-fuchsia-500" />
+        </div>
+        <button onClick={callDelete} disabled={!token} className="px-3 py-1.5 bg-fuchsia-600 hover:bg-fuchsia-700 disabled:bg-slate-700 disabled:text-slate-500 rounded-lg text-xs font-semibold shrink-0">delete-user 호출</button>
+      </div>
+
+      {resp && (
+        <pre className="bg-black/40 rounded-lg p-3 text-[11px] text-slate-300 overflow-x-auto font-mono whitespace-pre-wrap">{JSON.stringify(resp, null, 2)}</pre>
+      )}
+
+      <HintList hints={meta.hints} />
+      <FlagSubmit challengeId="bfla" playerName={playerName} onSolved={onSolved} alreadySolved={!!solved} />
+    </div>
+  )
+}
+
+function MassAssignmentChallenge({ meta, solved, onSolved, playerName }) {
+  const [username, setUsername] = useState('mallory')
+  const [extraKey, setExtraKey] = useState('role')
+  const [extraValue, setExtraValue] = useState('admin')
+  const [registerResp, setRegisterResp] = useState(null)
+  const [profileResp, setProfileResp] = useState(null)
+
+  const register = async () => {
+    try {
+      const body = { username }
+      if (extraKey.trim()) {
+        const v = extraValue.trim()
+        body[extraKey.trim()] = v === 'true' ? true : v === 'false' ? false : v
+      }
+      const res = await axios.post('/api/web-arena/massassign/register', body)
+      setRegisterResp(res.data)
+    } catch (err) {
+      setRegisterResp(err.response?.data ?? { error: String(err) })
+    }
+  }
+
+  const checkProfile = async () => {
+    try {
+      const res = await axios.get('/api/web-arena/massassign/profile', { params: { username } })
+      setProfileResp(res.data)
+    } catch (err) {
+      setProfileResp(err.response?.data ?? { error: String(err) })
+    }
+  }
+
+  return (
+    <div className="bg-lime-500/10 border border-lime-500/30 rounded-xl p-5 space-y-4">
+      <div className="flex items-center gap-2">
+        <Layers size={18} className="text-lime-400" />
+        <span className="text-xs font-bold text-lime-400">{meta.difficulty}</span>
+      </div>
+      <p className="text-base font-bold text-slate-100">{meta.title}</p>
+      {meta.meaning && <p className="text-xs text-slate-400"><span className="font-semibold text-slate-300">의미: </span>{meta.meaning}</p>}
+      <p className="text-xs text-slate-300">{meta.situation}</p>
+      <p className="text-[11px] font-mono text-slate-500">{meta.endpoint}</p>
+
+      <div className="grid sm:grid-cols-3 gap-2">
+        <div>
+          <label className="text-[11px] text-slate-400">username</label>
+          <input value={username} onChange={e => setUsername(e.target.value)} className="w-full bg-slate-800 border border-slate-600 rounded-lg px-2 py-1.5 text-xs font-mono focus:outline-none focus:border-lime-500" />
+        </div>
+        <div>
+          <label className="text-[11px] text-slate-400">추가 필드 이름 (비우면 안 보냄)</label>
+          <input value={extraKey} onChange={e => setExtraKey(e.target.value)} placeholder="role" className="w-full bg-slate-800 border border-slate-600 rounded-lg px-2 py-1.5 text-xs font-mono focus:outline-none focus:border-lime-500" />
+        </div>
+        <div>
+          <label className="text-[11px] text-slate-400">값</label>
+          <input value={extraValue} onChange={e => setExtraValue(e.target.value)} placeholder="admin" className="w-full bg-slate-800 border border-slate-600 rounded-lg px-2 py-1.5 text-xs font-mono focus:outline-none focus:border-lime-500" />
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <button onClick={register} className="flex-1 py-2 bg-lime-600 hover:bg-lime-700 rounded-lg text-xs font-semibold">가입(register)</button>
+        <button onClick={checkProfile} className="flex-1 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs font-semibold">프로필 확인</button>
+      </div>
+
+      {registerResp && (
+        <pre className="bg-black/40 rounded-lg p-3 text-[11px] text-slate-300 overflow-x-auto font-mono whitespace-pre-wrap">{JSON.stringify(registerResp, null, 2)}</pre>
+      )}
+      {profileResp && (
+        <pre className="bg-black/40 rounded-lg p-3 text-[11px] text-slate-300 overflow-x-auto font-mono whitespace-pre-wrap">{JSON.stringify(profileResp, null, 2)}</pre>
+      )}
+
+      <HintList hints={meta.hints} />
+      <FlagSubmit challengeId="massassign" playerName={playerName} onSolved={onSolved} alreadySolved={!!solved} />
+    </div>
+  )
+}
+
 export default function WebArena() {
   const [challenges, setChallenges] = useState([])
   const [playerName, setPlayerName] = useState(() => {
@@ -613,10 +746,12 @@ export default function WebArena() {
             {byId.ssrf && <SsrfChallenge meta={byId.ssrf} solved={mySolved.ssrf} onSolved={refreshScoreboard} playerName={playerName} />}
             {byId.jwt && <JwtChallenge meta={byId.jwt} solved={mySolved.jwt} onSolved={refreshScoreboard} playerName={playerName} />}
             {byId.ssti && <SstiChallenge meta={byId.ssti} solved={mySolved.ssti} onSolved={refreshScoreboard} playerName={playerName} />}
+            {byId.bfla && <BflaChallenge meta={byId.bfla} solved={mySolved.bfla} onSolved={refreshScoreboard} playerName={playerName} />}
+            {byId.massassign && <MassAssignmentChallenge meta={byId.massassign} solved={mySolved.massassign} onSolved={refreshScoreboard} playerName={playerName} />}
           </div>
           <div className="space-y-4">
             <TimerCard />
-            <Scoreboard rows={rows} totalCount={challenges.length || 6} onRefresh={refreshScoreboard} />
+            <Scoreboard rows={rows} totalCount={challenges.length || 8} onRefresh={refreshScoreboard} />
           </div>
         </div>
       </div>

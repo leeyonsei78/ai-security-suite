@@ -5,7 +5,7 @@ import {
   Shield, Mail, ShieldAlert, Search, Siren, Globe, FlaskConical, Syringe, Cpu, Swords,
   ScrollText, BrainCircuit, ShieldCheck, Bell, Trash2, Send, Database, ShieldQuestion, Radar,
   KeyRound, ScanSearch, Container, MailCheck, Gauge, ChevronDown, Zap, Landmark,
-  LayoutGrid, Server, Network, Cloud, Fingerprint, Router,
+  LayoutGrid, Server, Network, Cloud, Fingerprint, Router, ShieldHalf, Building2,
 } from 'lucide-react'
 import ModeSelector from './ModeSelector'
 
@@ -75,9 +75,11 @@ const groups = [
     label: '모의해킹',
     icon: Swords,
     links: [
+      { to: '/white-hat-hub', icon: ShieldHalf, label: '화이트해커 연습 허브' },
       { to: '/pwn-lab', icon: Cpu, label: 'Pwn/Reverse 실습실' },
       { to: '/web-arena', icon: Swords, label: 'Web CTF 아레나' },
       { to: '/pentest-lab', icon: ShieldCheck, label: '모의 해킹 랩' },
+      { to: '/ad-attack-lab', icon: Building2, label: 'AD/Kerberos 공격 실습' },
       { to: '/phishing-sim', icon: Send, label: '피싱 모의훈련 생성기' },
     ],
   },
