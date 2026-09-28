@@ -23,6 +23,7 @@ from routers.phishing_sim import router as phishing_sim_router
 from routers.cve_lookup import router as cve_lookup_router
 from routers.scheduled_jobs import router as scheduled_jobs_router
 from routers.cloudtrail import router as cloudtrail_router, webhook_router as cloudtrail_webhook_router
+from routers.log_ingest import router as log_sources_router, ingest_router as log_ingest_router
 from services.claude_service import IS_MOCK
 
 
@@ -74,6 +75,10 @@ app.include_router(cloudtrail_router, dependencies=_authed)
 # 웹훅은 AWS SNS가 직접 호출하므로 API_KEY dependency를 걸지 않는다 — 대신
 # sns_verify.verify()로 서명을 검증한다 (routers/cloudtrail.py 참고).
 app.include_router(cloudtrail_webhook_router)
+app.include_router(log_sources_router, dependencies=_authed)
+# 로그 수집 엔드포인트는 고객사 rsyslog/syslog-ng가 직접 호출하므로 API_KEY
+# dependency를 걸지 않는다 — 대신 소스별 X-Ingest-Key로 인증한다 (routers/log_ingest.py 참고).
+app.include_router(log_ingest_router)
 
 
 @app.get("/")

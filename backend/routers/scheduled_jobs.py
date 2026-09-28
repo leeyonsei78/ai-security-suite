@@ -8,9 +8,10 @@ router = APIRouter(prefix="/api/scheduled-jobs", tags=["scheduled-jobs"])
 
 
 class CreateJobRequest(BaseModel):
-    job_type: str  # "webscan" | "cve_watch"
-    target: str
+    job_type: str  # "webscan" | "cve_watch" | "cloudwatch_logs" | "guardduty_findings"
+    target: str = ""
     interval_hours: int = 24
+    connection_id: int | None = None  # cloudwatch_logs/guardduty_findings에서 App 17 AWS 연결 참조
 
 
 @router.get("")
@@ -21,7 +22,7 @@ async def list_jobs():
 @router.post("")
 async def create_job(request: CreateJobRequest):
     try:
-        job = jobs_service.create_job(request.job_type, request.target, request.interval_hours)
+        job = jobs_service.create_job(request.job_type, request.target, request.interval_hours, request.connection_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     job_scheduler.schedule_job(job)

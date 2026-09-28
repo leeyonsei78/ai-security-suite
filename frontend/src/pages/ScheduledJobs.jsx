@@ -1,24 +1,27 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
-import { Clock, Globe, Database, Trash2, Play, Plus, AlertTriangle } from 'lucide-react'
+import { Clock, Globe, Database, Trash2, Play, Plus, AlertTriangle, Cloud, ShieldAlert } from 'lucide-react'
 import GuidePanel from '../components/GuidePanel'
 
 const JOB_STEPS = [
-  '점검 유형을 선택합니다 — "웹 스캐너 정기 점검"(App 6 재사용) 또는 "CVE 키워드 감시"(App 15 재사용).',
-  '대상(URL 또는 검색 키워드)과 점검 주기(시간 단위)를 입력하고 [등록]을 클릭합니다.',
+  '점검 유형을 선택합니다 — 웹 스캐너/CVE 감시는 대상만 입력하면 되고, CloudWatch Logs/GuardDuty는 App 17(CloudTrail 연동)에서 등록한 AWS 연결이 먼저 있어야 합니다.',
+  '대상(URL·키워드·로그 그룹명 등)과 점검 주기(시간 단위)를 입력하고 [등록]을 클릭합니다.',
   '등록된 작업은 백엔드가 켜져 있는 동안 자동으로 주기마다 실행됩니다 — n8n 같은 별도 도구 설치가 필요 없습니다.',
-  '직전 실행과 비교해 새로 생긴 CRITICAL 이슈/고위험 CVE가 있을 때만 알림(🔔)이 발송됩니다.',
+  '직전 실행과 비교해 새로 생긴 CRITICAL 이슈/고위험 CVE·GuardDuty 탐지가 있을 때만 알림(🔔)이 발송됩니다.',
   '[지금 실행]으로 주기를 기다리지 않고 즉시 한 번 테스트할 수 있습니다.',
 ]
 const JOB_TIPS = [
-  '실행 결과는 각각 웹 스캐너(App 6)·CVE 조회(App 15) 히스토리에도 그대로 쌓입니다.',
+  '실행 결과는 각각 웹 스캐너(App 6)·CVE 조회(App 15)·대시보드(App 1) 히스토리에도 그대로 쌓입니다.',
   '백엔드 프로세스가 켜져 있어야 스케줄이 동작합니다(재시작하면 자동으로 다시 등록됨).',
   '같은 문제가 계속 나와도 매번 알림을 보내지 않고, "새로 생긴" 항목이 있을 때만 알림을 보냅니다.',
+  'GuardDuty는 AWS가 이미 심각도를 계산해주므로 Claude 재분석 없이 그 결과를 그대로 사용합니다(원가 절약).',
 ]
 
 const JOB_TYPE_CONFIG = {
-  webscan: { icon: Globe, label: '웹 스캐너 정기 점검', placeholder: 'https://example.com' },
-  cve_watch: { icon: Database, label: 'CVE 키워드 감시', placeholder: 'log4j' },
+  webscan: { icon: Globe, label: '웹 스캐너 정기 점검', placeholder: 'https://example.com', requiresConnection: false, targetRequired: true },
+  cve_watch: { icon: Database, label: 'CVE 키워드 감시', placeholder: 'log4j', requiresConnection: false, targetRequired: true },
+  cloudwatch_logs: { icon: Cloud, label: 'AWS CloudWatch Logs 감시', placeholder: '/aws/lambda/my-function', requiresConnection: true, targetRequired: true },
+  guardduty_findings: { icon: ShieldAlert, label: 'AWS GuardDuty 탐지 감시', placeholder: '(비워두면 자동 탐지)', requiresConnection: true, targetRequired: false },
 }
 
 function JobCard({ job, onDelete, onRunNow, running }) {
@@ -32,7 +35,7 @@ function JobCard({ job, onDelete, onRunNow, running }) {
           <Icon size={16} className="text-cyan-400 shrink-0" />
           <div className="min-w-0">
             <p className="text-xs text-slate-400">{cfg.label} · {job.interval_hours}시간마다</p>
-            <p className="text-sm font-mono text-slate-200 truncate">{job.target}</p>
+            <p className="text-sm font-mono text-slate-200 truncate">{job.target || '(자동 탐지)'}</p>
           </div>
         </div>
         <div className="flex items-center gap-1 shrink-0">
@@ -69,8 +72,10 @@ function JobCard({ job, onDelete, onRunNow, running }) {
 
 export default function ScheduledJobs() {
   const [jobs, setJobs] = useState([])
+  const [connections, setConnections] = useState([])
   const [jobType, setJobType] = useState('webscan')
   const [target, setTarget] = useState('')
+  const [connectionId, setConnectionId] = useState('')
   const [intervalHours, setIntervalHours] = useState(24)
   const [creating, setCreating] = useState(false)
   const [running, setRunning] = useState(null)
@@ -79,15 +84,24 @@ export default function ScheduledJobs() {
   const fetchJobs = () => {
     axios.get('/api/scheduled-jobs').then(r => setJobs(r.data.jobs)).catch(() => {})
   }
+  const fetchConnections = () => {
+    axios.get('/api/cloudtrail/connections').then(r => setConnections(r.data.connections)).catch(() => {})
+  }
 
-  useEffect(() => { fetchJobs() }, [])
+  useEffect(() => { fetchJobs(); fetchConnections() }, [])
+
+  const cfg = JOB_TYPE_CONFIG[jobType]
 
   const createJob = async () => {
-    if (!target.trim()) return
+    if (cfg.targetRequired && !target.trim()) return
+    if (cfg.requiresConnection && !connectionId) return
     setCreating(true)
     setError('')
     try {
-      await axios.post('/api/scheduled-jobs', { job_type: jobType, target, interval_hours: Number(intervalHours) })
+      await axios.post('/api/scheduled-jobs', {
+        job_type: jobType, target, interval_hours: Number(intervalHours),
+        connection_id: cfg.requiresConnection ? Number(connectionId) : null,
+      })
       setTarget('')
       fetchJobs()
     } catch (err) {
@@ -112,8 +126,6 @@ export default function ScheduledJobs() {
     }
   }
 
-  const cfg = JOB_TYPE_CONFIG[jobType]
-
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 p-6">
       <div className="max-w-4xl mx-auto space-y-6">
@@ -135,11 +147,13 @@ export default function ScheduledJobs() {
           <div className="grid sm:grid-cols-[auto_1fr_auto] gap-3">
             <select
               value={jobType}
-              onChange={e => setJobType(e.target.value)}
+              onChange={e => { setJobType(e.target.value); setTarget(''); setConnectionId('') }}
               className="bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-sm"
             >
               <option value="webscan">웹 스캐너 정기 점검</option>
               <option value="cve_watch">CVE 키워드 감시</option>
+              <option value="cloudwatch_logs">AWS CloudWatch Logs 감시</option>
+              <option value="guardduty_findings">AWS GuardDuty 탐지 감시</option>
             </select>
             <input
               value={target}
@@ -159,10 +173,31 @@ export default function ScheduledJobs() {
               <span className="text-xs text-slate-400">시간마다</span>
             </div>
           </div>
-          {error && <p className="text-xs text-red-400">{error}</p>}
+
+          {cfg.requiresConnection && (
+            <div>
+              <select
+                value={connectionId}
+                onChange={e => setConnectionId(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-sm"
+              >
+                <option value="">AWS 연결 선택 (App 17에서 먼저 등록 필요)</option>
+                {connections.map(c => (
+                  <option key={c.id} value={c.id}>{c.role_arn}</option>
+                ))}
+              </select>
+              {connections.length === 0 && (
+                <p className="text-xs text-amber-400 mt-1">
+                  등록된 AWS 연결이 없습니다 — <a href="/cloudtrail" className="underline">CloudTrail 연동(App 17)</a>에서 먼저 등록하세요.
+                </p>
+              )}
+            </div>
+          )}
+
+          {error && <p className="text-xs text-red-400 break-all">{error}</p>}
           <button
             onClick={createJob}
-            disabled={creating || !target.trim()}
+            disabled={creating || (cfg.targetRequired && !target.trim()) || (cfg.requiresConnection && !connectionId)}
             className="flex items-center gap-1.5 px-4 py-2 bg-cyan-700 hover:bg-cyan-600 disabled:bg-slate-700 disabled:text-slate-500 rounded-lg text-sm font-semibold"
           >
             <Plus size={14} /> {creating ? '등록 중...' : '등록'}

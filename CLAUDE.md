@@ -23,6 +23,7 @@ Claude AI를 활용한 보안 분석 도구 모음.
 | 15 | CVE 실시간 조회 | ✅ 완료 |
 | 16 | 정기 점검 스케줄러 | ✅ 완료 |
 | 17 | AWS CloudTrail 연동 | ✅ 완료 |
+| 18 | 외부 로그 소스 연동 (Syslog) | ✅ 완료 |
 
 ---
 
@@ -220,14 +221,26 @@ App 2(피싱 탐지기)와 짝을 이루는 "생성기" — 사내 보안 인식
 ### App 16: 정기 점검 스케줄러 `/scheduled-jobs`
 사업화 검토 중 "n8n 없이도 되는 내장 스케줄러"가 필요하다는 논의로 추가. n8n 같은 외부 자동화 도구를 설치하지 않아도, 이 앱 자체에서 App 6(웹 스캐너)·App 15(CVE 조회)를 주기적으로 자동 재실행할 수 있게 하는 도구.
 - **APScheduler**(순수 파이썬, 외부 브로커·별도 서버 불필요)를 백엔드 프로세스 안에 그대로 띄우는 방식 — FastAPI `lifespan`에서 서버 시작 시 DB에 저장된 활성 작업을 전부 스케줄러에 등록하고, 종료 시 정리
-- 점검 유형 2종: **웹 스캐너 정기 점검**(URL 대상, App 6의 `scan_url()` 재사용) / **CVE 키워드 감시**(키워드 대상, App 15의 `search_cves()` 재사용) — 새 분석 로직을 만들지 않고 기존 서비스 함수를 그대로 호출
-- 실행 결과는 각 원본 앱(webscan/cve_lookup)의 히스토리에도 그대로 쌓임 — "누가 트리거했는지"(사람 vs 스케줄러)만 다를 뿐 완전히 별도 저장소가 아님
+- 점검 유형 4종: **웹 스캐너 정기 점검**(URL 대상, App 6의 `scan_url()` 재사용) / **CVE 키워드 감시**(키워드 대상, App 15의 `search_cves()` 재사용) / **AWS CloudWatch Logs 감시**(로그 그룹 대상) / **AWS GuardDuty 탐지 감시**(Detector 대상, 비워두면 자동 탐지) — 새 분석 로직을 만들지 않고 기존 서비스 함수를 그대로 호출
+- **AWS 연동 2종 추가** (Roadmap "Syslog/기타 Cloud API 연동" 항목): CloudWatch Logs/GuardDuty는 새 AWS 연결 관리 화면을 또 만들지 않고 **App 17(CloudTrail 연동)에 이미 등록된 IAM Role 연결을 그대로 재사용**(`connection_id` 필드로 참조, `aws_cloudtrail_service.assume_role()` 공용 호출). CloudWatch Logs는 원시 텍스트 로그라 CloudTrail과 동일하게 `analyze_logs()`로 AI 분석하지만, **GuardDuty는 AWS가 자체 ML로 이미 심각도(Severity 0~10)를 계산해주므로 Claude 재분석 없이 그 결과를 그대로 dashboard 히스토리 형식으로 매핑**(원가 절약 + AWS가 이미 검증한 판정을 그대로 신뢰 — CloudTrail/CloudWatch와의 의도적 차이점). GuardDuty 심각도는 8.5+→CRITICAL/7.0+→HIGH/4.0+→MEDIUM/그 외→LOW로 매핑해 신규 고심각도 건만 알림
+- 실행 결과는 각 원본 앱(webscan/cve_lookup) 또는 dashboard(cloudwatch_logs/guardduty_findings)의 히스토리에도 그대로 쌓임 — "누가 트리거했는지"(사람 vs 스케줄러)만 다를 뿐 완전히 별도 저장소가 아님
 - **알림 피로 방지**: 매번 실행할 때마다 알림을 보내지 않고, 직전 실행 결과와 비교(fingerprint: 웹스캔은 `severity:title` 집합, CVE 감시는 CVE ID 집합)해 **새로 나타난 CRITICAL 이슈 / 새로 발견된 CVSS 7.0+ CVE**가 있을 때만 `notify.alert_if_critical()` 호출. CVE 조회는 원래 알림 대상에서 제외돼 있었지만(App 15 설명 참고, Claude AI를 안 쓰는 순수 조회 도구라 "위협 판정"이 아님), 정기 감시 맥락에서는 "새 고위험 CVE 발견"이 실제 공식 데이터 기반의 정당한 알림 사유라 `notify.APP_LABELS`에 `cve_lookup` 라벨을 추가하고 예외적으로 포함시킴
 - 작업 등록/삭제/목록/즉시실행(`GET/POST /api/scheduled-jobs`, `DELETE /api/scheduled-jobs/{id}`, `POST /api/scheduled-jobs/{id}/run-now`) — 즉시실행은 주기를 기다리지 않고 테스트하거나 급하게 한 번 확인하고 싶을 때 사용
 - 작업 목록은 `db.py`의 범용 히스토리 테이블(`app="scheduled_jobs"`)에 저장돼 서버 재시작에도 유지되고, 재시작 시 자동으로 스케줄러에 다시 등록됨 (히스토리 삭제 시 `delete_entry()` 함수를 `db.py`에 새로 추가 — 기존엔 `clear_history()`로 앱 전체 삭제만 가능했음)
 - ⚠️ **단일 프로세스 구조를 전제** — 여러 워커/서버로 스케일 아웃하면 같은 작업이 워커마다 중복 실행될 수 있음. 그 시점엔 Celery+Beat 같은 분산 스케줄러(외부 브로커 필요)로 이전 필요. 지금(단일 서버) 규모에는 충분함
 - `backend/services/scheduler.py`(APScheduler 래퍼) / `backend/services/scheduled_jobs_service.py`(작업 생성·검증·실행·diff 로직) / `backend/routers/scheduled_jobs.py`
-- 웹 스캔 작업 생성→즉시실행(Mock 모드, 이슈 4건 발견)→재실행(신규 0건으로 정확히 diff됨, 중복 알림 없음 확인)→서버 재시작 후 작업 유지 확인, CVE 감시 작업의 네트워크 오류 처리(이 세션 네트워크 제한으로 실제 NVD 응답은 못 받았으나 에러가 `last_error`에 안전하게 기록되고 크래시 없음)까지 curl로 검증 완료. 프론트는 `vite build` 성공 + 사용자 브라우저 확인 필요
+- 웹 스캔 작업 생성→즉시실행(Mock 모드, 이슈 4건 발견)→재실행(신규 0건으로 정확히 diff됨, 중복 알림 없음 확인)→서버 재시작 후 작업 유지 확인, CVE 감시 작업의 네트워크 오류 처리(이 세션 네트워크 제한으로 실제 NVD 응답은 못 받았으나 에러가 `last_error`에 안전하게 기록되고 크래시 없음)까지 curl로 검증 완료. **AWS 연동 2종**: connection_id 미지정/존재하지 않는 connection_id 거부, 유효한(테스트용으로 직접 DB에 삽입한) 연결로 작업 생성 후 즉시실행 시 boto3가 실제 AWS STS에 요청을 보내 `InvalidClientTokenId`를 정직하게 반환하는 것(크래시 없음)까지 curl로 검증 — 이 세션에 실제 AWS 자격증명이 없어 AssumeRole 성공 이후 CloudWatch/GuardDuty 실제 조회까지는 검증 못 함. 프론트는 `vite build` 성공 + 사용자 브라우저 확인 필요
+
+### App 18: 외부 로그 소스 연동 (Syslog) `/log-sources`
+Roadmap의 "Syslog/기타 Cloud API 연동" 항목 중 클라우드 제공자에 종속되지 않는 범용 부분 — rsyslog/syslog-ng 등 **임의의 로그 포워더**가 HTTPS로 로그를 직접 보내 App 1(대시보드)에서 분석하게 함. App 17(CloudTrail)이 AWS 전용 웹훅이라면 이건 "HTTPS POST만 되면 어떤 소스든" 붙일 수 있는 범용 버전.
+- **이 서버가 UDP 514(syslog 기본 포트)를 직접 열지 않음**: 임의의 UDP를 인터넷에 노출하면 스푸핑·DoS에 취약해지므로, 대신 고객사 쪽에 이미 있는 rsyslog(`omhttp` 모듈)/syslog-ng(`http()` destination)가 로그를 파싱해서 HTTPS로 포워딩하도록 설정 — 고객사 인바운드 방화벽을 전혀 안 건드려도 되는 outbound-only 구조. 설정 예시·명령어는 `docs/log-ingest-integration.md`에 문서화
+- **소스별 Ingest Key**: 소스를 등록하면(`POST /api/log-sources`) 그 소스 전용 랜덤 키가 즉시 발급됨 — 우리 전역 `API_KEY`와 별개로, 여러 고객사/소스를 서로 격리하기 위해 소스 단위로 발급(한 키 유출이 다른 소스에 영향 없음). 삭제 후 재등록하는 방식으로 키 회전
+- **수집 엔드포인트**(`POST /api/logs/ingest`, `X-Ingest-Key` 헤더로 인증, API_KEY 미적용): JSON 객체 배열 / JSON 객체 하나 / 순수 텍스트(줄바꿈 구분) 3가지 형식을 자동 판별해 받음 — rsyslog `omhttp`·syslog-ng `http()` destination이 흔히 보내는 형태와 간단한 curl 스크립트 양쪽 다 지원. 배치당 최대 200줄만 처리(비용 보호)
+- 받은 로그는 App 1의 기존 `analyze_logs()`에 그대로 흘려보내고(App 17과 동일한 "기존 파이프라인 재사용" 원칙) 결과는 dashboard 히스토리에 쌓이며 CRITICAL이면 기존 알림 시스템 발동
+- 프론트 `/log-sources` 페이지에서 소스 등록·목록(수집 건수·마지막 수신 시각·에러)·삭제 + 수집 URL·Ingest Key 복사 버튼 제공
+- `backend/services/log_ingest_service.py` / `backend/routers/log_ingest.py`(소스 관리는 `API_KEY` 인증 적용, 수집 엔드포인트는 별도로 인증 미적용)
+- **검증 완료**: 소스 생성 → 발급된 키 없이/틀린 키로 요청 시 401 → 올바른 키로 JSON 배열 요청과 순수 텍스트 요청 둘 다 202(Accepted) 응답 + dashboard 히스토리에 정상 적재 + 소스의 수집 건수·마지막 수신 시각 갱신까지 curl로 실제 엔드투엔드 검증 완료(Mock 모드). 프론트는 `vite build` 성공 + 사용자 브라우저 확인 필요
+- ⚠️ **Azure/GCP 클라우드 로그는 미착수**: Azure Activity Log(Service Principal 인증)·GCP Cloud Logging(Service Account 인증)은 AWS와 인증 모델이 달라 이번엔 구현하지 않음 — `docs/log-ingest-integration.md`에 향후 확장 방향(AWS와 같은 패턴: 연결 관리 화면 + App 16에 새 job_type 추가)만 문서화해둠, 실제 고객 요청이 들어오면 착수 예정(Roadmap 그대로 유지)
 
 ### App 17: AWS CloudTrail 연동 `/cloudtrail`
 사업화 검토에서 이어진 후속 작업 — 고객사 AWS 계정의 CloudTrail 감사 로그를 **S3+SNS 웹훅** 방식으로 받아 App 1(대시보드) 분석 파이프라인에 실시간에 가깝게 흘려보냄. 온보딩 절차·IAM 정책 예시는 `docs/cloudtrail-integration.md`에 별도 문서화(요청받은 항목).
@@ -270,7 +283,7 @@ App 2(피싱 탐지기)와 짝을 이루는 "생성기" — 사내 보안 인식
 - [x] **IoC 실제 위협 인텔리전스 조회**: AbuseIPDB/OTX 연동 — 위 App 4 설명 참고
 - [x] **n8n 없이 되는 내장 스케줄러**: App 16으로 구현 — 위 App 16 설명 참고
 - [x] **CloudTrail 연동(S3+SNS 웹훅 방식)**: App 17 (`/cloudtrail`)로 구현됨, `docs/cloudtrail-integration.md` 온보딩 가이드 포함
-- [ ] **Syslog/기타 Cloud API 연동**: 고객 요청 들어오는 대로 순차 확장
+- [x] **Syslog/기타 Cloud API 연동**: Syslog는 App 18 (`/log-sources`)로 구현, AWS CloudWatch Logs/GuardDuty는 App 16 확장으로 구현. Azure/GCP는 인증 모델이 달라 미착수 — `docs/log-ingest-integration.md`에 향후 확장 방향만 문서화, 고객 요청 들어오는 대로 착수
 
 ### 외부 자동화 연동
 - [x] **n8n 연동 (Pull: n8n → 이 앱)**: 위 "공통 기능"의 n8n 자동화 연동 항목, `docs/n8n-integration.md` 참고
@@ -295,7 +308,8 @@ test_AI_security/
 ├── .gitignore
 ├── docs/
 │   ├── n8n-integration.md    ← n8n 연동 가이드
-│   └── cloudtrail-integration.md  ← AWS CloudTrail 연동 온보딩 가이드 (App 17)
+│   ├── cloudtrail-integration.md  ← AWS CloudTrail 연동 온보딩 가이드 (App 17)
+│   └── log-ingest-integration.md  ← Syslog 등 로그 소스 연동 가이드 (App 18)
 ├── n8n-workflows/             ← n8n Import용 예제 워크플로우 3개
 ├── backend/
 │   ├── main.py
@@ -318,15 +332,17 @@ test_AI_security/
 │   │   ├── pentest_lab.py     ← App 13 (+ /stages, /exploit-template)
 │   │   ├── phishing_sim.py    ← App 14 (+ /scenarios, /report/{id})
 │   │   ├── cve_lookup.py      ← App 15 (+ /search, /status) — Claude API 미사용, NVD 공식 API 직접 호출
-│   │   ├── scheduled_jobs.py  ← App 16 (+ /{id}/run-now) — 내장 스케줄러로 App 6/15 정기 재실행
-│   │   └── cloudtrail.py      ← App 17 (+ /webhook, API_KEY 미적용) — AWS CloudTrail S3+SNS 웹훅 연동
+│   │   ├── scheduled_jobs.py  ← App 16 (+ /{id}/run-now) — 내장 스케줄러로 App 6/15/CloudWatch/GuardDuty 정기 재실행
+│   │   ├── cloudtrail.py      ← App 17 (+ /webhook, API_KEY 미적용) — AWS CloudTrail S3+SNS 웹훅 연동
+│   │   └── log_ingest.py      ← App 18 (+ /ingest, API_KEY 미적용) — Syslog 등 범용 로그 수집
 │   └── services/
 │       ├── claude_service.py
 │       ├── mock_data.py
-│       ├── db.py              ← 히스토리 SQLite 영속화 (범용, App 1/2/3/4/5/6/7/8/11/12/14/15/16/17 공용)
+│       ├── db.py              ← 히스토리 SQLite 영속화 (범용, App 1/2/3/4/5/6/7/8/11/12/14/15/16/17/18 공용)
 │       ├── auth.py            ← 선택적 API 키 인증 (n8n 등 외부 연동용, API_KEY 미설정 시 비활성)
-│       ├── scheduler.py / scheduled_jobs_service.py  ← App 16, APScheduler 내장 스케줄러
-│       ├── sns_verify.py / aws_cloudtrail_service.py  ← App 17, SNS 서명검증 + CloudTrail 로그 수집
+│       ├── scheduler.py / scheduled_jobs_service.py  ← App 16, APScheduler 내장 스케줄러 (App 17 연결 재사용해 CloudWatch/GuardDuty도 처리)
+│       ├── sns_verify.py / aws_cloudtrail_service.py  ← App 17, SNS 서명검증 + CloudTrail 로그 수집 (assume_role()을 App 16도 재사용)
+│       ├── log_ingest_service.py  ← App 18, Syslog 등 범용 로그 수집 (소스별 Ingest Key)
 │       ├── notify.py          ← Critical 탐지 시 Slack/이메일 알림
 │       ├── live_monitor.py    ← App 1 실시간 모니터링용 합성 로그 생성기
 │       ├── phishing_service.py / mock_phishing.py
@@ -370,7 +386,8 @@ test_AI_security/
             ├── PhishingSimGenerator.jsx
             ├── CveLookup.jsx
             ├── ScheduledJobs.jsx
-            └── CloudTrailIntegration.jsx
+            ├── CloudTrailIntegration.jsx
+            └── LogSourceIntegration.jsx
 ```
 
 ## 실행 방법
@@ -403,6 +420,8 @@ npm run dev
 | n8n 연동 (`n8n-workflows/`) | 없음 — 서버 두 개만 켜면 바로 Import해서 테스트 가능. 자세한 내용은 `docs/n8n-integration.md` |
 | `/scheduled-jobs` | 없음 — 백엔드만 켜져 있으면 바로 등록·자동 실행됨. CVE 감시 작업은 외부 인터넷 필요, 웹 스캐너 작업은 Live 모드일 때 대상 URL 접속 가능해야 함 |
 | `/cloudtrail` | 우리 서버에 boto3 AWS 자격증명(환경변수 또는 인스턴스 역할) 설정 필요 + 실제 접근 대상 AWS 계정에 IAM Role 사전 구성 필요. 자세한 내용은 `docs/cloudtrail-integration.md` |
+| `/scheduled-jobs`의 CloudWatch Logs/GuardDuty 감시 | `/cloudtrail`에서 AWS 연결을 먼저 등록해야 함(같은 연결 재사용) |
+| `/log-sources` | 없음 — 백엔드만 켜져 있으면 바로 소스 등록·Ingest Key 발급 가능. 실제 로그 수신은 고객사 rsyslog/syslog-ng 설정 필요(`docs/log-ingest-integration.md`) |
 
 ## 환경 변수 (.env)
 

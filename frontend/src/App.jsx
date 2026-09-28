@@ -19,6 +19,7 @@ import PhishingSimGenerator from './pages/PhishingSimGenerator'
 import CveLookup from './pages/CveLookup'
 import ScheduledJobs from './pages/ScheduledJobs'
 import CloudTrailIntegration from './pages/CloudTrailIntegration'
+import LogSourceIntegration from './pages/LogSourceIntegration'
 
 export default function App() {
   const [isMock, setIsMock] = useState(null)
@@ -48,6 +49,7 @@ export default function App() {
         <Route path="/cve-lookup" element={<CveLookup />} />
         <Route path="/scheduled-jobs" element={<ScheduledJobs />} />
         <Route path="/cloudtrail" element={<CloudTrailIntegration />} />
+        <Route path="/log-sources" element={<LogSourceIntegration />} />
       </Routes>
     </BrowserRouter>
   )
