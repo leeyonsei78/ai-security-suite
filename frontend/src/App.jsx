@@ -18,6 +18,7 @@ import PentestLab from './pages/PentestLab'
 import PhishingSimGenerator from './pages/PhishingSimGenerator'
 import CveLookup from './pages/CveLookup'
 import ScheduledJobs from './pages/ScheduledJobs'
+import CloudTrailIntegration from './pages/CloudTrailIntegration'
 
 export default function App() {
   const [isMock, setIsMock] = useState(null)
@@ -46,6 +47,7 @@ export default function App() {
         <Route path="/phishing-sim" element={<PhishingSimGenerator />} />
         <Route path="/cve-lookup" element={<CveLookup />} />
         <Route path="/scheduled-jobs" element={<ScheduledJobs />} />
+        <Route path="/cloudtrail" element={<CloudTrailIntegration />} />
       </Routes>
     </BrowserRouter>
   )

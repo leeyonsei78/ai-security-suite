@@ -22,6 +22,7 @@ Claude AI를 활용한 보안 분석 도구 모음.
 | 14 | 피싱 모의훈련 이메일 생성기 | ✅ 완료 |
 | 15 | CVE 실시간 조회 | ✅ 완료 |
 | 16 | 정기 점검 스케줄러 | ✅ 완료 |
+| 17 | AWS CloudTrail 연동 | ✅ 완료 |
 
 ---
 
@@ -228,6 +229,17 @@ App 2(피싱 탐지기)와 짝을 이루는 "생성기" — 사내 보안 인식
 - `backend/services/scheduler.py`(APScheduler 래퍼) / `backend/services/scheduled_jobs_service.py`(작업 생성·검증·실행·diff 로직) / `backend/routers/scheduled_jobs.py`
 - 웹 스캔 작업 생성→즉시실행(Mock 모드, 이슈 4건 발견)→재실행(신규 0건으로 정확히 diff됨, 중복 알림 없음 확인)→서버 재시작 후 작업 유지 확인, CVE 감시 작업의 네트워크 오류 처리(이 세션 네트워크 제한으로 실제 NVD 응답은 못 받았으나 에러가 `last_error`에 안전하게 기록되고 크래시 없음)까지 curl로 검증 완료. 프론트는 `vite build` 성공 + 사용자 브라우저 확인 필요
 
+### App 17: AWS CloudTrail 연동 `/cloudtrail`
+사업화 검토에서 이어진 후속 작업 — 고객사 AWS 계정의 CloudTrail 감사 로그를 **S3+SNS 웹훅** 방식으로 받아 App 1(대시보드) 분석 파이프라인에 실시간에 가깝게 흘려보냄. 온보딩 절차·IAM 정책 예시는 `docs/cloudtrail-integration.md`에 별도 문서화(요청받은 항목).
+- **인증 모델**: 장기 AWS 액세스 키를 절대 저장하지 않는 AWS 표준 Cross-Account IAM Role 패턴. 고객사가 자기 계정에 Role을 만들어 우리 AWS 계정에게 AssumeRole 권한을 신뢰 정책으로 내주고(+ExternalId로 혼동된 대리인 공격 방지), 우리는 매번 몇 분짜리 임시 자격증명만 빌려 씀 — DB에는 Role ARN·ExternalId만 남음. 우리 쪽 백엔드 서버 자체는 boto3 표준 자격증명 체인(환경변수 또는 EC2 인스턴스 역할)으로 인증돼 있어야 함(운영자가 서버에 설정)
+- **동작 흐름**: 고객사 CloudTrail이 SNS 알림을 켜두면(`aws cloudtrail update-trail --sns-topic-name`) 새 로그 파일이 S3에 쌓일 때마다 SNS가 우리 웹훅(`POST /api/cloudtrail/webhook`)을 호출 → 서명 검증 통과 시 등록된 연결의 Role로 그 로그 파일을 S3에서 읽어와(`boto3` STS AssumeRole → S3 GetObject) 각 CloudTrail 레코드를 한 줄씩 정리 → App 1의 기존 `analyze_logs()`에 그대로 흘려보냄(새 분석 로직 없음, App 16과 같은 "기존 파이프라인 재사용" 원칙) → 결과는 `dashboard` 히스토리에 쌓이고 CRITICAL이면 기존 알림 시스템 발동
+- **웹훅 보안 — SNS 메시지 서명 검증**: 이 엔드포인트는 AWS가 직접 호출하므로 우리 `API_KEY` 인증을 못 씀(AWS가 커스텀 헤더를 못 보냄) — 대신 AWS 공식 권장 방식대로 각 메시지의 RSA 전자서명을 암호학적으로 검증(`backend/services/sns_verify.py`, SigningCertURL이 실제 `sns.*.amazonaws.com` 도메인인지 정규식으로 먼저 확인한 뒤 그 인증서로 서명 검증, SignatureVersion 1(SHA1)/2(SHA256) 둘 다 지원). 서명 검증만으로는 "서명이 유효한 아무 SNS 토픽"이 다 통과하므로, 메시지의 `TopicArn`이 우리가 등록해둔 연결과 일치하는지 추가로 대조해 다른 토픽의 진짜 서명된 메시지를 재전송하는 공격도 차단
+- **SNS 구독 확인(SubscriptionConfirmation) 자동 처리**: SNS 토픽에 웹훅을 HTTPS로 구독 등록하면 AWS가 확인 요청을 보내는데, 서명이 유효한 요청이면 `SubscribeURL`을 서버가 자동으로 GET해서 구독을 활성화 — 사람이 따로 링크를 클릭할 필요 없음
+- 연결 관리(`GET/POST /api/cloudtrail/connections`, `DELETE .../{id}`)는 등록 즉시 실제 AssumeRole 검증을 수행해 잘못된 ARN/ExternalId/신뢰정책을 바로 알려줌. 프론트 `/cloudtrail` 페이지에서 연결 등록·목록(수집 건수·마지막 수신 시각·에러)·삭제 + 웹훅 URL 복사 버튼 제공
+- 대량 로그 파일로 인한 프롬프트 비용 폭증을 막기 위해 파일당 최대 100개 레코드만 분석(`MAX_RECORDS_PER_FILE`)
+- `backend/services/sns_verify.py` / `backend/services/aws_cloudtrail_service.py` / `backend/routers/cloudtrail.py`(연결 관리 라우터는 `API_KEY` 인증 적용, 웹훅 라우터는 별도로 인증 미적용)
+- **검증 완료**: SNS 서명 검증 로직은 자체 생성한 테스트 RSA 키쌍으로 4가지 케이스(정상 서명/변조된 메시지 거부/구독확인 메시지 서명/가짜 도메인 인증서 거부) 전부 통과 확인. CloudTrail 로그 파싱(`gzip` 압축 해제 + 레코드→로그라인 변환)과 SNS Notification 메시지 파싱(`s3Bucket`/`s3ObjectKey` 추출)은 실제 CloudTrail 스키마로 만든 샘플 데이터로 검증. 웹훅 엔드포인트는 실제 HTTP 요청으로 잘못된 JSON(400)·가짜 서명 도메인(403) 거부까지 curl로 검증. ⚠️ 이 세션에 실제 AWS 계정/자격증명이 없어 진짜 IAM Role AssumeRole 성공 케이스와 실제 SNS가 보낸 진짜 서명까지는 검증하지 못함 — `create_connection()`이 boto3 STS에 실제로 요청을 보내 `InvalidClientTokenId` 같은 정직한 AWS 에러를 그대로 반환하는 것(크래시 없이 안전하게 실패)까지는 확인. 사용자가 실제 AWS 테스트 계정으로 온보딩 절차 전체를 한 번 밟아보는 걸 권장
+
 ---
 
 ## 공통 기능
@@ -257,7 +269,7 @@ App 2(피싱 탐지기)와 짝을 이루는 "생성기" — 사내 보안 인식
 ### 사업화 검토 후속 (2026-09)
 - [x] **IoC 실제 위협 인텔리전스 조회**: AbuseIPDB/OTX 연동 — 위 App 4 설명 참고
 - [x] **n8n 없이 되는 내장 스케줄러**: App 16으로 구현 — 위 App 16 설명 참고
-- [ ] **CloudTrail 연동(S3+SNS 웹훅 방식)**: 다음 착수 후보, 온보딩 가이드 문서화 작업 병행 필요
+- [x] **CloudTrail 연동(S3+SNS 웹훅 방식)**: App 17 (`/cloudtrail`)로 구현됨, `docs/cloudtrail-integration.md` 온보딩 가이드 포함
 - [ ] **Syslog/기타 Cloud API 연동**: 고객 요청 들어오는 대로 순차 확장
 
 ### 외부 자동화 연동
@@ -269,7 +281,7 @@ App 2(피싱 탐지기)와 짝을 이루는 "생성기" — 사내 보안 인식
 ## 기술 스택
 
 ```
-Backend:  Python 3.11+ / FastAPI / Uvicorn / httpx / APScheduler
+Backend:  Python 3.11+ / FastAPI / Uvicorn / httpx / APScheduler / boto3 / cryptography
 AI:       Anthropic Claude API (claude-sonnet-4-6)
 Frontend: React 18 / Vite / TailwindCSS / react-router-dom
 ```
@@ -282,7 +294,8 @@ test_AI_security/
 ├── .env.example
 ├── .gitignore
 ├── docs/
-│   └── n8n-integration.md    ← n8n 연동 가이드
+│   ├── n8n-integration.md    ← n8n 연동 가이드
+│   └── cloudtrail-integration.md  ← AWS CloudTrail 연동 온보딩 가이드 (App 17)
 ├── n8n-workflows/             ← n8n Import용 예제 워크플로우 3개
 ├── backend/
 │   ├── main.py
@@ -305,13 +318,15 @@ test_AI_security/
 │   │   ├── pentest_lab.py     ← App 13 (+ /stages, /exploit-template)
 │   │   ├── phishing_sim.py    ← App 14 (+ /scenarios, /report/{id})
 │   │   ├── cve_lookup.py      ← App 15 (+ /search, /status) — Claude API 미사용, NVD 공식 API 직접 호출
-│   │   └── scheduled_jobs.py  ← App 16 (+ /{id}/run-now) — 내장 스케줄러로 App 6/15 정기 재실행
+│   │   ├── scheduled_jobs.py  ← App 16 (+ /{id}/run-now) — 내장 스케줄러로 App 6/15 정기 재실행
+│   │   └── cloudtrail.py      ← App 17 (+ /webhook, API_KEY 미적용) — AWS CloudTrail S3+SNS 웹훅 연동
 │   └── services/
 │       ├── claude_service.py
 │       ├── mock_data.py
-│       ├── db.py              ← 히스토리 SQLite 영속화 (범용, App 1/2/3/4/5/6/7/8/11/12/14/15/16 공용)
+│       ├── db.py              ← 히스토리 SQLite 영속화 (범용, App 1/2/3/4/5/6/7/8/11/12/14/15/16/17 공용)
 │       ├── auth.py            ← 선택적 API 키 인증 (n8n 등 외부 연동용, API_KEY 미설정 시 비활성)
 │       ├── scheduler.py / scheduled_jobs_service.py  ← App 16, APScheduler 내장 스케줄러
+│       ├── sns_verify.py / aws_cloudtrail_service.py  ← App 17, SNS 서명검증 + CloudTrail 로그 수집
 │       ├── notify.py          ← Critical 탐지 시 Slack/이메일 알림
 │       ├── live_monitor.py    ← App 1 실시간 모니터링용 합성 로그 생성기
 │       ├── phishing_service.py / mock_phishing.py
@@ -354,7 +369,8 @@ test_AI_security/
             ├── PentestLab.jsx
             ├── PhishingSimGenerator.jsx
             ├── CveLookup.jsx
-            └── ScheduledJobs.jsx
+            ├── ScheduledJobs.jsx
+            └── CloudTrailIntegration.jsx
 ```
 
 ## 실행 방법
@@ -386,6 +402,7 @@ npm run dev
 | `/ioc`의 실제 위협 인텔리전스 조회 | 없음 — `ABUSEIPDB_API_KEY`/`OTX_API_KEY` 미설정 시 AI 판정만 표시(정상 동작), 설정 시 외부 인터넷 접속 필요 |
 | n8n 연동 (`n8n-workflows/`) | 없음 — 서버 두 개만 켜면 바로 Import해서 테스트 가능. 자세한 내용은 `docs/n8n-integration.md` |
 | `/scheduled-jobs` | 없음 — 백엔드만 켜져 있으면 바로 등록·자동 실행됨. CVE 감시 작업은 외부 인터넷 필요, 웹 스캐너 작업은 Live 모드일 때 대상 URL 접속 가능해야 함 |
+| `/cloudtrail` | 우리 서버에 boto3 AWS 자격증명(환경변수 또는 인스턴스 역할) 설정 필요 + 실제 접근 대상 AWS 계정에 IAM Role 사전 구성 필요. 자세한 내용은 `docs/cloudtrail-integration.md` |
 
 ## 환경 변수 (.env)
 
@@ -407,6 +424,12 @@ NVD_API_KEY=
 # IoC 위협 인텔리전스 실조회 (선택, .env.example 참고) — 둘 다 없으면 AI 판정만 사용
 ABUSEIPDB_API_KEY=
 OTX_API_KEY=
+
+# AWS CloudTrail 연동 (선택, .env.example 참고) — "우리 회사" AWS 계정 자격증명(고객사 것 아님).
+# EC2/ECS 인스턴스 역할 사용 시 비워둬도 됨. docs/cloudtrail-integration.md 참고
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
+AWS_DEFAULT_REGION=us-east-1
 
 # 백엔드 API 인증 (선택, .env.example 참고) — 비워두면 인증 없음(기본값).
 # n8n 등을 로컬 밖으로 노출할 때 설정 권장. docs/n8n-integration.md 참고
