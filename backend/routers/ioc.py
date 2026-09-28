@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from services.ioc_service import analyze_ioc
-from services import db, notify
+from services import db, notify, threat_intel
 
 router = APIRouter(prefix="/api/ioc", tags=["ioc"])
 
@@ -10,6 +10,14 @@ APP_NAME = "ioc"
 
 class AnalyzeRequest(BaseModel):
     content: str
+
+
+@router.get("/status")
+async def status():
+    return {
+        "abuseipdb_configured": threat_intel.IS_ABUSEIPDB_CONFIGURED,
+        "otx_configured": threat_intel.IS_OTX_CONFIGURED,
+    }
 
 
 @router.post("/analyze")
@@ -22,6 +30,7 @@ async def analyze(request: AnalyzeRequest):
     results = analyze_ioc(request.content)
     if not results:
         raise HTTPException(status_code=400, detail="No valid IoCs found")
+    results = await threat_intel.enrich_results(results)
 
     entry = {"results": results, "total": len(results)}
     entry["id"] = db.add_entry(APP_NAME, entry)

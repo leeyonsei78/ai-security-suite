@@ -117,6 +117,38 @@ function IoCDetail({ item }) {
         <p className="text-xs font-semibold text-blue-400 mb-1">권장 조치</p>
         <p className="text-xs text-slate-300 leading-relaxed">{item.recommendation}</p>
       </div>
+
+      {item.threat_intel && <ThreatIntelBox ti={item.threat_intel} />}
+    </div>
+  )
+}
+
+function ThreatIntelBox({ ti }) {
+  const { abuseipdb, otx } = ti
+  return (
+    <div className="bg-slate-800/60 rounded-lg p-3 space-y-2">
+      <p className="text-xs font-semibold text-emerald-400">실제 위협 인텔리전스 조회 (AI 추정과 별개의 검증 데이터)</p>
+      {abuseipdb && (
+        abuseipdb.available ? (
+          <p className="text-xs text-slate-300">
+            <span className="text-slate-400">AbuseIPDB:</span> 악성 신뢰도 {abuseipdb.abuse_confidence_score}%,
+            신고 {abuseipdb.total_reports}건{abuseipdb.country_code ? ` (${abuseipdb.country_code})` : ''} —{' '}
+            <a href={abuseipdb.link} target="_blank" rel="noreferrer" className="text-cyan-400 hover:underline">원본 보기</a>
+          </p>
+        ) : (
+          <p className="text-xs text-slate-500">AbuseIPDB: 조회 실패 ({abuseipdb.error})</p>
+        )
+      )}
+      {otx && (
+        otx.available ? (
+          <p className="text-xs text-slate-300">
+            <span className="text-slate-400">AlienVault OTX:</span> {otx.pulse_count}개의 커뮤니티 위협 리포트(Pulse)에 포함 —{' '}
+            <a href={otx.link} target="_blank" rel="noreferrer" className="text-cyan-400 hover:underline">원본 보기</a>
+          </p>
+        ) : (
+          <p className="text-xs text-slate-500">OTX: 조회 실패 ({otx.error})</p>
+        )
+      )}
     </div>
   )
 }

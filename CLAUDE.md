@@ -74,6 +74,8 @@ Claude AI를 활용한 보안 분석 도구 모음.
 IP·도메인·파일 해시·이메일 → 알려진 악성 지표 여부 판별.
 - 자동 타입 감지 (IP / 도메인 / MD5·SHA256 / 이메일)
 - 여러 IoC 일괄 분석, 결과 복사
+- **실제 위협 인텔리전스 조회 연동** (사업화 검토 중 "AI 추론만으로는 신뢰도가 부족하다"는 지적으로 추가): AbuseIPDB(IP 평판, 무료 일 1,000건)·AlienVault OTX(IP/도메인/해시 커뮤니티 IOC, 무료)를 실제로 조회해 AI 판정과 나란히 보여줌. `ABUSEIPDB_API_KEY`/`OTX_API_KEY` 둘 다 선택 사항(`.env.example` 참고) — 미설정 시 지금까지처럼 AI 판정만 반환(회귀 없음), `GET /api/ioc/status`로 설정 여부 확인 가능. VirusTotal은 무료 API 약관상 상업적 재판매가 금지되어 있어 제외함(유료 라이선스 필요, 추후 검토). 동일 IoC 반복 조회 시 무료 한도를 아끼기 위해 24시간 캐싱(`backend/data/threat_intel_cache.db`, gitignore 대상). email 타입은 두 서비스 다 대상이 아니라 AI 판정만 유지됨
+- `backend/services/threat_intel.py`. ⚠️ 이 세션 네트워크 제한으로 AbuseIPDB/OTX 실호출까지는 검증 못 했으나(프록시 403), 키 미설정/설정 두 경우 모두 기존 분석 흐름이 깨지지 않고 provider별 실패가 개별적으로 우아하게 처리되는 것(전체 요청 실패로 이어지지 않음)은 curl로 검증 완료
 
 ### App 5: 인시던트 리스폰스 어시스턴트 `/incident`
 보안 사고 유형 선택 → AI가 단계별 대응 계획 + 체크리스트 생성.
@@ -292,7 +294,7 @@ test_AI_security/
 │       ├── live_monitor.py    ← App 1 실시간 모니터링용 합성 로그 생성기
 │       ├── phishing_service.py / mock_phishing.py
 │       ├── vulnerability_service.py / mock_vulnerability.py / vuln_scenarios.py / recon_guide.py
-│       ├── ioc_service.py / mock_ioc.py
+│       ├── ioc_service.py / mock_ioc.py / threat_intel.py (AbuseIPDB/OTX 실조회)
 │       ├── incident_service.py / mock_incident.py
 │       ├── webscan_service.py / mock_webscan.py
 │       ├── threat_analysis_service.py / mock_threat_analysis.py
@@ -358,6 +360,7 @@ npm run dev
 | `/pwn-lab`의 Misc 3개 챌린지 | 없음 — 컴파일 불필요 |
 | `/web-arena` 공유 스코어보드를 팀원과 같이 쓰기 | `npm run dev -- --host` + 방화벽에서 5173/8000 포트 개방 후 `http://<호스트 IP>:5173` 공유 |
 | `/cve-lookup` | 없음 — 다만 외부 인터넷(services.nvd.nist.gov)에 접속 가능해야 함. `NVD_API_KEY` 없이도 동작(요청 한도만 낮음) |
+| `/ioc`의 실제 위협 인텔리전스 조회 | 없음 — `ABUSEIPDB_API_KEY`/`OTX_API_KEY` 미설정 시 AI 판정만 표시(정상 동작), 설정 시 외부 인터넷 접속 필요 |
 | n8n 연동 (`n8n-workflows/`) | 없음 — 서버 두 개만 켜면 바로 Import해서 테스트 가능. 자세한 내용은 `docs/n8n-integration.md` |
 
 ## 환경 변수 (.env)
@@ -376,6 +379,10 @@ ALERT_EMAIL_FROM=
 
 # CVE 실시간 조회 (선택, .env.example 참고) — 없어도 동작하나 요청 한도가 낮음
 NVD_API_KEY=
+
+# IoC 위협 인텔리전스 실조회 (선택, .env.example 참고) — 둘 다 없으면 AI 판정만 사용
+ABUSEIPDB_API_KEY=
+OTX_API_KEY=
 
 # 백엔드 API 인증 (선택, .env.example 참고) — 비워두면 인증 없음(기본값).
 # n8n 등을 로컬 밖으로 노출할 때 설정 권장. docs/n8n-integration.md 참고
