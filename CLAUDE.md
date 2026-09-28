@@ -21,6 +21,7 @@ Claude AI를 활용한 보안 분석 도구 모음.
 | 13 | 모의 해킹 랩 | ✅ 완료 |
 | 14 | 피싱 모의훈련 이메일 생성기 | ✅ 완료 |
 | 15 | CVE 실시간 조회 | ✅ 완료 |
+| 16 | 정기 점검 스케줄러 | ✅ 완료 |
 
 ---
 
@@ -215,6 +216,18 @@ App 2(피싱 탐지기)와 짝을 이루는 "생성기" — 사내 보안 인식
 - `backend/routers/cve_lookup.py`, `backend/services/cve_lookup_service.py`
 - 백엔드는 curl로 실제 NVD API 대상 검증 완료, 프론트는 `vite build` 성공 + 사용자 브라우저 확인 필요
 
+### App 16: 정기 점검 스케줄러 `/scheduled-jobs`
+사업화 검토 중 "n8n 없이도 되는 내장 스케줄러"가 필요하다는 논의로 추가. n8n 같은 외부 자동화 도구를 설치하지 않아도, 이 앱 자체에서 App 6(웹 스캐너)·App 15(CVE 조회)를 주기적으로 자동 재실행할 수 있게 하는 도구.
+- **APScheduler**(순수 파이썬, 외부 브로커·별도 서버 불필요)를 백엔드 프로세스 안에 그대로 띄우는 방식 — FastAPI `lifespan`에서 서버 시작 시 DB에 저장된 활성 작업을 전부 스케줄러에 등록하고, 종료 시 정리
+- 점검 유형 2종: **웹 스캐너 정기 점검**(URL 대상, App 6의 `scan_url()` 재사용) / **CVE 키워드 감시**(키워드 대상, App 15의 `search_cves()` 재사용) — 새 분석 로직을 만들지 않고 기존 서비스 함수를 그대로 호출
+- 실행 결과는 각 원본 앱(webscan/cve_lookup)의 히스토리에도 그대로 쌓임 — "누가 트리거했는지"(사람 vs 스케줄러)만 다를 뿐 완전히 별도 저장소가 아님
+- **알림 피로 방지**: 매번 실행할 때마다 알림을 보내지 않고, 직전 실행 결과와 비교(fingerprint: 웹스캔은 `severity:title` 집합, CVE 감시는 CVE ID 집합)해 **새로 나타난 CRITICAL 이슈 / 새로 발견된 CVSS 7.0+ CVE**가 있을 때만 `notify.alert_if_critical()` 호출. CVE 조회는 원래 알림 대상에서 제외돼 있었지만(App 15 설명 참고, Claude AI를 안 쓰는 순수 조회 도구라 "위협 판정"이 아님), 정기 감시 맥락에서는 "새 고위험 CVE 발견"이 실제 공식 데이터 기반의 정당한 알림 사유라 `notify.APP_LABELS`에 `cve_lookup` 라벨을 추가하고 예외적으로 포함시킴
+- 작업 등록/삭제/목록/즉시실행(`GET/POST /api/scheduled-jobs`, `DELETE /api/scheduled-jobs/{id}`, `POST /api/scheduled-jobs/{id}/run-now`) — 즉시실행은 주기를 기다리지 않고 테스트하거나 급하게 한 번 확인하고 싶을 때 사용
+- 작업 목록은 `db.py`의 범용 히스토리 테이블(`app="scheduled_jobs"`)에 저장돼 서버 재시작에도 유지되고, 재시작 시 자동으로 스케줄러에 다시 등록됨 (히스토리 삭제 시 `delete_entry()` 함수를 `db.py`에 새로 추가 — 기존엔 `clear_history()`로 앱 전체 삭제만 가능했음)
+- ⚠️ **단일 프로세스 구조를 전제** — 여러 워커/서버로 스케일 아웃하면 같은 작업이 워커마다 중복 실행될 수 있음. 그 시점엔 Celery+Beat 같은 분산 스케줄러(외부 브로커 필요)로 이전 필요. 지금(단일 서버) 규모에는 충분함
+- `backend/services/scheduler.py`(APScheduler 래퍼) / `backend/services/scheduled_jobs_service.py`(작업 생성·검증·실행·diff 로직) / `backend/routers/scheduled_jobs.py`
+- 웹 스캔 작업 생성→즉시실행(Mock 모드, 이슈 4건 발견)→재실행(신규 0건으로 정확히 diff됨, 중복 알림 없음 확인)→서버 재시작 후 작업 유지 확인, CVE 감시 작업의 네트워크 오류 처리(이 세션 네트워크 제한으로 실제 NVD 응답은 못 받았으나 에러가 `last_error`에 안전하게 기록되고 크래시 없음)까지 curl로 검증 완료. 프론트는 `vite build` 성공 + 사용자 브라우저 확인 필요
+
 ---
 
 ## 공통 기능
@@ -238,7 +251,14 @@ App 2(피싱 탐지기)와 짝을 이루는 "생성기" — 사내 보안 인식
 ### 새 도구 추가
 - [x] **피싱 모의훈련 이메일 생성기**: App 14 (`/phishing-sim`)로 구현됨
 - [x] **CVE 실시간 조회 연동**: App 15 (`/cve-lookup`)로 구현됨, App 3 취약점 스캐너와 연동
+- [x] **정기 점검 스케줄러**: App 16 (`/scheduled-jobs`)로 구현됨, 사업화 검토 중 나온 "내장 스케줄러" 항목
 - 그 외 후보였던 시크릿 스캐너·통합 리스크 대시보드는 미착수 — 새 아이디어가 생기면 여기에 추가.
+
+### 사업화 검토 후속 (2026-09)
+- [x] **IoC 실제 위협 인텔리전스 조회**: AbuseIPDB/OTX 연동 — 위 App 4 설명 참고
+- [x] **n8n 없이 되는 내장 스케줄러**: App 16으로 구현 — 위 App 16 설명 참고
+- [ ] **CloudTrail 연동(S3+SNS 웹훅 방식)**: 다음 착수 후보, 온보딩 가이드 문서화 작업 병행 필요
+- [ ] **Syslog/기타 Cloud API 연동**: 고객 요청 들어오는 대로 순차 확장
 
 ### 외부 자동화 연동
 - [x] **n8n 연동 (Pull: n8n → 이 앱)**: 위 "공통 기능"의 n8n 자동화 연동 항목, `docs/n8n-integration.md` 참고
@@ -249,7 +269,7 @@ App 2(피싱 탐지기)와 짝을 이루는 "생성기" — 사내 보안 인식
 ## 기술 스택
 
 ```
-Backend:  Python 3.11+ / FastAPI / Uvicorn / httpx
+Backend:  Python 3.11+ / FastAPI / Uvicorn / httpx / APScheduler
 AI:       Anthropic Claude API (claude-sonnet-4-6)
 Frontend: React 18 / Vite / TailwindCSS / react-router-dom
 ```
@@ -284,12 +304,14 @@ test_AI_security/
 │   │   ├── monitor.py         ← App 1 실시간 모니터링 (WebSocket /ws)
 │   │   ├── pentest_lab.py     ← App 13 (+ /stages, /exploit-template)
 │   │   ├── phishing_sim.py    ← App 14 (+ /scenarios, /report/{id})
-│   │   └── cve_lookup.py      ← App 15 (+ /search, /status) — Claude API 미사용, NVD 공식 API 직접 호출
+│   │   ├── cve_lookup.py      ← App 15 (+ /search, /status) — Claude API 미사용, NVD 공식 API 직접 호출
+│   │   └── scheduled_jobs.py  ← App 16 (+ /{id}/run-now) — 내장 스케줄러로 App 6/15 정기 재실행
 │   └── services/
 │       ├── claude_service.py
 │       ├── mock_data.py
-│       ├── db.py              ← 히스토리 SQLite 영속화 (범용, App 1/2/3/4/5/6/7/8/11/12/14/15 공용)
+│       ├── db.py              ← 히스토리 SQLite 영속화 (범용, App 1/2/3/4/5/6/7/8/11/12/14/15/16 공용)
 │       ├── auth.py            ← 선택적 API 키 인증 (n8n 등 외부 연동용, API_KEY 미설정 시 비활성)
+│       ├── scheduler.py / scheduled_jobs_service.py  ← App 16, APScheduler 내장 스케줄러
 │       ├── notify.py          ← Critical 탐지 시 Slack/이메일 알림
 │       ├── live_monitor.py    ← App 1 실시간 모니터링용 합성 로그 생성기
 │       ├── phishing_service.py / mock_phishing.py
@@ -331,7 +353,8 @@ test_AI_security/
             ├── ModelAudit.jsx
             ├── PentestLab.jsx
             ├── PhishingSimGenerator.jsx
-            └── CveLookup.jsx
+            ├── CveLookup.jsx
+            └── ScheduledJobs.jsx
 ```
 
 ## 실행 방법
@@ -362,6 +385,7 @@ npm run dev
 | `/cve-lookup` | 없음 — 다만 외부 인터넷(services.nvd.nist.gov)에 접속 가능해야 함. `NVD_API_KEY` 없이도 동작(요청 한도만 낮음) |
 | `/ioc`의 실제 위협 인텔리전스 조회 | 없음 — `ABUSEIPDB_API_KEY`/`OTX_API_KEY` 미설정 시 AI 판정만 표시(정상 동작), 설정 시 외부 인터넷 접속 필요 |
 | n8n 연동 (`n8n-workflows/`) | 없음 — 서버 두 개만 켜면 바로 Import해서 테스트 가능. 자세한 내용은 `docs/n8n-integration.md` |
+| `/scheduled-jobs` | 없음 — 백엔드만 켜져 있으면 바로 등록·자동 실행됨. CVE 감시 작업은 외부 인터넷 필요, 웹 스캐너 작업은 Live 모드일 때 대상 URL 접속 가능해야 함 |
 
 ## 환경 변수 (.env)
 

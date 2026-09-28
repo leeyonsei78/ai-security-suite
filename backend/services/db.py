@@ -83,3 +83,9 @@ def clear_history(app: str) -> None:
     with _lock:
         _conn.execute("DELETE FROM history WHERE app = ?", (app,))
         _conn.commit()
+
+
+def delete_entry(app: str, entry_id: int) -> None:
+    with _lock:
+        _conn.execute("DELETE FROM history WHERE app = ? AND id = ?", (app, entry_id))
+        _conn.commit()

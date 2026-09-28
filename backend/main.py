@@ -1,6 +1,9 @@
+from contextlib import asynccontextmanager
+
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from services.auth import require_api_key
+from services import scheduler as job_scheduler
 from routers.analyze import router as analyze_router
 from routers.phishing import router as phishing_router
 from routers.vulnerability import router as vuln_router
@@ -18,9 +21,19 @@ from routers.pentest_lab import router as pentest_lab_router
 from routers.alerts import router as alerts_router
 from routers.phishing_sim import router as phishing_sim_router
 from routers.cve_lookup import router as cve_lookup_router
+from routers.scheduled_jobs import router as scheduled_jobs_router
 from services.claude_service import IS_MOCK
 
-app = FastAPI(title="AI Security Suite", version="1.0.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # App 16(정기 점검 스케줄러)에 등록된 작업들을 서버 시작 시 내장 스케줄러에 올린다.
+    job_scheduler.start()
+    yield
+    job_scheduler.shutdown()
+
+
+app = FastAPI(title="AI Security Suite", version="1.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -55,6 +68,7 @@ app.include_router(pentest_lab_router, dependencies=_authed)
 app.include_router(alerts_router, dependencies=_authed)
 app.include_router(phishing_sim_router, dependencies=_authed)
 app.include_router(cve_lookup_router, dependencies=_authed)
+app.include_router(scheduled_jobs_router, dependencies=_authed)
 
 
 @app.get("/")

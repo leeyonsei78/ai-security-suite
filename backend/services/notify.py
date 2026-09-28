@@ -43,6 +43,7 @@ APP_LABELS = {
     "webscan": "웹 취약점 스캐너",
     "injection": "프롬프트 인젝션 탐지기",
     "model_audit": "AI 모델 감사",
+    "cve_lookup": "CVE 실시간 조회 (정기 감시)",
 }
 
 ALERTS_APP = "alerts"
